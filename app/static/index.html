@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AT2 Bridge</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">AT2<span class="brand-name-thin">Bridge</span></span>
+    </div>
+
+    <div class="conn-panel">
+      <span id="conn-led" class="led led-off" title="État de connexion"></span>
+      <span id="conn-label">Déconnecté</span>
+
+      <div class="conn-controls">
+        <select id="serial-port-select"></select>
+        <button id="btn-refresh-ports" class="btn-ghost" title="Rafraîchir la liste">↻</button>
+        <button id="btn-connect-serial" class="btn-primary">USB série</button>
+        <button id="btn-scan-ble" class="btn-ghost">Scanner BLE</button>
+        <button id="btn-disconnect" class="btn-danger" hidden>Déconnecter</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="channels">Canaux</button>
+    <button class="tab" data-tab="device">Appareil</button>
+    <button class="tab" data-tab="messages">Messagerie</button>
+    <button class="tab" data-tab="log">Journal</button>
+  </nav>
+
+  <main>
+    <section id="tab-channels" class="tab-panel active">
+      <div class="panel-toolbar">
+        <button id="btn-read-channels" class="btn-primary">Lire les 30 canaux</button>
+        <button id="btn-write-channels" class="btn-primary">Écrire les 30 canaux</button>
+        <span class="hint">La lecture groupée est une reconstitution du protocole, non capturée sur trafic réel — vérifie les résultats avant écriture.</span>
+      </div>
+      <div class="table-wrap">
+        <table id="channel-table">
+          <thead>
+            <tr>
+              <th>Ch</th><th>Nom (local)</th><th>RX MHz</th><th>TX MHz</th>
+              <th>Ton RX</th><th>Ton TX</th><th>BW étroite</th><th>Puissance haute</th>
+              <th>Scan</th><th>Numérique</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="channel-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-device" class="tab-panel">
+      <div class="settings-grid">
+        <div class="setting-card">
+          <label for="volume-slider">Volume (1–8)</label>
+          <input id="volume-slider" type="range" min="1" max="8" value="4" />
+          <button class="btn-primary" data-action="set-volume">Appliquer</button>
+        </div>
+        <div class="setting-card">
+          <label for="squelch-slider">Squelch (0–9)</label>
+          <input id="squelch-slider" type="range" min="0" max="9" value="3" />
+          <button class="btn-primary" data-action="set-squelch">Appliquer</button>
+        </div>
+        <div class="setting-card">
+          <label><input id="vox-toggle" type="checkbox" /> VOX activé</label>
+          <button class="btn-primary" data-action="set-vox">Appliquer</button>
+        </div>
+        <div class="setting-card">
+          <label for="select-channel-input">Sélectionner un canal (1–30)</label>
+          <input id="select-channel-input" type="number" min="1" max="30" value="1" />
+          <button class="btn-primary" data-action="select-channel">Basculer</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-messages" class="tab-panel">
+      <div class="message-form">
+        <input id="msg-username" type="text" placeholder="Pseudo (ex: elyha)" value="elyha" />
+        <textarea id="msg-text" rows="3" placeholder="Message hors-réseau à envoyer…"></textarea>
+        <button id="btn-send-message" class="btn-primary">Envoyer</button>
+        <span class="hint">Messagerie texte hors-réseau uniquement pour l'instant (voix/image non portées, voir README).</span>
+      </div>
+    </section>
+
+    <section id="tab-log" class="tab-panel">
+      <pre id="log-console"></pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
