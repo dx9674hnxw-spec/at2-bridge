@@ -1,0 +1,23 @@
+services:
+  at2-bridge:
+    build: .
+    container_name: at2-bridge
+    restart: unless-stopped
+
+    # BLE via BlueZ/D-Bus needs the host's Bluetooth stack: network_mode
+    # host is the simplest reliable way to reach it (no port mapping
+    # needed then -- the app listens directly on the host's :8000).
+    network_mode: host
+
+    # privileged simplifies USB/BLE device access; if you want to avoid
+    # it, replace with explicit `devices:` entries for your serial
+    # adapter (e.g. /dev/ttyACM0) and a `cap_add: [NET_ADMIN, NET_RAW]`
+    # + D-Bus socket mount for Bluetooth.
+    privileged: true
+
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+      - /dev:/dev
+
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -1,0 +1,21 @@
+This project contains code ported (from Kotlin to Python) from:
+
+  Baofeng-ALERVITES-AT2-Android
+  https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android
+  Licensed under the Apache License, Version 2.0
+  http://www.apache.org/licenses/LICENSE-2.0
+
+The following files in this repository are direct ports of logic from
+that project:
+
+  app/protocol/frame.py       <- At2FrameCodec.kt, Crc16CcittFalse.kt
+  app/protocol/channel.py     <- At2ChannelCodec.kt, At2Commands.kt (channel parts)
+  app/protocol/commands.py    <- At2Commands.kt (device/query commands)
+  app/protocol/messages.py    <- At2OfflineMessageCodec.kt (text messages only)
+  app/transport/ble_transport.py <- BleConstants.kt (GATT service/characteristic UUIDs)
+
+In accordance with the Apache License 2.0, this NOTICE file is included
+in the distribution. See THIRD_PARTY_NOTICES.md for further detail,
+including the upstream project's own vendored third-party notices
+(OpenCORE-AMR) which apply to functionality NOT ported here (real-time
+PTT voice codec is on the roadmap, see README.md).
