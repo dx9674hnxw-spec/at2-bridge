@@ -116,6 +116,55 @@ def test_message_long_text_fragments():
     assert len(frames) > 1  # start frame + chunk frames
 
 
+def test_amr_codec_round_trip_shapes():
+    from app.protocol.amr_codec import AmrNbCodec, FRAME_BYTES_PCM, ENCODED_FRAME_BYTES
+    import math
+    import struct
+
+    samples = [int(3000 * math.sin(2 * math.pi * 440 * i / 8000)) for i in range(160)]
+    pcm = struct.pack("<160h", *samples)
+    assert len(pcm) == FRAME_BYTES_PCM
+
+    with AmrNbCodec() as codec:
+        encoded = codec.encode(pcm)
+        assert encoded is not None
+        assert len(encoded) == ENCODED_FRAME_BYTES
+
+        decoded = codec.decode(encoded)
+        assert len(decoded) == FRAME_BYTES_PCM
+
+
+def test_ptt_voice_payload_build_and_parse():
+    from app.protocol import ptt
+
+    frames = [bytes([i]) * 12 for i in range(5)]
+    payload = ptt.build_ptt_voice_payload(frames)
+    pkt = frame.decode_packet(payload)
+    assert pkt.family == ptt.FAMILY_PTT
+    assert pkt.command == ptt.CMD_PTT
+    assert ptt.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body)
+
+    parsed = ptt.extract_amr_frames(pkt.body)
+    assert parsed == frames
+
+
+def test_ptt_voice_payload_tail_of_four():
+    from app.protocol import ptt
+
+    frames = [bytes([i]) * 12 for i in range(4)]
+    payload = ptt.build_ptt_voice_payload(frames)
+    pkt = frame.decode_packet(payload)
+    assert ptt.extract_amr_frames(pkt.body) == frames
+
+
+def test_ptt_voice_payload_rejects_bad_frame_count():
+    from app.protocol import ptt
+    import pytest
+
+    with pytest.raises(ValueError):
+        ptt.build_ptt_voice_payload([b"\x00" * 12] * 2)
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-v"]))

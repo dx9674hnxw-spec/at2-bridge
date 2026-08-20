@@ -2,47 +2,131 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AT2 Bridge</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
+      <span id="brand-mark" class="brand-mark"></span>
       <span class="brand-name">AT2<span class="brand-name-thin">Bridge</span></span>
     </div>
 
-    <div class="conn-panel">
-      <span id="conn-led" class="led led-off" title="État de connexion"></span>
-      <span id="conn-label">Déconnecté</span>
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode-server" data-mode="server">Serveur</button>
+      <button class="mode-btn" id="mode-local" data-mode="local">BLE local</button>
+    </div>
 
-      <div class="conn-controls">
+    <div class="conn-panel">
+      <span id="status-pill" class="status-pill"><span class="dot"></span><span id="conn-label">Déconnecté</span></span>
+      <div class="conn-controls" id="server-controls">
         <select id="serial-port-select"></select>
-        <button id="btn-refresh-ports" class="btn-ghost" title="Rafraîchir la liste">↻</button>
+        <button id="btn-refresh-ports" class="btn-ghost">↻</button>
         <button id="btn-connect-serial" class="btn-primary">USB série</button>
         <button id="btn-scan-ble" class="btn-ghost">Scanner BLE</button>
         <button id="btn-disconnect" class="btn-danger" hidden>Déconnecter</button>
       </div>
+      <div class="conn-controls" id="local-controls" hidden>
+        <button id="btn-local-connect" class="btn-primary">Connecter (Web Bluetooth)</button>
+        <button id="btn-local-disconnect" class="btn-danger" hidden>Déconnecter</button>
+      </div>
     </div>
   </header>
 
-  <nav class="tabs">
-    <button class="tab active" data-tab="channels">Canaux</button>
-    <button class="tab" data-tab="device">Appareil</button>
-    <button class="tab" data-tab="messages">Messagerie</button>
-    <button class="tab" data-tab="log">Journal</button>
-  </nav>
+  <div class="tabs-wrap">
+    <nav class="tabs">
+      <button class="tab active" data-tab="devices">Appareils</button>
+      <button class="tab" data-tab="channels">Canaux</button>
+      <button class="tab" data-tab="device">Réglages</button>
+      <button class="tab" data-tab="messages">Messagerie</button>
+      <button class="tab" data-tab="log">Journal</button>
+    </nav>
+  </div>
 
   <main>
-    <section id="tab-channels" class="tab-panel active">
+    <section id="tab-devices" class="tab-panel active">
+      <div class="device-list" id="device-list"></div>
+
+      <div class="devices-grid">
+        <div class="card" id="ptt-panel">
+          <div class="chan-switch">
+            <button class="chan-arrow" id="chan-prev" title="Canal précédent">‹</button>
+            <select id="chan-select" class="chan-select"></select>
+            <button class="chan-arrow" id="chan-next" title="Canal suivant">›</button>
+            <button class="chan-arrow" id="chan-rename" title="Renommer ce canal">✎</button>
+            <div class="chan-opts" id="chan-opts"></div>
+          </div>
+
+          <div class="ptt-header">
+            <div>
+              <div class="ptt-device-name" id="ptt-device-name">—</div>
+              <div class="ptt-device-sub" id="ptt-device-sub">—</div>
+            </div>
+            <span class="rf-indicator" id="rf-indicator">
+              <span class="rf-dot"></span><span id="rf-label">Standby</span>
+            </span>
+          </div>
+
+          <div class="ptt-wave" id="ptt-wave"></div>
+
+          <div class="ptt-controls">
+            <button class="ptt-btn" id="ptt-btn">PTT</button>
+            <div class="ptt-meta">
+              <div class="ptt-timer" id="ptt-timer">00:00</div>
+              <div class="hint" id="ptt-hint">Maintiens pour émettre (mode serveur uniquement pour l'instant)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="gps-panel">
+          <div class="gps-header">
+            <div class="gps-title">Position &amp; urgence</div>
+            <span class="gps-fix" id="gps-fix"><span class="dot"></span><span id="gps-fix-label">Localisation…</span></span>
+          </div>
+
+          <div class="gps-coords" id="gps-coords">— , —</div>
+          <div class="gps-sub" id="gps-accuracy">précision inconnue</div>
+
+          <div class="beacon-row">
+            <label class="switch">
+              <input type="checkbox" id="beacon-toggle" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+            <span>Balise position auto</span>
+            <select id="beacon-interval" class="beacon-interval">
+              <option value="30">30 s</option>
+              <option value="60" selected>1 min</option>
+              <option value="300">5 min</option>
+              <option value="900">15 min</option>
+            </select>
+          </div>
+          <div class="hint" id="beacon-status">Balise désactivée</div>
+
+          <button class="btn-ghost gps-send-btn" id="gps-send-now">📍 Envoyer ma position maintenant</button>
+
+          <div class="sos-row">
+            <button class="sos-btn" id="sos-btn">🆘 SOS</button>
+            <select id="sos-preset" class="sos-preset">
+              <option value="Perdu, besoin d'un itinéraire">Perdu, besoin d'un itinéraire</option>
+              <option value="Blessé, besoin de secours médical">Blessé, besoin de secours médical</option>
+              <option value="Bloqué, besoin d'une évacuation">Bloqué, besoin d'une évacuation</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-channels" class="tab-panel">
       <div class="panel-toolbar">
         <button id="btn-read-channels" class="btn-primary">Lire les 30 canaux</button>
         <button id="btn-write-channels" class="btn-primary">Écrire les 30 canaux</button>
-        <span class="hint">La lecture groupée est une reconstitution du protocole, non capturée sur trafic réel — vérifie les résultats avant écriture.</span>
+        <span class="hint">La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire.</span>
       </div>
       <div class="table-wrap">
-        <table id="channel-table">
+        <table>
           <thead>
             <tr>
               <th>Ch</th><th>Nom (local)</th><th>RX MHz</th><th>TX MHz</th>
@@ -56,7 +140,7 @@
     </section>
 
     <section id="tab-device" class="tab-panel">
-      <div class="settings-grid">
+      <div class="card settings-grid">
         <div class="setting-card">
           <label for="volume-slider">Volume (1–8)</label>
           <input id="volume-slider" type="range" min="1" max="8" value="4" />
@@ -71,20 +155,18 @@
           <label><input id="vox-toggle" type="checkbox" /> VOX activé</label>
           <button class="btn-primary" data-action="set-vox">Appliquer</button>
         </div>
-        <div class="setting-card">
-          <label for="select-channel-input">Sélectionner un canal (1–30)</label>
-          <input id="select-channel-input" type="number" min="1" max="30" value="1" />
-          <button class="btn-primary" data-action="select-channel">Basculer</button>
-        </div>
       </div>
     </section>
 
     <section id="tab-messages" class="tab-panel">
-      <div class="message-form">
-        <input id="msg-username" type="text" placeholder="Pseudo (ex: elyha)" value="elyha" />
-        <textarea id="msg-text" rows="3" placeholder="Message hors-réseau à envoyer…"></textarea>
+      <div class="card message-form">
+        <input id="msg-username" type="text" placeholder="Pseudo" value="elyha" />
+        <textarea id="msg-text" rows="3" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
         <button id="btn-send-message" class="btn-primary">Envoyer</button>
-        <span class="hint">Messagerie texte hors-réseau uniquement pour l'instant (voix/image non portées, voir README).</span>
+        <span class="hint">Texte hors-réseau uniquement pour l'instant — image/vocal hors-réseau restent au roadmap (voir README).</span>
+      </div>
+      <div class="card">
+        <div class="msg-thread" id="msg-thread"></div>
       </div>
     </section>
 
@@ -93,6 +175,9 @@
     </section>
   </main>
 
+  <script src="/static/protocol.js"></script>
+  <script src="/static/ble-client.js"></script>
+  <script src="/static/ptt-audio.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

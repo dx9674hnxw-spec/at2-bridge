@@ -1,17 +1,25 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+let mode = "server"; // "server" | "local"
+let connected = false;
+let localDeviceInfo = null;
+
 async function api(method, path, body) {
   const res = await fetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${method} ${path} -> ${res.status}: ${text}`);
-  }
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
   return res.status === 204 ? null : res.json();
+}
+
+function appendLog(line) {
+  const el = $("#log-console");
+  const now = new Date().toLocaleTimeString("fr-FR");
+  el.textContent += `[${now}] ${line}\n`;
+  el.scrollTop = el.scrollHeight;
 }
 
 // ---------------------------------------------------------------------------
@@ -27,37 +35,57 @@ $$(".tab").forEach((tab) => {
 });
 
 // ---------------------------------------------------------------------------
-// Connection
+// Mode toggle (server vs local Web Bluetooth)
 // ---------------------------------------------------------------------------
-function setConnUi(status) {
-  const led = $("#conn-led");
-  const label = $("#conn-label");
-  led.className = "led " + (status.connected ? "led-connected" : "led-off");
-  label.textContent = status.connected
-    ? `Connecté (${status.kind} · ${status.target})`
-    : "Déconnecté";
-  $("#btn-disconnect").hidden = !status.connected;
+function applyModeUi() {
+  $("#mode-server").classList.toggle("active", mode === "server");
+  $("#mode-local").classList.toggle("active", mode === "local");
+  $("#server-controls").hidden = mode !== "server";
+  $("#local-controls").hidden = mode !== "local";
+  $("#ptt-hint").textContent = mode === "server"
+    ? "Maintiens pour émettre — encode et transmet la voix en temps réel"
+    : "PTT vocal indisponible en mode BLE local (nécessite le décodeur du serveur)";
+  $("#ptt-btn").disabled = mode === "local";
+}
+
+const localSupported = AT2BleClient.isSupported();
+if (!localSupported) {
+  $("#mode-local").disabled = true;
+  $("#mode-local").title = "Web Bluetooth non disponible sur ce navigateur (indisponible sur tout navigateur iOS)";
+}
+
+$("#mode-server").addEventListener("click", () => { mode = "server"; applyModeUi(); refreshStatus(); });
+$("#mode-local").addEventListener("click", () => {
+  if (!localSupported) return;
+  mode = "local";
+  applyModeUi();
+  updateLocalStatusUi();
+});
+applyModeUi();
+
+// ---------------------------------------------------------------------------
+// Server-mode connection
+// ---------------------------------------------------------------------------
+function setConnUi(isConnected, label) {
+  connected = isConnected;
+  $("#brand-mark").classList.toggle("connected", isConnected);
+  $("#status-pill").classList.toggle("up", isConnected);
+  $("#conn-label").textContent = label;
 }
 
 async function refreshStatus() {
+  if (mode !== "server") return;
   const status = await api("GET", "/api/connection/status");
-  setConnUi(status);
+  setConnUi(status.connected, status.connected ? `Connecté (${status.kind} · ${status.target})` : "Déconnecté");
+  $("#btn-disconnect").hidden = !status.connected;
 }
 
 async function refreshSerialPorts() {
   const ports = await api("GET", "/api/connection/serial/ports");
   const select = $("#serial-port-select");
-  select.innerHTML = "";
-  if (ports.length === 0) {
-    select.innerHTML = `<option value="">Aucun port détecté</option>`;
-    return;
-  }
-  ports.forEach((p) => {
-    const opt = document.createElement("option");
-    opt.value = p.path;
-    opt.textContent = `${p.path} — ${p.description}`;
-    select.appendChild(opt);
-  });
+  select.innerHTML = ports.length
+    ? ports.map((p) => `<option value="${p.path}">${p.path} — ${p.description}</option>`).join("")
+    : `<option value="">Aucun port détecté</option>`;
 }
 
 $("#btn-refresh-ports").addEventListener("click", refreshSerialPorts);
@@ -65,35 +93,27 @@ $("#btn-refresh-ports").addEventListener("click", refreshSerialPorts);
 $("#btn-connect-serial").addEventListener("click", async () => {
   const port = $("#serial-port-select").value;
   if (!port) return alert("Sélectionne un port série d'abord.");
-  $("#conn-led").className = "led led-connecting";
   try {
     await api("POST", "/api/connection/serial/connect", { port, baud_rate: 115200 });
     await refreshStatus();
-  } catch (e) {
-    alert(e.message);
-    await refreshStatus();
-  }
+  } catch (e) { alert(e.message); }
 });
 
 $("#btn-scan-ble").addEventListener("click", async () => {
-  $("#conn-led").className = "led led-connecting";
   try {
     const devices = await api("GET", "/api/connection/ble/scan");
-    if (devices.length === 0) {
-      alert("Aucun appareil BLE trouvé à proximité.");
-      await refreshStatus();
-      return;
-    }
+    if (!devices.length) return alert("Aucun appareil BLE trouvé à proximité du serveur.");
     const names = devices.map((d, i) => `${i}: ${d.name} (${d.address})`).join("\n");
     const choice = prompt(`Appareils trouvés :\n${names}\n\nEntre le numéro à connecter :`);
     const idx = parseInt(choice, 10);
     if (Number.isNaN(idx) || !devices[idx]) return;
     await api("POST", "/api/connection/ble/connect", { address: devices[idx].address });
+    await api("POST", "/api/known-devices", {
+      id: `ble-${devices[idx].address}`, name: devices[idx].name, transport: "ble", target: devices[idx].address,
+    });
     await refreshStatus();
-  } catch (e) {
-    alert(e.message);
-    await refreshStatus();
-  }
+    await loadDeviceList();
+  } catch (e) { alert(e.message); }
 });
 
 $("#btn-disconnect").addEventListener("click", async () => {
@@ -102,19 +122,290 @@ $("#btn-disconnect").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Channels
+// Local mode (Web Bluetooth) connection
+// ---------------------------------------------------------------------------
+function updateLocalStatusUi() {
+  const isConnected = AT2BleClient.connected();
+  setConnUi(isConnected, isConnected ? `Connecté (local · ${localDeviceInfo?.name || "?"})` : "Déconnecté (BLE local)");
+  $("#btn-local-disconnect").hidden = !isConnected;
+}
+
+$("#btn-local-connect").addEventListener("click", async () => {
+  try {
+    localDeviceInfo = await AT2BleClient.connect();
+    updateLocalStatusUi();
+    appendLog(`BLE local connecté: ${localDeviceInfo.name}`);
+  } catch (e) { alert(e.message); }
+});
+$("#btn-local-disconnect").addEventListener("click", async () => {
+  await AT2BleClient.disconnect();
+  updateLocalStatusUi();
+});
+AT2BleClient.onPacket((pkt) => appendLog(`RX local [${pkt.family.toString(16)}/${pkt.command.toString(16)}]`));
+
+// ---------------------------------------------------------------------------
+// Devices tab: known devices list
+// ---------------------------------------------------------------------------
+async function loadDeviceList() {
+  const list = $("#device-list");
+  try {
+    const known = await api("GET", "/api/known-devices");
+    if (!known.length) {
+      list.innerHTML = `<div class="card hint">Aucun appareil connu pour l'instant — scanne en BLE ou connecte-toi en série pour en enregistrer un.</div>`;
+      return;
+    }
+    list.innerHTML = known.map((d) => `
+      <div class="card device-card">
+        <div class="device-thumb">📻</div>
+        <div class="device-card-info">
+          <div class="device-card-name">${d.name}</div>
+          <div class="device-card-model">${d.transport.toUpperCase()} · ${d.target}</div>
+        </div>
+        <div class="device-card-actions">
+          <button class="btn-primary" onclick="reconnectKnownDevice('${d.id}', '${d.transport}', '${d.target}')">Connecter</button>
+          <button class="btn-ghost" onclick="forgetKnownDevice('${d.id}')">Oublier</button>
+        </div>
+      </div>`).join("");
+  } catch (e) {
+    list.innerHTML = `<div class="card hint">${e.message}</div>`;
+  }
+}
+
+async function reconnectKnownDevice(id, transport, target) {
+  try {
+    if (transport === "ble") await api("POST", "/api/connection/ble/connect", { address: target });
+    else await api("POST", "/api/connection/serial/connect", { port: target, baud_rate: 115200 });
+    await refreshStatus();
+  } catch (e) { alert(e.message); }
+}
+
+async function forgetKnownDevice(id) {
+  await api("DELETE", `/api/known-devices/${id}`);
+  await loadDeviceList();
+}
+
+loadDeviceList();
+
+// ---------------------------------------------------------------------------
+// Compact channel switcher
+// ---------------------------------------------------------------------------
+let channelNames = {};
+let activeChannel = 1;
+let lastReadChannels = [];
+
+async function loadChannelNames() {
+  channelNames = await api("GET", "/api/channel-names");
+}
+
+function renderChanSelect() {
+  const sel = $("#chan-select");
+  sel.innerHTML = Array.from({ length: 30 }, (_, i) => i + 1)
+    .map((n) => `<option value="${n}">CH${String(n).padStart(2, "0")} · ${channelNames[n] || "—"}</option>`)
+    .join("");
+  sel.value = activeChannel;
+}
+
+function renderChanOpts() {
+  const cfg = lastReadChannels.find((c) => c.channel === activeChannel);
+  const opts = cfg
+    ? [
+        { icon: cfg.high_power ? "H" : "L", title: cfg.high_power ? "Puissance haute" : "Puissance basse", on: cfg.high_power },
+        { icon: cfg.bandwidth_narrow ? "N" : "W", title: cfg.bandwidth_narrow ? "Bande étroite" : "Bande large", on: cfg.bandwidth_narrow },
+        { icon: "📡", title: cfg.scan_add ? "Ajouté au scan" : "Exclu du scan", on: cfg.scan_add },
+        { icon: cfg.mode_digital ? "D" : "A", title: cfg.mode_digital ? "Numérique" : "Analogique", on: cfg.mode_digital, warn: cfg.mode_digital },
+      ]
+    : [{ icon: "?", title: "Lis les canaux pour voir les options", on: false }];
+  $("#chan-opts").innerHTML = opts
+    .map((o) => `<span class="chan-opt-icon ${o.on ? (o.warn ? "warn-on" : "on") : ""}" title="${o.title}">${o.icon}</span>`)
+    .join("");
+}
+
+async function applyActiveChannel(select = true) {
+  renderChanSelect();
+  renderChanOpts();
+  $("#ptt-device-sub").textContent = `CH${String(activeChannel).padStart(2, "0")}${channelNames[activeChannel] ? " · " + channelNames[activeChannel] : ""}`;
+  if (select) {
+    try {
+      if (mode === "server") await api("POST", `/api/channels/${activeChannel}/select`);
+      else if (AT2BleClient.connected()) await AT2BleClient.selectChannel(activeChannel);
+    } catch (e) { appendLog(`Erreur sélection canal: ${e.message}`); }
+  }
+}
+
+$("#chan-select").addEventListener("change", (e) => { activeChannel = parseInt(e.target.value, 10); applyActiveChannel(); });
+$("#chan-prev").addEventListener("click", () => { activeChannel = activeChannel > 1 ? activeChannel - 1 : 30; applyActiveChannel(); });
+$("#chan-next").addEventListener("click", () => { activeChannel = activeChannel < 30 ? activeChannel + 1 : 1; applyActiveChannel(); });
+$("#chan-rename").addEventListener("click", async () => {
+  const name = prompt(`Nom pour le canal ${activeChannel} :`, channelNames[activeChannel] || "");
+  if (name === null) return;
+  await api("PUT", `/api/channel-names/${activeChannel}`, { name });
+  await loadChannelNames();
+  applyActiveChannel(false);
+});
+
+// ---------------------------------------------------------------------------
+// Live PTT (server mode: real mic capture + AMR encode server-side + WS)
+// ---------------------------------------------------------------------------
+const waveEl = $("#ptt-wave");
+for (let i = 0; i < 40; i++) {
+  const bar = document.createElement("span");
+  bar.style.height = "3px";
+  waveEl.appendChild(bar);
+}
+function setWaveHeights(active) {
+  waveEl.querySelectorAll("span").forEach((bar) => {
+    bar.style.height = (active ? 4 + Math.random() * 46 : 3) + "px";
+  });
+}
+let waveTimer = setInterval(() => setWaveHeights(false), 90);
+
+let pttSocket = null;
+let pttActive = false;
+let pttStart = null;
+let pttTimerInterval = null;
+
+function formatTimer(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+async function startPtt() {
+  if (mode !== "server" || !connected || pttActive) return;
+  pttActive = true;
+  pttStart = Date.now();
+  $("#ptt-btn").classList.add("pressed");
+  waveEl.classList.add("active");
+  $("#rf-indicator").classList.add("tx");
+  $("#rf-label").textContent = "TX";
+  pttTimerInterval = setInterval(() => {
+    $("#ptt-timer").textContent = formatTimer(Date.now() - pttStart);
+  }, 200);
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  pttSocket = new WebSocket(`${proto}://${location.host}/ws/ptt`);
+  pttSocket.binaryType = "arraybuffer";
+  pttSocket.onmessage = (evt) => {
+    const pcm = new Int16Array(evt.data);
+    PttAudio.playPcmFrame(pcm);
+    $("#rf-indicator").classList.add("rx");
+  };
+  pttSocket.onopen = async () => {
+    await PttAudio.startCapture((int16Frame) => {
+      if (pttSocket && pttSocket.readyState === WebSocket.OPEN) {
+        pttSocket.send(int16Frame.buffer);
+      }
+      setWaveHeights(true);
+    });
+  };
+  pttSocket.onerror = () => appendLog("PTT WS erreur");
+}
+
+function stopPtt() {
+  if (!pttActive) return;
+  pttActive = false;
+  PttAudio.stopCapture();
+  if (pttSocket) { pttSocket.close(); pttSocket = null; }
+  $("#ptt-btn").classList.remove("pressed");
+  waveEl.classList.remove("active");
+  $("#rf-indicator").classList.remove("tx", "rx");
+  $("#rf-label").textContent = "Standby";
+  clearInterval(pttTimerInterval);
+  $("#ptt-timer").textContent = "00:00";
+}
+
+const pttBtn = $("#ptt-btn");
+pttBtn.addEventListener("mousedown", startPtt);
+pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startPtt(); });
+["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((evt) => pttBtn.addEventListener(evt, stopPtt));
+
+// ---------------------------------------------------------------------------
+// GPS position + SOS
+// ---------------------------------------------------------------------------
+let lastCoords = null;
+let beaconTimer = null;
+
+function formatCoords(lat, lon) { return `${lat.toFixed(5)}° , ${lon.toFixed(5)}°`; }
+function updateGpsFix(locked, label) {
+  $("#gps-fix").classList.toggle("locked", locked);
+  $("#gps-fix-label").textContent = label;
+}
+
+function requestLocation() {
+  if (!navigator.geolocation) { updateGpsFix(false, "Géolocalisation indisponible"); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      lastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      $("#gps-coords").textContent = formatCoords(lastCoords.lat, lastCoords.lon);
+      $("#gps-accuracy").textContent = `précision ≈ ${Math.round(lastCoords.acc)} m`;
+      updateGpsFix(true, "Fix GPS acquis");
+    },
+    () => updateGpsFix(false, "Localisation refusée"),
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+requestLocation();
+
+async function sendPositionPayload(url, note) {
+  if (!lastCoords) return alert("Pas de position GPS disponible.");
+  const username = $("#msg-username")?.value || "AT2Bridge";
+  if (mode === "server") {
+    await api("POST", url, { username, lat: lastCoords.lat, lon: lastCoords.lon, note });
+  } else if (AT2BleClient.connected()) {
+    await AT2BleClient.sendText(username, `${note} 📍 ${formatCoords(lastCoords.lat, lastCoords.lon)}`);
+  } else {
+    alert("Aucune connexion active.");
+  }
+}
+
+$("#gps-send-now").addEventListener("click", async () => {
+  try {
+    await sendPositionPayload("/api/position/send", "");
+    $("#beacon-status").textContent = `Position envoyée à l'instant (${formatCoords(lastCoords.lat, lastCoords.lon)})`;
+  } catch (e) { alert(e.message); }
+});
+
+$("#beacon-toggle").addEventListener("change", (e) => {
+  const status = $("#beacon-status");
+  if (e.target.checked) {
+    const seconds = parseInt($("#beacon-interval").value, 10);
+    const label = seconds >= 60 ? `${seconds / 60} min` : `${seconds} s`;
+    status.textContent = `Balise active — envoi toutes les ${label}`;
+    beaconTimer = setInterval(async () => {
+      requestLocation();
+      try { await sendPositionPayload("/api/position/send", ""); } catch (_) {}
+      status.textContent = `Dernière balise envoyée à l'instant · prochaine dans ${label}`;
+    }, seconds * 1000);
+  } else {
+    clearInterval(beaconTimer);
+    status.textContent = "Balise désactivée";
+  }
+});
+$("#beacon-interval").addEventListener("change", () => {
+  if ($("#beacon-toggle").checked) $("#beacon-toggle").dispatchEvent(new Event("change"));
+});
+
+$("#sos-btn").addEventListener("click", async () => {
+  const btn = $("#sos-btn");
+  const preset = $("#sos-preset").value;
+  try {
+    await sendPositionPayload("/api/position/sos", preset);
+    btn.classList.add("sent");
+    btn.textContent = "✔ Envoyé";
+    setTimeout(() => { btn.classList.remove("sent"); btn.textContent = "🆘 SOS"; }, 2200);
+  } catch (e) { alert(e.message); }
+});
+
+// ---------------------------------------------------------------------------
+// Channel table (bulk read/write)
 // ---------------------------------------------------------------------------
 let toneOptions = ["OFF"];
 
 function channelRowHtml(ch) {
-  const toneSelect = (value) =>
-    `<select class="tone-select">${toneOptions
-      .map((t) => `<option value="${t}" ${t === value ? "selected" : ""}>${t}</option>`)
-      .join("")}</select>`;
+  const toneSelect = (value) => `<select class="tone-select">${toneOptions.map((t) => `<option value="${t}" ${t === value ? "selected" : ""}>${t}</option>`).join("")}</select>`;
   return `
     <tr data-channel="${ch.channel}">
       <td>${ch.channel}</td>
-      <td><input type="text" class="ch-name" value="${ch.name ?? ""}" placeholder="—" /></td>
+      <td><input type="text" class="ch-name" value="${channelNames[ch.channel] || ch.name || ""}" placeholder="—" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-rx" value="${ch.rx_mhz ?? ""}" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-tx" value="${ch.tx_mhz ?? ""}" /></td>
       <td>${toneSelect(ch.rx_tone ?? "OFF")}</td>
@@ -133,12 +424,7 @@ function emptyChannels() {
 
 function renderChannelTable(channels) {
   $("#channel-table-body").innerHTML = channels.map(channelRowHtml).join("");
-  $$(".btn-write-one").forEach((btn) =>
-    btn.addEventListener("click", async (e) => {
-      const row = e.target.closest("tr");
-      await writeChannelRow(row);
-    })
-  );
+  $$(".btn-write-one").forEach((btn) => btn.addEventListener("click", async (e) => writeChannelRow(e.target.closest("tr"))));
 }
 
 function readChannelRow(row) {
@@ -154,9 +440,7 @@ function readChannelRow(row) {
     high_power: row.querySelector(".ch-power").checked,
     scan_add: row.querySelector(".ch-scan").checked,
     mode_digital: row.querySelector(".ch-digital").checked,
-    busy_lock: false,
-    hop_on: false,
-    encrypt_key: 0,
+    busy_lock: false, hop_on: false, encrypt_key: 0,
   };
 }
 
@@ -164,94 +448,85 @@ async function writeChannelRow(row) {
   const cfg = readChannelRow(row);
   try {
     await api("PUT", `/api/channels/${cfg.channel}`, cfg);
-  } catch (e) {
-    alert(e.message);
-  }
+    if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
+  } catch (e) { alert(e.message); }
 }
 
 $("#btn-read-channels").addEventListener("click", async () => {
   try {
     const channels = await api("GET", "/api/channels");
-    renderChannelTable(channels.length ? channels : emptyChannels());
-  } catch (e) {
-    alert(e.message);
-  }
+    lastReadChannels = channels.length ? channels : emptyChannels();
+    renderChannelTable(lastReadChannels);
+    renderChanOpts();
+  } catch (e) { alert(e.message); }
 });
 
 $("#btn-write-channels").addEventListener("click", async () => {
-  const rows = $$("#channel-table-body tr");
-  const configs = rows.map(readChannelRow);
+  const configs = $$("#channel-table-body tr").map(readChannelRow);
   if (configs.length !== 30) return alert("Il faut exactement 30 lignes (utilise « Lire » d'abord).");
   try {
     await api("PUT", "/api/channels", configs);
     alert("Codeplug écrit.");
-  } catch (e) {
-    alert(e.message);
-  }
+  } catch (e) { alert(e.message); }
 });
 
-// initial empty table so the UI isn't blank before first read
 renderChannelTable(emptyChannels());
-api("GET", "/api/channels/tone-options").then((opts) => {
-  toneOptions = opts;
-});
+api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; });
 
 // ---------------------------------------------------------------------------
 // Device settings
 // ---------------------------------------------------------------------------
-document.querySelectorAll("[data-action]").forEach((btn) => {
+$$("[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     try {
-      switch (btn.dataset.action) {
-        case "set-volume":
-          await api("PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) });
-          break;
-        case "set-squelch":
-          await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
-          break;
-        case "set-vox":
-          await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
-          break;
-        case "select-channel":
-          await api("POST", `/api/channels/${parseInt($("#select-channel-input").value, 10)}/select`);
-          break;
-      }
-    } catch (e) {
-      alert(e.message);
-    }
+      if (btn.dataset.action === "set-volume") await api("PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) });
+      if (btn.dataset.action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
+      if (btn.dataset.action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
+    } catch (e) { alert(e.message); }
   });
 });
 
 // ---------------------------------------------------------------------------
-// Messaging
+// Messaging (single thread tied to the active channel; outgoing only for
+// now -- inbound offline-message decoding isn't wired yet, see README)
 // ---------------------------------------------------------------------------
+function pushSentBubble(text) {
+  const thread = $("#msg-thread");
+  const el = document.createElement("div");
+  el.className = "msg-bubble mine";
+  el.innerHTML = `<div class="meta">Moi · ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${text}</div>`;
+  thread.appendChild(el);
+  thread.scrollTop = thread.scrollHeight;
+}
+
 $("#btn-send-message").addEventListener("click", async () => {
   const username = $("#msg-username").value || "AT2Bridge";
   const text = $("#msg-text").value.trim();
   if (!text) return;
   try {
-    await api("POST", "/api/messages/text", { username, text });
+    if (mode === "server") await api("POST", "/api/messages/text", { username, text });
+    else if (AT2BleClient.connected()) await AT2BleClient.sendText(username, text);
+    else return alert("Aucune connexion active.");
+    pushSentBubble(text);
     $("#msg-text").value = "";
-  } catch (e) {
-    alert(e.message);
-  }
+  } catch (e) { alert(e.message); }
 });
 
 // ---------------------------------------------------------------------------
-// Live log (WebSocket)
+// Live log (server mode only)
 // ---------------------------------------------------------------------------
 function connectLogSocket() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/log`);
-  const console_ = $("#log-console");
-  ws.onmessage = (evt) => {
-    console_.textContent += evt.data + "\n";
-    console_.scrollTop = console_.scrollHeight;
-  };
+  ws.onmessage = (evt) => appendLog(evt.data);
   ws.onclose = () => setTimeout(connectLogSocket, 2000);
 }
 connectLogSocket();
 
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadChannelNames().then(() => applyActiveChannel(false));
 refreshStatus();
 refreshSerialPorts();
-setInterval(refreshStatus, 5000);
+setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
