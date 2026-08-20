@@ -21,3 +21,4 @@ services:
 
     environment:
       - PYTHONUNBUFFERED=1
+      - UVICORN_PORT=2910
