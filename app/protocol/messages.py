@@ -352,5 +352,4 @@ class MessageAssembler:
             return CompletedMessage(kind="image", sender=entry["sender"], msg_id=c.msg_id,
                                      data=ordered, width=entry.get("width"), height=entry.get("height"))
         return None
-PYEOF
-python3 -c "import ast; ast.parse(open('/home/claude/at2-bridge/app/protocol/messages.py').read()); print('syntax OK')"
+
