@@ -29,6 +29,8 @@ class DeviceManager:
         self._log: list[str] = []
         self._log_listeners: list = []
         self._next_msg_id = 1
+        self._ptt_rx_listeners: list = []
+        self._rx_codec = None
 
     # -- connection lifecycle -------------------------------------------------
 
@@ -63,6 +65,7 @@ class DeviceManager:
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
         await t.connect(port, baud_rate=baud_rate)
         self._transport, self._kind, self._target = t, "serial", port
+        self._install_ptt_rx_listener(t)
         self._log_line(f"Connecté en série sur {port} @ {baud_rate} bauds")
 
     async def connect_ble(self, address: str) -> None:
@@ -71,6 +74,7 @@ class DeviceManager:
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
         await t.connect(address)
         self._transport, self._kind, self._target = t, "ble", address
+        self._install_ptt_rx_listener(t)
         self._log_line(f"Connecté en BLE sur {address}")
 
     async def disconnect(self) -> None:
@@ -168,6 +172,89 @@ class DeviceManager:
             await t.send_raw_frame(f)
             await asyncio.sleep(0.35)
         self._log_line(f"Message texte envoyé ({len(text)} caractères, {len(frames)} trame(s))")
+
+    async def send_position(self, username: str, lat: float, lon: float, note: str = "") -> None:
+        """Position beacon / SOS, piggybacked on the (verified, working)
+        text messaging channel -- see README for why this isn't a
+        dedicated structured location message type yet."""
+        prefix = f"{note + ' ' if note else ''}📍 {lat:.5f},{lon:.5f}"
+        await self.send_text_message(username, prefix)
+
+    # -- live PTT (real-time voice) -----------------------------------------
+
+    def start_ptt_session(self) -> "PttSession":
+        t = self._require_transport()
+        return PttSession(t, self._log_line)
+
+    def on_ptt_voice_packet(self, callback) -> None:
+        """`callback(pcm_bytes)` is invoked (sync) with 320 bytes of decoded
+        PCM for every incoming voice packet on the active transport."""
+        self._ptt_rx_listeners.append(callback)
+
+    def _install_ptt_rx_listener(self, transport: Transport) -> None:
+        from app.protocol.amr_codec import AmrNbCodec
+        from app.protocol import ptt as ptt_proto
+
+        rx_codec = AmrNbCodec()
+        self._rx_codec = rx_codec
+
+        def _on_packet(pkt) -> None:
+            if not ptt_proto.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body):
+                return
+            for amr_frame in ptt_proto.extract_amr_frames(pkt.body):
+                pcm = rx_codec.decode(amr_frame)
+                for cb in list(self._ptt_rx_listeners):
+                    try:
+                        cb(pcm)
+                    except Exception:
+                        logger.exception("PTT rx listener raised")
+
+        transport.on_packet(_on_packet)
+
+
+class PttSession:
+    """One push-to-talk transmission: buffers 20ms PCM frames, AMR-encodes
+    them, and sends them to the radio in 100ms (5-frame) packets, exactly
+    matching PttVoiceSender.kt's pacing and chunking.
+    """
+
+    def __init__(self, transport: Transport, log_line) -> None:
+        from app.protocol.amr_codec import AmrNbCodec
+        from app.protocol import ptt as ptt_proto
+
+        self._transport = transport
+        self._log_line = log_line
+        self._codec = AmrNbCodec()
+        self._ptt_proto = ptt_proto
+        self._pending_amr: list[bytes] = []
+        self._last_send = 0.0
+
+    async def feed_pcm_frame(self, pcm_320_bytes: bytes) -> None:
+        """Call once per 20ms with exactly 320 bytes of 16-bit mono PCM @8kHz."""
+        encoded = self._codec.encode(pcm_320_bytes)
+        if encoded is None:
+            return
+        self._pending_amr.append(encoded)
+        if len(self._pending_amr) >= self._ptt_proto.FRAMES_PER_PACKET:
+            await self._flush(self._ptt_proto.FRAMES_PER_PACKET)
+
+    async def _flush(self, count: int) -> None:
+        if len(self._pending_amr) < count:
+            return
+        chunk, self._pending_amr = self._pending_amr[:count], self._pending_amr[count:]
+        now = asyncio.get_event_loop().time()
+        gap = now - self._last_send
+        if self._last_send and gap < self._ptt_proto.PACKET_PACING_SECONDS:
+            await asyncio.sleep(self._ptt_proto.PACKET_PACING_SECONDS - gap)
+        self._last_send = asyncio.get_event_loop().time()
+        payload = self._ptt_proto.build_ptt_voice_payload(chunk)
+        await self._transport.send_payload(payload)
+
+    async def close(self) -> None:
+        if len(self._pending_amr) >= self._ptt_proto.TAIL_MIN_FRAMES:
+            await self._flush(len(self._pending_amr))
+        self._codec.close()
+        self._log_line("PTT: transmission terminée")
 
 
 device_manager = DeviceManager()
