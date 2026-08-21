@@ -19,6 +19,6 @@ COPY app ./app
 RUN mkdir -p /srv/data
 ENV AT2_BRIDGE_DATA_DIR=/srv/data
 
-EXPOSE 8000
+EXPOSE 2910
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "2910"]
