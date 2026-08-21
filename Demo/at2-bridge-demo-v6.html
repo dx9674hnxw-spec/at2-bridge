@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AT2 Bridge — Démo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --font-sans: 'Inter', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --color-bg: #050505;
+  --color-bg-alt: #0f1117;
+  --color-surface: #121212;
+  --color-surface-hover: #1a1a1a;
+
+  --grid-size: 32px;
+  --grid-line: rgba(255, 255, 255, 0.035);
+
+  --color-border: #1f2937;
+  --color-border-strong: #374151;
+  --color-border-soft: rgba(255, 255, 255, 0.08);
+
+  --color-text: #ffffff;
+  --color-text-soft: #e5e7eb;
+  --color-text-muted: #d1d5db;
+  --color-text-dim: #9ca3af;
+  --color-text-subtle: #6b7280;
+  --color-text-faint: #4b5563;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-ring: rgba(59, 130, 246, 0.12);
+  --color-primary-border: rgba(59, 130, 246, 0.4);
+  --color-primary-border-soft: rgba(59, 130, 246, 0.3);
+  --color-primary-outline: rgba(59, 130, 246, 0.15);
+
+  --color-orange: #f97316;
+
+  --status-up: #10b981;
+  --status-up-bg: rgba(16, 185, 129, 0.08);
+  --status-up-bg-strong: rgba(16, 185, 129, 0.16);
+  --status-up-border: rgba(16, 185, 129, 0.35);
+
+  --status-down: #ef4444;
+  --status-down-bg: rgba(239, 68, 68, 0.08);
+  --status-down-border: rgba(239, 68, 68, 0.35);
+
+  --status-degraded: #f59e0b;
+  --status-degraded-bg: rgba(245, 158, 11, 0.10);
+  --status-degraded-border: rgba(245, 158, 11, 0.35);
+
+  --status-info: #60a5fa;
+  --status-info-bg: rgba(59, 130, 246, 0.08);
+
+  --status-neutral: #94a3b8;
+  --status-neutral-bg: rgba(148, 163, 184, 0.12);
+  --status-neutral-border: rgba(148, 163, 184, 0.28);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-input: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.875rem;
+  --radius-pill: 9999px;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-primary-outline), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  --transition-fast: 200ms ease;
+  --transition-medium: 250ms ease;
+}
+
+*, *::before, *::after { font-family: var(--font-sans); box-sizing: border-box; }
+
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-text-muted);
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.035), transparent 26%),
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, var(--grid-size) var(--grid-size), var(--grid-size) var(--grid-size);
+  background-position: center center;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.demo-banner {
+  background: color-mix(in srgb, var(--status-degraded) 16%, transparent);
+  border-bottom: 1px solid var(--status-degraded-border);
+  color: var(--status-degraded);
+  text-align: center;
+  padding: 7px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* -- Topbar ------------------------------------------------------------ */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+  background-color: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap; gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--status-up);
+  box-shadow: 0 0 8px var(--status-up);
+}
+.brand-name { font-family: var(--font-mono); font-weight: 600; font-size: 16px; color: var(--color-text); letter-spacing: -0.01em; }
+.brand-name-thin { font-weight: 400; color: var(--color-text-subtle); }
+
+.conn-panel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background-color: var(--status-up-bg);
+  border: 1px solid var(--status-up-border);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px 4px 8px;
+  font-size: 12px; font-weight: 600; color: var(--status-up);
+}
+.status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--status-up); box-shadow: 0 0 5px var(--status-up); }
+
+.conn-controls { display: flex; gap: 8px; align-items: center; }
+
+select, input[type=text], input[type=number], textarea {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-soft);
+  border-radius: var(--radius-input);
+  padding: 7px 11px;
+  font-size: 13px;
+}
+select:focus, input:focus, textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+  outline: none;
+}
+input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.2); }
+textarea { resize: vertical; width: 100%; max-width: 480px; }
+
+button {
+  border: none; border-radius: var(--radius-md); padding: 7px 14px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+.btn-primary { background-color: var(--color-primary); color: #fff; }
+.btn-primary:hover { background-color: var(--color-primary-hover); }
+.btn-ghost { background-color: var(--color-surface); color: var(--color-text-dim); border: 1px solid var(--color-border); }
+.btn-ghost:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+.btn-danger { background-color: var(--status-down-bg); color: var(--status-down); border: 1px solid var(--status-down-border); }
+.btn-danger:hover { background-color: rgba(239, 68, 68, 0.18); }
+
+/* -- Tabs ---------------------------------------------------------------- */
+.tabs-wrap { padding: 14px 24px 0; }
+.tabs {
+  display: inline-flex; gap: 2px; padding: 4px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.tab {
+  background-color: transparent; color: var(--color-text-dim);
+  font-size: 13px; font-weight: 600;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+}
+.tab:hover { background-color: var(--color-primary-hover); color: #fff; }
+.tab.active {
+  background-color: var(--status-info-bg);
+  color: #ffffff;
+  box-shadow: 0 0 0 1px var(--color-primary-outline);
+}
+
+main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* -- KPI cards ------------------------------------------------------------ */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.kpi:hover { background-color: var(--color-surface-hover); border-color: var(--color-primary-border); transform: translateY(-1px); box-shadow: var(--shadow-card-hover); }
+.kpi .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--color-text-faint); }
+.kpi .value { font-family: var(--font-mono); font-size: 21px; color: var(--color-text); margin-top: 6px; letter-spacing: -0.01em; }
+.kpi .value.up { color: var(--status-up); }
+.kpi .value.info { color: var(--status-info); }
+
+/* -- Toolbar / hints ------------------------------------------------------ */
+.panel-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.hint { color: var(--color-text-subtle); font-size: 12px; }
+
+/* -- Channel table ---------------------------------------------------- */
+.table-wrap {
+  overflow-x: auto;
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+table { border-collapse: collapse; width: 100%; min-width: 920px; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
+th {
+  color: var(--color-text-faint); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--color-border);
+}
+td input[type=text], td input[type=number] { width: 100%; min-width: 72px; padding: 5px 9px; }
+tbody tr { transition: background-color var(--transition-fast); }
+tbody tr:hover { background-color: var(--color-surface-hover); }
+.freq-cell input { font-family: var(--font-mono); }
+
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.status-active { background: var(--status-up); box-shadow: 0 0 5px var(--status-up); }
+.status-idle { background: var(--color-text-faint); }
+
+/* -- Device settings ---------------------------------------------------- */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.setting-card {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.setting-card:hover { background-color: var(--color-surface-hover); border-color: var(--color-primary-border); box-shadow: var(--shadow-card-hover); }
+.setting-card label { font-size: 12px; color: var(--color-text-dim); font-weight: 500; }
+.setting-card input[type=range] { width: 100%; accent-color: var(--color-primary); }
+.readout { font-family: var(--font-mono); font-size: 24px; color: var(--status-info); letter-spacing: -0.01em; }
+
+/* -- Settings panel (same structural pattern as .msg-panel: one grouped
+   container, header row, divided sub-sections) -------------------------- */
+.settings-panel {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.settings-section-title {
+  padding: 14px 16px 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+}
+.settings-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-label { flex: 1; min-width: 0; }
+.settings-row-title { font-size: 13px; font-weight: 600; color: var(--color-text-soft); }
+.settings-row-sub { font-size: 11px; color: var(--color-text-subtle); margin-top: 1px; }
+.settings-row-control { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.settings-row-control input[type=range] { width: 120px; accent-color: var(--color-primary); }
+.settings-readout-inline { font-family: var(--font-mono); font-size: 13px; color: var(--status-info); min-width: 22px; text-align: right; }
+.settings-row-control input[type=text] { width: 140px; }
+
+.icon-toggle {
+  width: 34px; height: 34px; border-radius: var(--radius-md); flex-shrink: 0;
+  background-color: var(--color-surface); border: 1px solid var(--color-border);
+  color: var(--color-text-faint); font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.icon-toggle.on { color: var(--status-info); border-color: var(--color-primary-border-soft); background-color: var(--status-info-bg); }
+.settings-status-pill {
+  font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-pill);
+  background: var(--status-neutral-bg); color: var(--status-neutral); border: 1px solid var(--status-neutral-border);
+}
+
+/* -- Messages (ATAK VX-inspired) ------------------------------------------ */
+.msg-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .msg-layout { grid-template-columns: 1fr; } }
+
+.group-list {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.group-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.group-item:last-child { border-bottom: none; }
+.group-item:hover { background-color: var(--color-surface-hover); }
+.group-item.active { background-color: var(--status-info-bg); box-shadow: inset 2px 0 0 var(--color-primary); }
+.group-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--color-text-dim);
+  flex-shrink: 0;
+}
+.group-item.active .group-avatar { color: var(--color-primary); border-color: var(--color-primary-border); }
+.group-meta { min-width: 0; flex: 1; }
+.group-name { font-size: 13px; font-weight: 600; color: var(--color-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-sub { font-size: 11px; color: var(--color-text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-badge {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  color: var(--status-up); background: var(--status-up-bg);
+  border: 1px solid var(--status-up-border);
+  border-radius: var(--radius-pill); padding: 1px 7px; flex-shrink: 0;
+}
+
+.msg-panel {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.device-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.device-icon {
+  width: 34px; height: 34px; border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.device-info { flex: 1; min-width: 0; }
+.device-title { font-size: 14px; font-weight: 600; color: var(--color-text); }
+.device-sub { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-subtle); }
+.device-eject {
+  width: 30px; height: 30px; border-radius: var(--radius-md);
+  background-color: var(--status-down-bg); border: 1px solid var(--status-down-border);
+  color: var(--status-down); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; font-size: 13px;
+}
+
+.status-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--color-border); }
+.status-cell {
+  padding: 10px 6px; text-align: center;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+.status-cell:nth-child(4n) { border-right: none; }
+.status-cell:nth-child(n+5) { border-bottom: none; }
+.status-cell .sc-value { font-size: 13px; font-weight: 700; color: var(--color-text-soft); }
+.status-cell .sc-value.accent { color: var(--status-info); }
+.status-cell .sc-value.warn { color: var(--status-degraded); }
+.status-cell .sc-label { font-size: 10px; color: var(--color-text-subtle); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.vol-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+.vol-row input[type=range] { flex: 1; accent-color: var(--color-primary); }
+.vol-icon { color: var(--color-text-dim); font-size: 14px; }
+
+.msg-thread { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; }
+.msg-bubble { max-width: 78%; }
+.msg-bubble.mine { align-self: flex-end; }
+.msg-bubble .meta { font-size: 10.5px; color: var(--color-text-subtle); margin-bottom: 3px; font-weight: 500; }
+.msg-bubble.mine .meta { text-align: right; }
+.msg-body {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 9px 12px;
+  font-size: 13px; color: var(--color-text-soft);
+}
+.msg-bubble.mine .msg-body { background-color: var(--status-info-bg); border-color: var(--color-primary-border-soft); }
+
+.msg-body.img-body { padding: 6px; }
+.msg-body.img-body img { display: block; width: 100%; max-width: 220px; border-radius: var(--radius-md); }
+.msg-body.img-caption { padding: 6px 6px 8px; }
+.msg-body.img-caption .cap-text { padding: 4px 4px 0; font-size: 12px; color: var(--color-text-dim); }
+
+.voice-row { display: flex; align-items: center; gap: 9px; min-width: 190px; }
+.voice-play {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background-color: var(--color-primary); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer;
+}
+.msg-bubble.mine .voice-play { background-color: #fff; color: var(--color-primary); }
+.voice-wave { flex: 1; height: 20px; display: flex; align-items: center; gap: 2px; }
+.voice-wave span { width: 2px; background: var(--color-text-faint); border-radius: 1px; }
+.msg-bubble.mine .voice-wave span { background: rgba(255,255,255,0.55); }
+.voice-dur { font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-subtle); flex-shrink: 0; }
+.msg-bubble.mine .voice-dur { color: rgba(255,255,255,0.7); }
+
+.compose-row { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--color-border); }
+.compose-row input[type=text] { flex: 1; }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: var(--radius-md); flex-shrink: 0;
+  background-color: var(--color-surface); border: 1px solid var(--color-border);
+  color: var(--color-text-dim); display: flex; align-items: center; justify-content: center;
+  font-size: 15px; cursor: pointer; transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.icon-btn:hover { background-color: var(--color-surface-hover); color: var(--color-text); }
+.icon-btn.record.active { background-color: var(--status-down-bg); border-color: var(--status-down-border); color: var(--status-down); }
+.send-btn {
+  width: 34px; height: 34px; border-radius: var(--radius-md); flex-shrink: 0;
+  background-color: var(--color-primary); color: #fff; border: none;
+  display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;
+}
+.send-btn:hover { background-color: var(--color-primary-hover); }
+
+
+/* -- Log console ---------------------------------------------------------- */
+#log-console {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--status-up);
+  height: 420px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-pill); }
+
+@media (max-width: 640px) {
+  .topbar { flex-direction: column; align-items: flex-start; }
+  main { padding: 16px; }
+}
+
+/* -- Devices list (style app Ola Radio) ----------------------------------- */
+.device-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.device-card {
+  display: flex; align-items: center; gap: 14px;
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.device-card:hover { background-color: var(--color-surface-hover); border-color: var(--color-primary-border); transform: translateY(-1px); box-shadow: var(--shadow-card-hover); }
+.device-card.selected { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary-outline), var(--shadow-card); }
+.device-thumb {
+  width: 46px; height: 46px; border-radius: var(--radius-lg); flex-shrink: 0;
+  background-color: var(--color-surface); border: 1px solid var(--color-border-strong);
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.device-card-info { flex: 1; min-width: 0; }
+.device-card-name { font-size: 14px; font-weight: 600; color: var(--color-text); }
+.device-card-model { font-size: 11px; color: var(--color-text-subtle); margin-top: 1px; }
+.device-card-status { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11.5px; font-weight: 600; }
+.device-card-status.connected { color: var(--status-up); }
+.device-card-status.disconnected { color: var(--color-text-faint); }
+.device-card-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 5px currentColor; }
+.device-card-battery { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-dim); text-align: right; flex-shrink: 0; }
+.bt-icon { color: var(--color-primary); font-size: 15px; flex-shrink: 0; }
+
+/* -- Live PTT panel --------------------------------------------------- */
+.ptt-panel {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px 22px;
+}
+.ptt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.ptt-device-name { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.ptt-device-sub { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-subtle); }
+
+.rf-indicator {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--radius-pill); padding: 4px 11px;
+  font-size: 11.5px; font-weight: 600;
+  background-color: var(--status-neutral-bg); color: var(--status-neutral);
+  border: 1px solid var(--status-neutral-border);
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.rf-indicator .rf-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.rf-indicator.tx { background-color: var(--status-down-bg); color: var(--status-down); border-color: var(--status-down-border); }
+.rf-indicator.tx .rf-dot { box-shadow: 0 0 6px currentColor; animation: pulse 0.6s infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+
+.ptt-wave {
+  height: 56px; display: flex; align-items: center; justify-content: center; gap: 3px;
+  margin-bottom: 18px;
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.ptt-wave span {
+  width: 3px; min-height: 3px; border-radius: 2px;
+  background: var(--color-text-faint);
+  transition: height 0.08s ease, background-color 0.15s ease;
+}
+.ptt-wave.active span { background: var(--status-down); }
+
+.ptt-controls { display: flex; align-items: center; gap: 18px; }
+.ptt-btn {
+  width: 76px; height: 76px; border-radius: 50%; flex-shrink: 0;
+  background-color: var(--color-surface); border: 2px solid var(--color-border-strong);
+  color: var(--color-text-dim); font-weight: 700; font-size: 13px; letter-spacing: 0.04em;
+  cursor: pointer; user-select: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.ptt-btn:active, .ptt-btn.pressed {
+  background-color: var(--status-down); border-color: var(--status-down);
+  color: #fff; transform: scale(0.96);
+  box-shadow: 0 0 0 8px var(--status-down-bg);
+}
+.ptt-meta { flex: 1; }
+.ptt-timer { font-family: var(--font-mono); font-size: 20px; color: var(--color-text-soft); margin-bottom: 3px; }
+
+/* -- Compact channel switcher (icons instead of a full form) --------------- */
+.chan-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.chan-arrow {
+  width: 26px; height: 26px; border-radius: var(--radius-sm); flex-shrink: 0;
+  background-color: var(--color-surface); border: 1px solid var(--color-border);
+  color: var(--color-text-dim); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.chan-arrow:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+.chan-select {
+  flex: 1; min-width: 120px; font-weight: 600; font-size: 13px;
+  padding: 5px 8px;
+}
+.chan-opts { display: flex; gap: 4px; flex-wrap: wrap; }
+.chan-opt-icon {
+  width: 26px; height: 26px; border-radius: var(--radius-sm); flex-shrink: 0;
+  background-color: var(--color-surface); border: 1px solid var(--color-border);
+  color: var(--color-text-faint); font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  cursor: default;
+}
+.chan-opt-icon.on { color: var(--status-info); border-color: var(--color-primary-border-soft); background-color: var(--status-info-bg); }
+.chan-opt-icon.warn-on { color: var(--status-degraded); border-color: var(--status-degraded-border); background-color: var(--status-degraded-bg); }
+
+/* -- Devices tab layout ------------------------------------------------- */
+.devices-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+@media (min-width: 860px) { .devices-grid { grid-template-columns: 1fr 1fr; align-items: start; } }
+
+/* -- GPS / emergency panel ------------------------------------------------ */
+.gps-panel {
+  background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px 20px;
+}
+.gps-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.gps-title { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.gps-fix {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--radius-pill); padding: 4px 10px;
+  font-size: 11px; font-weight: 600;
+  background-color: var(--status-neutral-bg); color: var(--status-neutral);
+  border: 1px solid var(--status-neutral-border);
+}
+.gps-fix.locked { background-color: var(--status-up-bg); color: var(--status-up); border-color: var(--status-up-border); }
+.gps-fix .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.gps-coords { font-family: var(--font-mono); font-size: 19px; color: var(--status-info); letter-spacing: -0.01em; }
+.gps-sub { font-size: 11px; color: var(--color-text-subtle); margin-bottom: 16px; }
+
+.beacon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; color: var(--color-text-soft); }
+.beacon-interval { padding: 5px 8px; font-size: 12px; margin-left: auto; }
+
+.switch { display: inline-flex; cursor: pointer; }
+.switch input { display: none; }
+.switch-track {
+  width: 34px; height: 20px; border-radius: var(--radius-pill);
+  background-color: var(--color-border-strong); position: relative;
+  transition: background-color 0.15s ease;
+}
+.switch-thumb {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background-color: #fff; transition: transform 0.15s ease;
+}
+.switch input:checked + .switch-track { background-color: var(--color-primary); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(14px); }
+
+.gps-send-btn { width: 100%; margin: 12px 0 16px; }
+
+.sos-row { display: flex; gap: 8px; }
+.sos-btn {
+  background-color: var(--status-down); color: #fff; border: none;
+  border-radius: var(--radius-md); padding: 10px 16px; font-weight: 700; font-size: 13px;
+  flex-shrink: 0; cursor: pointer;
+}
+.sos-btn:hover { background-color: #f16b63; }
+.sos-btn.sent { background-color: var(--status-up); }
+.sos-preset { flex: 1; min-width: 0; }
+
+
+</style>
+</head>
+<body>
+  <div class="demo-banner">⚡ DÉMO — données simulées, aucune radio réellement connectée</div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">AT2<span class="brand-name-thin">Bridge</span></span>
+    </div>
+    <div class="conn-panel">
+      <span class="status-pill"><span class="dot"></span><span id="conn-label">Connecté · BLE · AT2_2E10</span></span>
+      <div class="conn-controls">
+        <select id="serial-port-select">
+          <option>/dev/ttyACM0 — AT2 Radio</option>
+        </select>
+        <button class="btn-ghost">↻</button>
+        <button class="btn-primary">USB série</button>
+        <button class="btn-ghost">Scanner BLE</button>
+        <button class="btn-danger">Déconnecter</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs-wrap">
+    <nav class="tabs">
+      <button class="tab active" data-tab="devices">Appareils</button>
+      <button class="tab" data-tab="channels">Canaux</button>
+      <button class="tab" data-tab="device">Réglages</button>
+      <button class="tab" data-tab="messages">Messagerie</button>
+      <button class="tab" data-tab="log">Journal</button>
+    </nav>
+  </div>
+
+  <main>
+    <section id="tab-devices" class="tab-panel active">
+      <div class="device-list" id="device-list"></div>
+
+      <div class="devices-grid">
+        <div class="ptt-panel" id="ptt-panel">
+        <div class="ptt-header">
+          <div>
+            <div class="ptt-device-name" id="ptt-device-name">—</div>
+            <div class="ptt-device-sub" id="ptt-device-sub">—</div>
+          </div>
+          <span class="rf-indicator" id="rf-indicator">
+            <span class="rf-dot"></span><span id="rf-label">Standby</span>
+          </span>
+        </div>
+
+        <div class="chan-switch">
+          <button class="chan-arrow" id="chan-prev" title="Canal précédent">‹</button>
+          <select id="chan-select" class="chan-select"></select>
+          <button class="chan-arrow" id="chan-next" title="Canal suivant">›</button>
+          <div class="chan-opts" id="chan-opts"></div>
+        </div>
+
+        <div class="ptt-wave" id="ptt-wave"></div>
+
+        <div class="ptt-controls">
+          <button class="ptt-btn" id="ptt-btn">PTT</button>
+          <div class="ptt-meta">
+            <div class="ptt-timer" id="ptt-timer">00:00</div>
+            <div class="hint">Maintiens le bouton (ou clic) pour émettre — démo simulée</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gps-panel">
+        <div class="gps-header">
+          <div class="gps-title">Position &amp; urgence</div>
+          <span class="gps-fix" id="gps-fix"><span class="dot"></span><span id="gps-fix-label">Localisation…</span></span>
+        </div>
+
+        <div class="gps-coords" id="gps-coords">— , —</div>
+        <div class="gps-sub" id="gps-accuracy">précision inconnue</div>
+
+        <div class="beacon-row">
+          <label class="switch">
+            <input type="checkbox" id="beacon-toggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+          <span>Balise position auto</span>
+          <select id="beacon-interval" class="beacon-interval">
+            <option value="30">30 s</option>
+            <option value="60" selected>1 min</option>
+            <option value="300">5 min</option>
+            <option value="900">15 min</option>
+          </select>
+        </div>
+        <div class="hint" id="beacon-status">Balise désactivée</div>
+
+        <button class="btn-ghost gps-send-btn" id="gps-send-now">📍 Envoyer ma position maintenant</button>
+
+        <div class="sos-row">
+          <button class="sos-btn" id="sos-btn">🆘 SOS</button>
+          <select id="sos-preset" class="sos-preset">
+            <option value="Perdu, besoin d'un itinéraire">Perdu, besoin d'un itinéraire</option>
+            <option value="Blessé, besoin de secours médical">Blessé, besoin de secours médical</option>
+            <option value="Bloqué, besoin d'une évacuation">Bloqué, besoin d'une évacuation</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-channels" class="tab-panel">
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Canaux configurés</div><div class="value info" id="kpi-channels">—</div></div>
+        <div class="kpi"><div class="label">Canal actif</div><div class="value" id="kpi-active-channel">—</div></div>
+        <div class="kpi"><div class="label">Dernière sync</div><div class="value up" id="kpi-sync">—</div></div>
+        <div class="kpi"><div class="label">Batterie radio</div><div class="value" id="kpi-battery">—</div></div>
+      </div>
+      <div class="panel-toolbar">
+        <button class="btn-primary" onclick="regenerateChannels()">↻ Régénérer (démo)</button>
+        <button class="btn-ghost">Écrire les 30 canaux</button>
+        <span class="hint">Interface de démonstration — les données ci-dessous sont générées aléatoirement, aucune radio n'est réellement interrogée.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th><th>Ch</th><th>Nom (local)</th><th>RX MHz</th><th>TX MHz</th>
+              <th>Ton RX</th><th>Ton TX</th><th>BW étroite</th><th>Puissance haute</th>
+              <th>Scan</th><th>Numérique</th>
+            </tr>
+          </thead>
+          <tbody id="channel-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-device" class="tab-panel">
+      <div class="settings-panel">
+        <div class="device-row">
+          <div class="device-icon">⚙️</div>
+          <div class="device-info">
+            <div class="device-title">Réglages appareil</div>
+            <div class="device-sub">Radio active — CH02 · Base</div>
+          </div>
+          <span class="settings-status-pill">non lu depuis l'appareil</span>
+        </div>
+
+        <div class="settings-section-title">Audio</div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Volume</div>
+            <div class="settings-row-sub">1 à 8</div>
+          </div>
+          <div class="settings-row-control">
+            <input id="volume-slider" type="range" min="1" max="8" value="4" oninput="document.getElementById('volume-readout').textContent=this.value" />
+            <span class="settings-readout-inline" id="volume-readout">4</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Squelch</div>
+            <div class="settings-row-sub">0 à 9</div>
+          </div>
+          <div class="settings-row-control">
+            <input id="squelch-slider" type="range" min="0" max="9" value="3" oninput="document.getElementById('squelch-readout').textContent=this.value" />
+            <span class="settings-readout-inline" id="squelch-readout">3</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">VOX</div>
+            <div class="settings-row-sub">Activation vocale de l'émission</div>
+          </div>
+          <div class="settings-row-control">
+            <span class="icon-toggle" id="vox-toggle" title="VOX" onclick="this.classList.toggle('on')">V</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Sensibilité VOX</div>
+            <div class="settings-row-sub">1 (faible) à 5 (élevée)</div>
+          </div>
+          <div class="settings-row-control">
+            <input id="vox-sensitivity-slider" type="range" min="1" max="5" value="3" oninput="document.getElementById('vox-sens-readout').textContent=this.value" />
+            <span class="settings-readout-inline" id="vox-sens-readout">3</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Tonalité de confirmation</div>
+            <div class="settings-row-sub">Bip sonore de l'appareil</div>
+          </div>
+          <div class="settings-row-control">
+            <span class="icon-toggle on" id="prompt-tone-toggle" title="Tonalité" onclick="this.classList.toggle('on')">♪</span>
+          </div>
+        </div>
+
+        <div class="settings-section-title">Émission</div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Temporisation TX (TOT)</div>
+            <div class="settings-row-sub">Coupure auto en secondes (0 = désactivé)</div>
+          </div>
+          <div class="settings-row-control">
+            <input id="tot-slider" type="range" min="0" max="240" step="10" value="120" oninput="document.getElementById('tot-readout').textContent=this.value" />
+            <span class="settings-readout-inline" id="tot-readout">120</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Inhibition TX</div>
+            <div class="settings-row-sub">Bloque toute émission (réception seule)</div>
+          </div>
+          <div class="settings-row-control">
+            <span class="icon-toggle" id="tx-inhibit-toggle" title="Inhibition TX" onclick="this.classList.toggle('on')">⛔</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Réduction de bruit</div>
+            <div class="settings-row-sub">Filtrage du bruit à la réception</div>
+          </div>
+          <div class="settings-row-control">
+            <span class="icon-toggle on" id="noise-reduction-toggle" title="Réduction de bruit" onclick="this.classList.toggle('on')">NR</span>
+          </div>
+        </div>
+
+        <div class="settings-section-title">Identité &amp; extensions</div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Nom de l'appareil</div>
+            <div class="settings-row-sub">Tel qu'annoncé par la radio</div>
+          </div>
+          <div class="settings-row-control">
+            <input type="text" value="AT2_2E10" />
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Smart Link</div>
+            <div class="settings-row-sub">Pont PTT vers apps tierces (Zello, etc.)</div>
+          </div>
+          <div class="settings-row-control">
+            <span class="icon-toggle" id="smart-link-toggle" title="Smart Link" onclick="this.classList.toggle('on')">SL</span>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <button class="btn-primary" style="width:100%;">Appliquer les réglages</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-messages" class="tab-panel">
+      <div class="msg-layout">
+        <div class="group-list" id="group-list"></div>
+
+        <div class="msg-panel">
+          <div class="device-row">
+            <div class="device-icon">📻</div>
+            <div class="device-info">
+              <div class="device-title" id="active-group-name">—</div>
+              <div class="device-sub" id="active-group-sub">—</div>
+            </div>
+            <div class="device-eject" title="Quitter le groupe">⏏</div>
+          </div>
+
+          <div class="status-grid" id="status-grid"></div>
+
+          <div class="vol-row">
+            <span class="vol-icon">🔈</span>
+            <input type="range" min="1" max="8" value="4" />
+            <span class="vol-icon">🔊</span>
+          </div>
+
+          <div class="msg-thread" id="msg-thread"></div>
+
+          <div class="compose-row">
+            <button class="icon-btn" title="Joindre une image" onclick="addDemoImageMessage()">🖼️</button>
+            <button class="icon-btn record" id="record-btn" title="Message vocal" onclick="toggleRecordDemo()">🎙️</button>
+            <input type="text" id="compose-input" placeholder="Message hors-réseau…" />
+            <button class="send-btn" title="Envoyer" onclick="addDemoTextMessage()">➤</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:14px;">Groupes = canaux radio utilisés comme salons de discussion hors-réseau. Texte, image et vocal simulés — démo uniquement.</p>
+    </section>
+
+    <section id="tab-log" class="tab-panel">
+      <pre id="log-console"></pre>
+    </section>
+  </main>
+
+<script>
+// Tabs
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+  });
+});
+
+// Random demo data
+const CTCSS = ["67.0","69.3","74.4","77.0","82.5","88.5","94.8","100.0","103.5","107.2","114.8","123.0","131.8","141.3","156.7","173.8","186.2","203.5","218.1","233.6"];
+const DCS = ["D023N","D025N","D047N","D054I","D065N","D072N","D114N","D125N","D145I","D162N","D223N","D306N","D356N","D411N","D445I"];
+const NAMES = ["Base", "Relais 1", "Simplex", "Équipe A", "Équipe B", "Secours", "Logistique", "Poste fixe", "Patrouille", "Astreinte", "Local", "Chantier", "Sécu", "Accueil", "Toit", ""];
+
+function randTone() {
+  const r = Math.random();
+  if (r < 0.35) return "OFF";
+  if (r < 0.75) return CTCSS[Math.floor(Math.random() * CTCSS.length)] + "Hz";
+  return DCS[Math.floor(Math.random() * DCS.length)];
+}
+function randFreq() { return (440 + Math.random() * 30).toFixed(5); }
+
+function generateChannels() {
+  return Array.from({ length: 30 }, (_, i) => {
+    const freq = randFreq();
+    const sameTx = Math.random() > 0.3;
+    return {
+      channel: i + 1,
+      name: NAMES[Math.floor(Math.random() * NAMES.length)] || (Math.random() > 0.5 ? `CH${i + 1}` : ""),
+      rx: freq,
+      tx: sameTx ? freq : randFreq(),
+      rxTone: randTone(),
+      txTone: randTone(),
+      narrow: Math.random() > 0.3,
+      highPower: Math.random() > 0.4,
+      scan: Math.random() > 0.15,
+      digital: Math.random() > 0.75,
+    };
+  });
+}
+
+function channelRowHtml(ch) {
+  const active = ch.channel === window.__activeChannel;
+  return `
+    <tr>
+      <td><span class="status-dot ${active ? "status-active" : "status-idle"}"></span></td>
+      <td>${ch.channel}</td>
+      <td><input type="text" value="${ch.name}" placeholder="—" /></td>
+      <td class="freq-cell"><input type="text" value="${ch.rx}" /></td>
+      <td class="freq-cell"><input type="text" value="${ch.tx}" /></td>
+      <td><select><option selected>${ch.rxTone}</option></select></td>
+      <td><select><option selected>${ch.txTone}</option></select></td>
+      <td><input type="checkbox" ${ch.narrow ? "checked" : ""} /></td>
+      <td><input type="checkbox" ${ch.highPower ? "checked" : ""} /></td>
+      <td><input type="checkbox" ${ch.scan ? "checked" : ""} /></td>
+      <td><input type="checkbox" ${ch.digital ? "checked" : ""} /></td>
+    </tr>`;
+}
+
+function regenerateChannels() {
+  const channels = generateChannels();
+  window.__activeChannel = channels[Math.floor(Math.random() * 30)].channel;
+  document.getElementById("channel-table-body").innerHTML = channels.map(channelRowHtml).join("");
+  document.getElementById("kpi-channels").textContent = channels.filter(c => c.rx).length + " / 30";
+  document.getElementById("kpi-active-channel").textContent = "CH " + window.__activeChannel;
+  document.getElementById("kpi-sync").textContent = "il y a " + Math.floor(Math.random() * 8 + 1) + " s";
+  document.getElementById("kpi-battery").textContent = Math.floor(Math.random() * 30 + 65) + " %";
+}
+regenerateChannels();
+setInterval(() => {
+  document.getElementById("kpi-sync").textContent = "il y a " + Math.floor(Math.random() * 12 + 1) + " s";
+}, 4000);
+
+// -----------------------------------------------------------------------
+// Messaging (groups = radio channels, ATAK VX-style panel)
+// -----------------------------------------------------------------------
+const demoSenders = ["Base", "Équipe A", "elyha", "Secours", "Patrouille"];
+const demoTexts = [
+  "Bien reçu, en route.",
+  "Position mise à jour, voir carte.",
+  "RAS sur le secteur nord.",
+  "Besoin de renfort en zone 3.",
+  "Batterie faible, retour dans 20 min.",
+  "On arrive dans 5 minutes.",
+  "Confirmez dernière position.",
+];
+const imgCaptions = ["Vue du point de rassemblement", "Accès véhicule bloqué", "Photo du matériel", null];
+
+const groups = [
+  { id: "ch02", name: "Base", channel: 2, freq: "446.00625", mode: "Analogique", tone: "88.5Hz", enc: "OFF", members: 4 },
+  { id: "ch05", name: "Équipe A", channel: 5, freq: "446.09375", mode: "Numérique", tone: "D023N", enc: "12", members: 3 },
+  { id: "ch09", name: "Secours", channel: 9, freq: "446.18750", mode: "Analogique", tone: "OFF", enc: "OFF", members: 6 },
+  { id: "ch14", name: "Logistique", channel: 14, freq: "446.30000", mode: "Analogique", tone: "123.0Hz", enc: "OFF", members: 2 },
+];
+
+let activeGroupId = groups[0].id;
+const messagesByGroup = {};
+
+function seedMessages() {
+  groups.forEach((g) => {
+    const list = [];
+    const count = 3 + Math.floor(Math.random() * 3);
+    for (let i = count; i > 0; i--) {
+      const t = new Date(Date.now() - i * 4 * 60000);
+      const mine = Math.random() < 0.25;
+      const kind = Math.random();
+      let msg;
+      if (kind < 0.72) {
+        msg = { type: "text", text: demoTexts[Math.floor(Math.random() * demoTexts.length)] };
+      } else if (kind < 0.88) {
+        const cap = imgCaptions[Math.floor(Math.random() * imgCaptions.length)];
+        msg = { type: "image", caption: cap };
+      } else {
+        msg = { type: "voice", duration: 3 + Math.floor(Math.random() * 22) };
+      }
+      list.push({
+        ...msg,
+        sender: mine ? "elyha" : demoSenders[Math.floor(Math.random() * demoSenders.length)],
+        mine,
+        time: t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+      });
+    }
+    messagesByGroup[g.id] = list;
+  });
+}
+seedMessages();
+
+function groupItemHtml(g) {
+  const active = g.id === activeGroupId;
+  const initials = g.name.slice(0, 2).toUpperCase();
+  return `
+    <div class="group-item ${active ? "active" : ""}" onclick="selectGroup('${g.id}')">
+      <div class="group-avatar">${initials}</div>
+      <div class="group-meta">
+        <div class="group-name">${g.name}</div>
+        <div class="group-sub">CH${String(g.channel).padStart(2, "0")} · ${g.freq} MHz</div>
+      </div>
+      <span class="group-badge">${g.members}</span>
+    </div>`;
+}
+
+function renderGroupList() {
+  document.getElementById("group-list").innerHTML = groups.map(groupItemHtml).join("");
+}
+
+function waveBarsHtml(seed) {
+  let html = "";
+  for (let i = 0; i < 22; i++) {
+    const h = 4 + Math.round(Math.abs(Math.sin(seed * (i + 1))) * 14);
+    html += `<span style="height:${h}px"></span>`;
+  }
+  return html;
+}
+
+function msgBubbleHtml(m) {
+  let body;
+  if (m.type === "text") {
+    body = `<div class="msg-body">${m.text}</div>`;
+  } else if (m.type === "image") {
+    body = `<div class="msg-body img-body">
+      <div style="width:100%;height:120px;border-radius:6px;background:linear-gradient(135deg, var(--color-surface), var(--color-border));display:flex;align-items:center;justify-content:center;color:var(--color-text-faint);font-size:22px;">🖼️</div>
+      ${m.caption ? `<div class="cap-text">${m.caption}</div>` : ""}
+    </div>`;
+  } else {
+    body = `<div class="msg-body">
+      <div class="voice-row">
+        <div class="voice-play">▶</div>
+        <div class="voice-wave">${waveBarsHtml(m.duration)}</div>
+        <div class="voice-dur">0:${String(m.duration).padStart(2, "0")}</div>
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="msg-bubble ${m.mine ? "mine" : ""}">
+      <div class="meta">${m.mine ? "Moi" : m.sender} · ${m.time}</div>
+      ${body}
+    </div>`;
+}
+
+function renderStatusGrid(g) {
+  document.getElementById("status-grid").innerHTML = `
+    <div class="status-cell"><div class="sc-value accent">${g.freq}</div><div class="sc-label">MHz</div></div>
+    <div class="status-cell"><div class="sc-value">${g.mode}</div><div class="sc-label">Mode</div></div>
+    <div class="status-cell"><div class="sc-value">${g.tone}</div><div class="sc-label">Ton</div></div>
+    <div class="status-cell"><div class="sc-value ${g.enc === "OFF" ? "" : "warn"}">${g.enc}</div><div class="sc-label">Chiffrement</div></div>
+  `;
+}
+
+function renderThread() {
+  const thread = document.getElementById("msg-thread");
+  thread.innerHTML = messagesByGroup[activeGroupId].map(msgBubbleHtml).join("");
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function selectGroup(id) {
+  activeGroupId = id;
+  const g = groups.find((x) => x.id === id);
+  document.getElementById("active-group-name").textContent = g.name;
+  document.getElementById("active-group-sub").textContent = `CH${String(g.channel).padStart(2, "0")} · ${g.members} membres`;
+  renderGroupList();
+  renderStatusGrid(g);
+  renderThread();
+}
+
+function pushMessage(msg) {
+  const t = new Date();
+  messagesByGroup[activeGroupId].push({
+    ...msg,
+    sender: "elyha",
+    mine: true,
+    time: t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+  });
+  renderThread();
+}
+
+function addDemoTextMessage() {
+  const input = document.getElementById("compose-input");
+  const text = input.value.trim();
+  if (!text) return;
+  pushMessage({ type: "text", text });
+  input.value = "";
+}
+document.getElementById("compose-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addDemoTextMessage();
+});
+
+function addDemoImageMessage() {
+  pushMessage({ type: "image", caption: "Image jointe (démo)" });
+}
+
+let recording = false;
+function toggleRecordDemo() {
+  const btn = document.getElementById("record-btn");
+  recording = !recording;
+  btn.classList.toggle("active", recording);
+  if (!recording) {
+    pushMessage({ type: "voice", duration: 2 + Math.floor(Math.random() * 12) });
+  }
+}
+
+// -----------------------------------------------------------------------
+// Devices list + Live PTT (demo)
+// -----------------------------------------------------------------------
+const devices = [
+  { id: "at2-5115", name: "AT2_5115", model: "AT2", transport: "BLE", connected: true, battery: 82 },
+  { id: "at2-2e10", name: "AT2_2E10", model: "AT2", transport: "BLE", connected: true, battery: 57 },
+  { id: "at2-serial", name: "AT2 (USB série)", model: "AT2", transport: "USB", connected: false, battery: null },
+];
+let selectedDeviceId = devices[0].id;
+
+function deviceCardHtml(d) {
+  const selected = d.id === selectedDeviceId;
+  return `
+    <div class="device-card ${selected ? "selected" : ""}" onclick="selectDevice('${d.id}')">
+      <div class="device-thumb">📻</div>
+      <div class="device-card-info">
+        <div class="device-card-name">${d.name}</div>
+        <div class="device-card-model">Modèle : ${d.model}</div>
+        <div class="device-card-status ${d.connected ? "connected" : "disconnected"}">
+          <span class="dot"></span>${d.connected ? "Connecté" : "Déconnecté"}
+        </div>
+      </div>
+      ${d.connected ? `<span class="bt-icon">${d.transport === "BLE" ? "⚡" : "🔌"}</span>` : ""}
+      <div class="device-card-battery">${d.battery !== null ? d.battery + " %" : "—"}</div>
+    </div>`;
+}
+
+function renderDeviceList() {
+  document.getElementById("device-list").innerHTML = devices.map(deviceCardHtml).join("");
+}
+
+function selectDevice(id) {
+  selectedDeviceId = id;
+  const d = devices.find((x) => x.id === id);
+  renderDeviceList();
+  document.getElementById("ptt-device-name").textContent = d.name;
+  document.getElementById("ptt-device-sub").textContent = d.connected
+    ? `${d.transport} · CH${1 + Math.floor(Math.random() * 30)}`
+    : "Non connecté";
+  const btn = document.getElementById("ptt-btn");
+  btn.disabled = !d.connected;
+  btn.style.opacity = d.connected ? "1" : "0.4";
+  btn.style.cursor = d.connected ? "pointer" : "not-allowed";
+}
+renderDeviceList();
+
+// wave bars
+const waveEl = document.getElementById("ptt-wave");
+for (let i = 0; i < 40; i++) {
+  const bar = document.createElement("span");
+  bar.style.height = "3px";
+  waveEl.appendChild(bar);
+}
+let pttActive = false;
+let pttInterval = null;
+let pttStart = null;
+let pttTimerInterval = null;
+
+function animateWave() {
+  waveEl.querySelectorAll("span").forEach((bar) => {
+    const h = pttActive ? 4 + Math.random() * 48 : 3;
+    bar.style.height = h + "px";
+  });
+}
+setInterval(animateWave, 90);
+
+function formatTimer(ms) {
+  const s = Math.floor(ms / 1000);
+  const mm = String(Math.floor(s / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+function startPtt() {
+  const d = devices.find((x) => x.id === selectedDeviceId);
+  if (!d || !d.connected || pttActive) return;
+  pttActive = true;
+  pttStart = Date.now();
+  document.getElementById("ptt-btn").classList.add("pressed");
+  waveEl.classList.add("active");
+  const rf = document.getElementById("rf-indicator");
+  rf.classList.add("tx");
+  document.getElementById("rf-label").textContent = "TX";
+  pttTimerInterval = setInterval(() => {
+    document.getElementById("ptt-timer").textContent = formatTimer(Date.now() - pttStart);
+  }, 200);
+}
+
+function stopPtt() {
+  if (!pttActive) return;
+  pttActive = false;
+  document.getElementById("ptt-btn").classList.remove("pressed");
+  waveEl.classList.remove("active");
+  document.getElementById("rf-indicator").classList.remove("tx");
+  document.getElementById("rf-label").textContent = "Standby";
+  clearInterval(pttTimerInterval);
+  document.getElementById("ptt-timer").textContent = "00:00";
+}
+
+const pttBtn = document.getElementById("ptt-btn");
+pttBtn.addEventListener("mousedown", startPtt);
+pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startPtt(); });
+["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((evt) =>
+  pttBtn.addEventListener(evt, stopPtt)
+);
+
+// -----------------------------------------------------------------------
+// Compact channel switcher (device page)
+// -----------------------------------------------------------------------
+const quickChannels = groups.map((g) => ({
+  channel: g.channel,
+  name: g.name,
+  freq: g.freq,
+  mode: g.mode,
+  highPower: Math.random() > 0.4,
+  narrow: Math.random() > 0.3,
+  scan: Math.random() > 0.2,
+})).concat(
+  Array.from({ length: 6 }, (_, i) => ({
+    channel: 20 + i,
+    name: `CH${20 + i}`,
+    freq: randFreq(),
+    mode: Math.random() > 0.7 ? "Numérique" : "Analogique",
+    highPower: Math.random() > 0.4,
+    narrow: Math.random() > 0.3,
+    scan: Math.random() > 0.2,
+  }))
+).sort((a, b) => a.channel - b.channel);
+
+let activeChanIdx = 0;
+
+function renderChanSelect() {
+  const sel = document.getElementById("chan-select");
+  sel.innerHTML = quickChannels
+    .map((c, i) => `<option value="${i}">CH${String(c.channel).padStart(2, "0")} · ${c.name}</option>`)
+    .join("");
+  sel.value = activeChanIdx;
+}
+
+function renderChanOpts() {
+  const c = quickChannels[activeChanIdx];
+  const opts = [
+    { icon: c.highPower ? "H" : "L", title: c.highPower ? "Puissance haute" : "Puissance basse", on: c.highPower },
+    { icon: c.narrow ? "N" : "W", title: c.narrow ? "Bande étroite" : "Bande large", on: c.narrow },
+    { icon: "📡", title: c.scan ? "Ajouté au scan" : "Exclu du scan", on: c.scan },
+    { icon: c.mode === "Numérique" ? "D" : "A", title: c.mode, on: c.mode === "Numérique", warn: c.mode === "Numérique" },
+  ];
+  document.getElementById("chan-opts").innerHTML = opts
+    .map((o) => `<span class="chan-opt-icon ${o.on ? (o.warn ? "warn-on" : "on") : ""}" title="${o.title}">${o.icon}</span>`)
+    .join("");
+}
+
+function applyActiveChannel() {
+  renderChanSelect();
+  renderChanOpts();
+  const c = quickChannels[activeChanIdx];
+  document.getElementById("ptt-device-sub").textContent =
+    document.getElementById("ptt-device-sub").textContent.replace(/CH\d+/, `CH${String(c.channel).padStart(2, "0")}`);
+}
+
+document.getElementById("chan-select").addEventListener("change", (e) => {
+  activeChanIdx = parseInt(e.target.value, 10);
+  applyActiveChannel();
+});
+document.getElementById("chan-prev").addEventListener("click", () => {
+  activeChanIdx = (activeChanIdx - 1 + quickChannels.length) % quickChannels.length;
+  applyActiveChannel();
+});
+document.getElementById("chan-next").addEventListener("click", () => {
+  activeChanIdx = (activeChanIdx + 1) % quickChannels.length;
+  applyActiveChannel();
+});
+applyActiveChannel();
+
+// -----------------------------------------------------------------------
+// GPS position + emergency (APRS/SOS-style)
+// -----------------------------------------------------------------------
+let lastCoords = null;
+let beaconTimer = null;
+
+function formatCoords(lat, lon) {
+  return `${lat.toFixed(5)}° , ${lon.toFixed(5)}°`;
+}
+
+function updateGpsFix(locked, label) {
+  const fix = document.getElementById("gps-fix");
+  fix.classList.toggle("locked", locked);
+  document.getElementById("gps-fix-label").textContent = label;
+}
+
+function requestLocation() {
+  if (!navigator.geolocation) {
+    updateGpsFix(false, "Géolocalisation indisponible");
+    useFallbackCoords();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      lastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      document.getElementById("gps-coords").textContent = formatCoords(lastCoords.lat, lastCoords.lon);
+      document.getElementById("gps-accuracy").textContent = `précision ≈ ${Math.round(lastCoords.acc)} m (position réelle du navigateur)`;
+      updateGpsFix(true, "Fix GPS acquis");
+    },
+    () => {
+      updateGpsFix(false, "Localisation refusée");
+      useFallbackCoords();
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+function useFallbackCoords() {
+  // Demo fallback so the panel still looks alive without location permission.
+  lastCoords = { lat: 48.8566 + (Math.random() - 0.5) * 0.02, lon: 2.3522 + (Math.random() - 0.5) * 0.02, acc: 30 };
+  document.getElementById("gps-coords").textContent = formatCoords(lastCoords.lat, lastCoords.lon);
+  document.getElementById("gps-accuracy").textContent = "position de démonstration (permission non accordée)";
+}
+
+requestLocation();
+
+document.getElementById("gps-send-now").addEventListener("click", () => {
+  if (!lastCoords) return;
+  document.getElementById("beacon-status").textContent =
+    `Position envoyée à l'instant (${formatCoords(lastCoords.lat, lastCoords.lon)})`;
+});
+
+document.getElementById("beacon-toggle").addEventListener("change", (e) => {
+  const status = document.getElementById("beacon-status");
+  if (e.target.checked) {
+    const seconds = parseInt(document.getElementById("beacon-interval").value, 10);
+    status.textContent = `Balise active — envoi toutes les ${seconds >= 60 ? seconds / 60 + " min" : seconds + " s"}`;
+    beaconTimer = setInterval(() => {
+      requestLocation();
+      status.textContent = `Dernière balise envoyée à l'instant · prochaine dans ${seconds >= 60 ? seconds / 60 + " min" : seconds + " s"}`;
+    }, seconds * 1000);
+  } else {
+    clearInterval(beaconTimer);
+    status.textContent = "Balise désactivée";
+  }
+});
+document.getElementById("beacon-interval").addEventListener("change", () => {
+  if (document.getElementById("beacon-toggle").checked) {
+    document.getElementById("beacon-toggle").dispatchEvent(new Event("change"));
+  }
+});
+
+document.getElementById("sos-btn").addEventListener("click", () => {
+  const btn = document.getElementById("sos-btn");
+  const preset = document.getElementById("sos-preset").value;
+  const coordsText = lastCoords ? formatCoords(lastCoords.lat, lastCoords.lon) : "position inconnue";
+  btn.classList.add("sent");
+  btn.textContent = "✔ Envoyé";
+  pushMessage({ type: "text", text: `🆘 ${preset} — ${coordsText}` });
+  setTimeout(() => {
+    btn.classList.remove("sent");
+    btn.textContent = "🆘 SOS";
+  }, 2200);
+});
+
+selectDevice(selectedDeviceId);
+selectGroup(activeGroupId);
+
+
+// Fake live log
+const logTemplates = [
+  () => `RX [02/02] ${randHex(24)}`,
+  () => `RX [01/01] ${randHex(8)}`,
+  () => `Canal ${1 + Math.floor(Math.random()*30)} sélectionné`,
+  () => `TX [02/0e] ${randHex(16)}`,
+  () => `Notification batterie: ${Math.floor(Math.random()*30+65)}%`,
+  () => `Heartbeat BLE OK (RSSI -${40+Math.floor(Math.random()*30)} dBm)`,
+];
+function randHex(len) {
+  let s = "";
+  for (let i = 0; i < len; i++) s += Math.floor(Math.random() * 16).toString(16);
+  return s;
+}
+function pushLog() {
+  const console_ = document.getElementById("log-console");
+  const now = new Date().toLocaleTimeString("fr-FR");
+  const line = logTemplates[Math.floor(Math.random() * logTemplates.length)]();
+  console_.textContent += `[${now}] ${line}\n`;
+  console_.scrollTop = console_.scrollHeight;
+}
+for (let i = 0; i < 12; i++) pushLog();
+setInterval(pushLog, 1800);
+</script>
+</body>
+</html>
