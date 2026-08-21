@@ -40,22 +40,22 @@ Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle
 ## Architecture
 
 ```
-┌─────────────────────────────┐        ┌──────────────────────────────┐
-│  Navigateur (n'importe quel  │  HTTP  │  Serveur Linux (Docker)      │
-│  appareil, y compris iPhone) │◄──────►│  FastAPI (app/main.py)      │
+┌─────────────────────────────────┐        ┌──────────────────────────────────┐
+│  Navigateur (n'importe quel  │  HTTP  │  Serveur Linux (Docker)       │
+│  appareil, y compris iPhone) │◄──────►│  FastAPI (app/main.py)       │
 │                              │  WS    │  ├─ app/auth.py (token)      │
 │  Mode "Serveur" : contrôle   │        │  ├─ app/device.py (état)     │
 │  à distance via HTTP/WS      │        │  ├─ app/protocol/ (codec)    │
 │                              │        │  ├─ app/transport/           │
 │  Mode "BLE local" : Web      │        │  │   ├─ serial (pyserial)    │
-│  Bluetooth direct (Chrome/   │        │  │   └─ ble (bleak)          │
-│  Edge desktop/Android only,  │        │  └─ app/static/ (frontend)   │
-│  indisponible sur iOS)       │        └───────────┬──────────────────┘
-└──────────────┬───────────────┘                    │ USB-C série / BLE
+│  Bluetooth direct (Chrome/   │        │  │   └─ ble (bleak)           │
+│  Edge desktop/Android only,  │        │  └─ app/static/ (frontend)    │
+│  indisponible sur iOS)       │        └───────────┬─────────────────────┘
+└────────────────┬───────────────┘                   │ USB-C série / BLE
                │ Web Bluetooth (si mode local)       ▼
-               └────────────────────────────────►┌─────────────┐
+               └────────────────────────────────────►┌──────────────┐
                                                   │  Radio AT2  │
-                                                  └─────────────┘
+                                                  └──────────────┘
 ```
 
 ## Déploiement
