@@ -30,6 +30,7 @@ class DeviceManager:
         self._log_listeners: list = []
         self._next_msg_id = 1
         self._ptt_rx_listeners: list = []
+        self._message_rx_listeners: list = []
         self._rx_codec = None
 
     # -- connection lifecycle -------------------------------------------------
@@ -66,6 +67,7 @@ class DeviceManager:
         await t.connect(port, baud_rate=baud_rate)
         self._transport, self._kind, self._target = t, "serial", port
         self._install_ptt_rx_listener(t)
+        self._install_message_rx_listener(t)
         self._log_line(f"Connecté en série sur {port} @ {baud_rate} bauds")
 
     async def connect_ble(self, address: str) -> None:
@@ -75,6 +77,7 @@ class DeviceManager:
         await t.connect(address)
         self._transport, self._kind, self._target = t, "ble", address
         self._install_ptt_rx_listener(t)
+        self._install_message_rx_listener(t)
         self._log_line(f"Connecté en BLE sur {address}")
 
     async def disconnect(self) -> None:
@@ -179,6 +182,72 @@ class DeviceManager:
         dedicated structured location message type yet."""
         prefix = f"{note + ' ' if note else ''}📍 {lat:.5f},{lon:.5f}"
         await self.send_text_message(username, prefix)
+
+    async def send_voice_message(self, username: str, pcm_16khz_or_8khz: bytes, duration_ms: int) -> None:
+        """Store-and-forward voice note (distinct from live PTT). `pcm` must
+        be 16-bit mono @ 8kHz, already resampled by the caller (browser
+        or upload handler) -- same format PttSession expects."""
+        from app.protocol.amr_codec import AmrNbCodec, FRAME_BYTES_PCM
+
+        t = self._require_transport()
+        codec = AmrNbCodec()
+        try:
+            encoded = bytearray()
+            for i in range(0, len(pcm_16khz_or_8khz) - FRAME_BYTES_PCM + 1, FRAME_BYTES_PCM):
+                frame_pcm = pcm_16khz_or_8khz[i:i + FRAME_BYTES_PCM]
+                amr = codec.encode(frame_pcm)
+                if amr:
+                    encoded += amr
+            if not encoded:
+                raise ValueError("no audio to send (recording too short?)")
+            msg_id = self._next_msg_id
+            self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
+            frames = messages.build_voice_message_frames(username, bytes(encoded), duration_ms, msg_id)
+            for f in frames:
+                await t.send_raw_frame(f)
+                await asyncio.sleep(0.1)
+            self._log_line(f"Message vocal envoyé ({duration_ms}ms, {len(frames)} trame(s))")
+        finally:
+            codec.close()
+
+    async def send_image_message(self, username: str, jpeg_bytes: bytes, width: int, height: int) -> None:
+        """`jpeg_bytes` should already be resized/compressed to
+        IMAGE_LONG_EDGE_PX / IMAGE_JPEG_QUALITY -- see app/main.py's
+        image upload endpoint, which does this with Pillow before
+        calling here."""
+        t = self._require_transport()
+        msg_id = self._next_msg_id
+        self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
+        frames = messages.build_image_message_frames(username, jpeg_bytes, width, height, msg_id)
+        for f in frames:
+            await t.send_raw_frame(f)
+            await asyncio.sleep(0.1)
+        self._log_line(f"Image envoyée ({len(jpeg_bytes)} octets, {len(frames)} trame(s))")
+
+    def on_message_received(self, callback) -> None:
+        """`callback(CompletedMessage)` fires once a full text/voice/image
+        offline message has been reassembled from incoming packets."""
+        self._message_rx_listeners.append(callback)
+
+    def _install_message_rx_listener(self, transport: Transport) -> None:
+        assembler = messages.MessageAssembler()
+
+        def _on_packet(pkt) -> None:
+            # Skip PTT voice packets -- same family/command, distinguished
+            # by subtype (see app/protocol/ptt.py::PTT_VOICE_SUBTYPE).
+            from app.protocol import ptt as ptt_proto
+            if ptt_proto.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body):
+                return
+            completed = assembler.feed(pkt)
+            if completed is None:
+                return
+            for cb in list(self._message_rx_listeners):
+                try:
+                    cb(completed)
+                except Exception:
+                    logger.exception("message rx listener raised")
+
+        transport.on_packet(_on_packet)
 
     # -- live PTT (real-time voice) -----------------------------------------
 

@@ -3,3 +3,5 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pyserial==3.5
 bleak==0.22.3
+Pillow==11.1.0
+python-multipart==0.0.20

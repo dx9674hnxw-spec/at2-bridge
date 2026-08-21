@@ -220,7 +220,13 @@ def _decode_chunk_frame(msg_type: int, p: bytes) -> OfflineChunk | None:
         return None
     msg_id = _read_msg_id(p, 2)
     seq = int.from_bytes(p[6:8], "big")
-    data = p[8:]
+    # Byte 8 is a fixed 0x00 padding byte in every chunk frame (see the
+    # `+ bytes([0x00]) +` in each build_*_frames chunk builder above);
+    # actual chunk data starts right after it, at offset 9. (The
+    # reference Kotlin decoder reads from offset 8 here, which appears
+    # to be an off-by-one in that decoder -- caught by round-trip
+    # testing our own encoder/decoder pair, see module docstring.)
+    data = p[9:]
     return OfflineChunk(type=msg_type, msg_id=msg_id, seq=seq, data=data)
 
 
@@ -267,7 +273,10 @@ def _decode_image_start(p: bytes) -> OfflineStartFrame | None:
     sender = _decode_sender(p[7:23])
     declared_length = int.from_bytes(p[23:25], "little")
     total_parts = p[25]
-    inline_data = p[26:]  # here: width(2) + height(2), no data payload in the start frame
+    # Byte 26 is a fixed 0x00 padding byte (second byte of the
+    # `[part_count, 0x00]` pair in build_image_message_frames); width
+    # and height start right after it, at offset 27.
+    inline_data = p[27:]  # width(2 LE) + height(2 LE)
     return OfflineStartFrame(TYPE_IMAGE_START, msg_id, sender, declared_length, total_parts, 0, inline_data)
 
 
@@ -352,4 +361,3 @@ class MessageAssembler:
             return CompletedMessage(kind="image", sender=entry["sender"], msg_id=c.msg_id,
                                      data=ordered, width=entry.get("width"), height=entry.get("height"))
         return None
-
