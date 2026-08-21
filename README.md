@@ -1,49 +1,82 @@
 # AT2 Bridge
 
-Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** directement depuis un serveur Linux — lecture/écriture des canaux, réglages appareil, messagerie texte hors-réseau — en USB-C série ou en Bluetooth Low Energy.
+Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS.
 
-> ⚠️ Projet communautaire non affilié à Baofeng/Alervites. Le protocole a été reconstitué par rétro-ingénierie (décompilation du logiciel CPS officiel + lecture du code source d'un projet Android tiers). Il n'y a **aucune garantie** de compatibilité totale ni d'absence de régression sur le firmware de la radio — teste prudemment, idéalement avec une radio de secours sous la main.
+> ⚠️ Projet communautaire non affilié à Baofeng/Alervites. Protocole reconstitué par rétro-ingénierie (décompilation du CPS officiel + code source d'un projet Android tiers). Aucune garantie de compatibilité totale — teste prudemment.
 
-## Ce qui fonctionne (V1)
+## Fonctionnalités
 
-- **Transport USB-C série** (port COM virtuel, 115200 bauds) — protocole entièrement porté et testé unitairement.
-- **Transport BLE** (`bleak`) — UUID de service/caractéristiques réels, extraits d'un projet Android open-source qui les a capturés sur trafic réel (btsnoop).
-- **Lecture/écriture des 30 canaux** : fréquences RX/TX, tons CTCSS/DCS, bande passante, puissance, mode analogique/numérique, ajout au scan.
-- **Réglages appareil** : volume, squelch, VOX, sélection de canal actif.
-- **Messagerie texte hors-réseau** (le canal "off-grid" de l'appli Ola Radio) — fragmentation automatique des messages longs.
-- Interface web unique (aucune build JS requise), journal d'activité en direct.
+### ✅ Implémenté et testé (sans radio)
 
-## Ce qui n'est PAS encore implémenté
+- **Codec de trame** — Encodage/décodage `AA55 [LEN] [PAYLOAD] [CRC16] 77EE`, CRC16-CCITT (init `0x1234`, poly `0x1021`).
+- **Codec de canal** — Enregistrements 24 octets (fréquences, tons CTCSS/DCS, bande passante, puissance), round-trip testé.
+- **Codec AMR-NB (voix)** — Binding ctypes vers `libopencore-amrnb` réel, round-trip encode/decode validé.
+- **Chunking PTT temps réel** — Paquets vocaux (5 trames AMR/paquet, cadencement 100ms), format confirmé par le code source de référence.
+- **Messagerie texte/voix/image (construction + décodage)** — Les trois formats hors-réseau portés depuis `At2OfflineMessageCodec.kt`, round-trip encode→decode validé pour les trois types (texte court et fragmenté, voix, image).
+- **Backend FastAPI** — 32 routes HTTP + 4 WebSocket, toutes s'importent et répondent.
+- **Authentification** — Token HMAC, activable/désactivable via variable d'environnement, testée.
+- **Stockage local** (noms de canaux, appareils connus) — Persistance JSON testée.
+- **15 tests unitaires** — `app/tests/test_protocol.py`.
 
-- **PTT temps réel (voix)** : nécessite l'encodage/décodage AMR-NB (codec `OpenCORE-AMR`, trames de 12 octets/20ms) et un flux audio navigateur↔serveur↔radio. C'est la pièce la plus complexe du protocole ; voir `Roadmap` plus bas.
-- **Messagerie image et vocale hors-réseau** : le format est documenté dans le projet Android source, mais non porté ici — seul le texte l'est.
-- **Lecture groupée des 30 canaux** : la requête de lecture (`app/protocol/commands.py::query_channel_config`) est déduite par symétrie avec la commande d'écriture (même family/command, family de requête au lieu de family d'écriture), car elle n'a pas été capturée sur trafic réel dans le projet source. **À valider sur radio réelle** avant de faire confiance aux résultats en écriture groupée.
+### ⚠️ Implémenté mais non testé (nécessite la radio)
 
-## Origine du protocole
+- **Lecture/écriture des canaux** (USB série et BLE) — jamais envoyé à une radio réelle.
+- **Lecture groupée des 30 canaux (codeplug)** — commande déduite par symétrie, non observée sur trafic réel.
+- **Réglages appareil** (volume/squelch/VOX) — jamais vérifiés sur radio.
+- **Envoi de messages texte/voix/image hors-réseau** — format testé unitairement, jamais émis vers une radio.
+- **Réception de messages hors-réseau** — le décodage est câblé (assembleur de trames entrantes + WebSocket `/ws/messages` + affichage dans le fil de discussion), mais jamais reçu de vraie trame radio.
+- **PTT temps réel (voix)** — capture micro → 8kHz mono → AMR-NB → trames radio ; chaîne complète jamais testée avec une radio en face.
+- **Position/SOS** — repose sur le canal de messagerie texte (pas de type structuré dédié), jamais émis en conditions réelles.
+- **Mode BLE local (Web Bluetooth)** — port JS minimal (canal, texte), jamais connecté à une radio réelle.
+- **Reconnexion aux appareils connus** — persistance fonctionnelle, reconnexion réelle non testée.
 
-Deux sources ont été croisées, et les deux confirment un protocole **identique** entre USB série et BLE (mêmes trames `AA55...77EE`, même CRC16) :
+### 🚧 Non implémenté / Roadmap
 
-1. Décompilation du CPS officiel Windows (application Electron) — a livré la structure de trame et le layout exact des enregistrements de canaux.
-2. Code source du projet [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — a confirmé et complété (CRC16 exact, UUID BLE réels, format de messagerie hors-réseau).
+- **Type de message structuré "Position"** — actuellement du texte formaté, pas le format natif observé dans l'app Ola Radio.
+- **Gestion simultanée de plusieurs radios** — une seule connexion active à la fois côté serveur.
+- **Flux vidéo / photos périodiques** — non implémenté ; débit du protocole (≈330 o/s messagerie, 4,8 kbps PTT) rend une vraie vidéo irréaliste.
+- **Nettoyage des messages partiels abandonnés** — l'assembleur de messages entrants n'a pas de timeout si une transmission est interrompue en cours de route.
 
-Voir `NOTICE` et `THIRD_PARTY_NOTICES.md` pour l'attribution complète du code porté.
+## Architecture
 
-## Démarrage rapide (Docker)
+```
+┌─────────────────────────────┐        ┌──────────────────────────────┐
+│  Navigateur (n'importe quel  │  HTTP  │  Serveur Linux (Docker)      │
+│  appareil, y compris iPhone) │◄──────►│  FastAPI (app/main.py)      │
+│                              │  WS    │  ├─ app/auth.py (token)      │
+│  Mode "Serveur" : contrôle   │        │  ├─ app/device.py (état)     │
+│  à distance via HTTP/WS      │        │  ├─ app/protocol/ (codec)    │
+│                              │        │  ├─ app/transport/           │
+│  Mode "BLE local" : Web      │        │  │   ├─ serial (pyserial)    │
+│  Bluetooth direct (Chrome/   │        │  │   └─ ble (bleak)          │
+│  Edge desktop/Android only,  │        │  └─ app/static/ (frontend)   │
+│  indisponible sur iOS)       │        └───────────┬──────────────────┘
+└──────────────┬───────────────┘                    │ USB-C série / BLE
+               │ Web Bluetooth (si mode local)       ▼
+               └────────────────────────────────►┌─────────────┐
+                                                  │  Radio AT2  │
+                                                  └─────────────┘
+```
+
+## Déploiement
 
 ```bash
-git clone <url-de-ton-repo>
+git clone https://github.com/dx9674hnxw-spec/at2-bridge.git
 cd at2-bridge
 docker compose up -d --build
 ```
 
-L'interface est servie sur `http://<ip-du-serveur>:8000` (le conteneur tourne en `network_mode: host`, voir `docker-compose.yml` pour le détail des accès USB/BLE requis).
+Interface servie sur `http://<ip-du-serveur>:8000` (conteneur en `network_mode: host`).
+
+Pour activer l'authentification, définis `AT2_BRIDGE_PASSWORD` dans l'environnement du conteneur avant de déployer (sinon l'interface reste ouverte — à réserver à un réseau de confiance type Tailscale dans ce cas).
 
 ### Accès matériel requis
 
-- **USB série** : branche la radio en USB-C sur le serveur. Le port apparaîtra typiquement en `/dev/ttyACM0` ou `/dev/ttyUSB0` — visible et sélectionnable directement dans l'interface (« USB série » → liste déroulante).
-- **BLE** : le serveur doit avoir un adaptateur Bluetooth (intégré ou dongle USB). Le conteneur a besoin d'accéder à la stack BlueZ de l'hôte via D-Bus (déjà configuré dans `docker-compose.yml`).
+- **USB série** : port typiquement `/dev/ttyACM0` ou `/dev/ttyUSB0`, sélectionnable dans l'interface.
+- **BLE (mode serveur)** : adaptateur Bluetooth sur le serveur, accès à BlueZ via D-Bus (déjà configuré dans `docker-compose.yml`).
+- **BLE (mode local)** : aucun matériel serveur requis — utilise le Bluetooth de l'appareil affichant la page web.
 
-## Développement local (sans Docker)
+### Développement local (sans Docker)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -57,15 +90,25 @@ uvicorn app.main:app --reload
 python -m pytest app/tests -v
 ```
 
-Les tests couvrent le codec de trame, le CRC16, l'encodage/décodage des canaux et de la messagerie — indépendamment de tout matériel connecté.
+## Limitations connues
 
-## Roadmap
+- Aucune trame n'a été échangée avec une radio AT2 physique à ce jour.
+- La lecture groupée des 30 canaux est une déduction par symétrie, pas une commande observée.
+- Le PTT temps réel et la messagerie voix/image n'ont jamais été exercés de bout en bout avec du matériel.
+- Le mode BLE local n'implémente qu'un sous-ensemble du protocole (canal, texte) ; codeplug complet et PTT restent serveur uniquement.
+- Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit).
+- Une seule connexion radio active à la fois côté serveur.
+- L'authentification protège l'API et les WebSocket par token, mais reste un mot de passe partagé unique (pas de comptes multiples).
 
-1. **Valider la lecture groupée des canaux** sur une radio réelle (capturer le trafic pendant un "Read from device" dans le CPS ou l'app Ola Radio, comparer avec `query_channel_config()`).
-2. **Messagerie image/vocale hors-réseau** (formats déjà documentés côté Android, portage direct possible).
-3. **PTT temps réel** : intégrer `OpenCORE-AMR` (ou un binding Python équivalent) pour encoder/décoder l'audio AMR-NB MR475, streamer entre le micro du navigateur (WebRTC/WebAudio) et la radio par trames de 12 octets/20ms.
-4. Authentification de l'interface web (actuellement aucune — à réserver à un réseau de confiance, ex. Tailscale).
+## Origine du protocole
 
-## Licence
+Deux sources croisées, confirmant un protocole **identique** entre USB série et BLE :
 
-Code de ce projet sous licence MIT. Contient des portions portées depuis un projet tiers sous licence Apache 2.0 — voir `LICENSE`, `NOTICE` et `THIRD_PARTY_NOTICES.md`.
+1. Décompilation du CPS officiel Windows (Electron) — structure de trame et layout des canaux.
+2. Code source [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — CRC16 exact, UUID BLE réels, formats de messagerie hors-réseau (texte/voix/image) et protocole PTT temps réel.
+
+## Licences tierces
+
+Code porté (Kotlin → Python/JS) depuis [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0 — voir [`NOTICE`](./NOTICE) et [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md), y compris pour `libopencore-amrnb` (Apache 2.0).
+
+Code propre à ce projet sous licence MIT — voir [`LICENSE`](./LICENSE).
