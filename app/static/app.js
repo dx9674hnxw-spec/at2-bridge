@@ -5,14 +5,86 @@ let mode = "server"; // "server" | "local"
 let connected = false;
 let localDeviceInfo = null;
 
+// ---------------------------------------------------------------------------
+// Auth (shared-password token, see app/auth.py -- no-op if server-side
+// auth is disabled, i.e. AT2_BRIDGE_PASSWORD unset)
+// ---------------------------------------------------------------------------
+let authToken = sessionStorage.getItem("at2_token") || null;
+
+function wsUrl(path) {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const base = `${proto}://${location.host}${path}`;
+  return authToken ? `${base}?token=${encodeURIComponent(authToken)}` : base;
+}
+
+function showLoginOverlay(errored) {
+  $("#login-overlay").style.display = "flex";
+  $("#login-error").style.display = errored ? "block" : "none";
+}
+
+function hideLoginOverlay() {
+  $("#login-overlay").style.display = "none";
+}
+
+async function checkAuthStatus() {
+  const res = await fetch("/api/auth/status");
+  const { enabled } = await res.json();
+  if (enabled && !authToken) {
+    showLoginOverlay(false);
+    return false;
+  }
+  return true;
+}
+
+$("#login-submit").addEventListener("click", async () => {
+  const password = $("#login-password").value;
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) { showLoginOverlay(true); return; }
+    const { token } = await res.json();
+    authToken = token;
+    sessionStorage.setItem("at2_token", token);
+    hideLoginOverlay();
+    startApp();
+  } catch (e) {
+    showLoginOverlay(true);
+  }
+});
+$("#login-password").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#login-submit").click();
+});
+
 async function api(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const headers = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) {
+    authToken = null;
+    sessionStorage.removeItem("at2_token");
+    showLoginOverlay(false);
+    throw new Error("Session expirée, reconnecte-toi.");
+  }
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
   return res.status === 204 ? null : res.json();
+}
+
+async function apiUpload(path, formData) {
+  const headers = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const res = await fetch(path, { method: "POST", headers, body: formData });
+  if (res.status === 401) {
+    authToken = null;
+    sessionStorage.removeItem("at2_token");
+    showLoginOverlay(false);
+    throw new Error("Session expirée, reconnecte-toi.");
+  }
+  if (!res.ok) throw new Error(`POST ${path} -> ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 
 function appendLog(line) {
@@ -184,8 +256,6 @@ async function forgetKnownDevice(id) {
   await loadDeviceList();
 }
 
-loadDeviceList();
-
 // ---------------------------------------------------------------------------
 // Compact channel switcher
 // ---------------------------------------------------------------------------
@@ -282,7 +352,7 @@ async function startPtt() {
   }, 200);
 
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  pttSocket = new WebSocket(`${proto}://${location.host}/ws/ptt`);
+  pttSocket = new WebSocket(wsUrl("/ws/ptt"));
   pttSocket.binaryType = "arraybuffer";
   pttSocket.onmessage = (evt) => {
     const pcm = new Int16Array(evt.data);
@@ -471,7 +541,6 @@ $("#btn-write-channels").addEventListener("click", async () => {
 });
 
 renderChannelTable(emptyChannels());
-api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; });
 
 // ---------------------------------------------------------------------------
 // Device settings
@@ -512,21 +581,136 @@ $("#btn-send-message").addEventListener("click", async () => {
   } catch (e) { alert(e.message); }
 });
 
+// -- Image messages (server mode only -- image encoding happens server-side
+// with Pillow, see app/main.py; no BLE-local equivalent yet) ---------------
+$("#btn-attach-image").addEventListener("click", () => {
+  if (mode !== "server") return alert("L'envoi d'image nécessite le mode Serveur.");
+  $("#image-file-input").click();
+});
+
+$("#image-file-input").addEventListener("change", async () => {
+  const file = $("#image-file-input").files[0];
+  if (!file) return;
+  const username = $("#msg-username").value || "AT2Bridge";
+  const form = new FormData();
+  form.append("username", username);
+  form.append("image", file);
+  try {
+    await apiUpload("/api/messages/image", form);
+    pushSentBubble(`🖼️ Image envoyée (${file.name})`);
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $("#image-file-input").value = "";
+  }
+});
+
+// -- Voice notes (store-and-forward, distinct from live PTT). Reuses
+// PttAudio.startCapture/stopCapture as-is (already exported by
+// ptt-audio.js) to accumulate a full recording instead of streaming it. -
+let voiceRecording = false;
+let voiceChunks = [];
+
+$("#btn-record-voice").addEventListener("click", async () => {
+  if (mode !== "server") return alert("L'envoi vocal nécessite le mode Serveur.");
+  const btn = $("#btn-record-voice");
+  const status = $("#voice-record-status");
+
+  if (!voiceRecording) {
+    voiceRecording = true;
+    voiceChunks = [];
+    btn.textContent = "⏹️ Arrêter";
+    status.textContent = "Enregistrement en cours…";
+    try {
+      await PttAudio.startCapture((int16Frame) => { voiceChunks.push(int16Frame); });
+    } catch (e) {
+      voiceRecording = false;
+      btn.textContent = "🎙️ Vocal";
+      status.textContent = "";
+      alert(`Micro indisponible: ${e.message}`);
+    }
+  } else {
+    voiceRecording = false;
+    PttAudio.stopCapture();
+    btn.textContent = "🎙️ Vocal";
+    status.textContent = "Envoi…";
+
+    const totalSamples = voiceChunks.reduce((sum, c) => sum + c.length, 0);
+    if (totalSamples === 0) { status.textContent = ""; return; }
+    const merged = new Int16Array(totalSamples);
+    let offset = 0;
+    for (const c of voiceChunks) { merged.set(c, offset); offset += c.length; }
+    const durationMs = Math.round((totalSamples / 8000) * 1000);
+
+    const username = $("#msg-username").value || "AT2Bridge";
+    const form = new FormData();
+    form.append("username", username);
+    form.append("duration_ms", String(durationMs));
+    form.append("pcm", new Blob([merged.buffer], { type: "application/octet-stream" }), "voice.pcm");
+    try {
+      await apiUpload("/api/messages/voice", form);
+      pushSentBubble(`🎙️ Message vocal envoyé (${Math.round(durationMs / 1000)}s)`);
+      status.textContent = "";
+    } catch (e) {
+      status.textContent = "";
+      alert(e.message);
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Live log (server mode only)
 // ---------------------------------------------------------------------------
 function connectLogSocket() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/log`);
+  const ws = new WebSocket(wsUrl("/ws/log"));
   ws.onmessage = (evt) => appendLog(evt.data);
   ws.onclose = () => setTimeout(connectLogSocket, 2000);
 }
-connectLogSocket();
+
+// ---------------------------------------------------------------------------
+// Incoming offline messages (text/voice/image) -- /ws/messages
+// ---------------------------------------------------------------------------
+function pushReceivedBubble(msg) {
+  const thread = $("#msg-thread");
+  const el = document.createElement("div");
+  el.className = "msg-bubble";
+  const time = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  let body;
+  if (msg.kind === "text") {
+    body = `<div class="msg-body">${msg.text ?? ""}</div>`;
+  } else if (msg.kind === "image" && msg.data_base64) {
+    body = `<div class="msg-body"><img src="data:image/jpeg;base64,${msg.data_base64}" style="max-width:220px; border-radius:6px; display:block;" /></div>`;
+  } else if (msg.kind === "voice") {
+    body = `<div class="msg-body">🎙️ Message vocal (${Math.round((msg.duration_ms || 0) / 1000)}s) — lecture non câblée côté navigateur pour les messages reçus.</div>`;
+  } else {
+    body = `<div class="msg-body">Message de type inconnu (${msg.kind})</div>`;
+  }
+  el.innerHTML = `<div class="meta">${msg.sender || "?"} · ${time}</div>${body}`;
+  thread.appendChild(el);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function connectMessagesSocket() {
+  const ws = new WebSocket(wsUrl("/ws/messages"));
+  ws.onmessage = (evt) => {
+    try { pushReceivedBubble(JSON.parse(evt.data)); } catch (e) { appendLog(`Message entrant illisible: ${e.message}`); }
+  };
+  ws.onclose = () => setTimeout(connectMessagesSocket, 2000);
+}
 
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
-loadChannelNames().then(() => applyActiveChannel(false));
-refreshStatus();
-refreshSerialPorts();
-setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
+function startApp() {
+  connectLogSocket();
+  connectMessagesSocket();
+  loadDeviceList();
+  loadChannelNames().then(() => applyActiveChannel(false));
+  api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; }).catch(() => {});
+  refreshStatus();
+  refreshSerialPorts();
+  setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
+}
+
+checkAuthStatus().then((ok) => { if (ok) startApp(); });
+

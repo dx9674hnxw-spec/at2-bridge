@@ -140,21 +140,30 @@
     </section>
 
     <section id="tab-device" class="tab-panel">
-      <div class="card settings-grid">
-        <div class="setting-card">
-          <label for="volume-slider">Volume (1–8)</label>
-          <input id="volume-slider" type="range" min="1" max="8" value="4" />
-          <button class="btn-primary" data-action="set-volume">Appliquer</button>
+      <div class="card">
+        <div class="ptt-header">
+          <div>
+            <div class="ptt-device-name">Réglages appareil</div>
+            <div class="ptt-device-sub" id="settings-target-sub">Aucune connexion active</div>
+          </div>
         </div>
-        <div class="setting-card">
-          <label for="squelch-slider">Squelch (0–9)</label>
-          <input id="squelch-slider" type="range" min="0" max="9" value="3" />
-          <button class="btn-primary" data-action="set-squelch">Appliquer</button>
+        <div class="settings-grid">
+          <div class="setting-card">
+            <label for="volume-slider">Volume (1–8)</label>
+            <input id="volume-slider" type="range" min="1" max="8" value="4" />
+            <button class="btn-primary" data-action="set-volume">Appliquer</button>
+          </div>
+          <div class="setting-card">
+            <label for="squelch-slider">Squelch (0–9)</label>
+            <input id="squelch-slider" type="range" min="0" max="9" value="3" />
+            <button class="btn-primary" data-action="set-squelch">Appliquer</button>
+          </div>
+          <div class="setting-card">
+            <label><input id="vox-toggle" type="checkbox" /> VOX activé</label>
+            <button class="btn-primary" data-action="set-vox">Appliquer</button>
+          </div>
         </div>
-        <div class="setting-card">
-          <label><input id="vox-toggle" type="checkbox" /> VOX activé</label>
-          <button class="btn-primary" data-action="set-vox">Appliquer</button>
-        </div>
+        <span class="hint">Ces trois réglages sont les seuls actuellement câblés à la radio (voir README) — d'autres commandes existent dans le protocole mais ne sont pas encore reliées à l'interface.</span>
       </div>
     </section>
 
@@ -162,8 +171,14 @@
       <div class="card message-form">
         <input id="msg-username" type="text" placeholder="Pseudo" value="elyha" />
         <textarea id="msg-text" rows="3" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
-        <button id="btn-send-message" class="btn-primary">Envoyer</button>
-        <span class="hint">Texte hors-réseau uniquement pour l'instant — image/vocal hors-réseau restent au roadmap (voir README).</span>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button class="btn-ghost" id="btn-attach-image" title="Joindre une image">🖼️ Image</button>
+          <input type="file" id="image-file-input" accept="image/*" hidden />
+          <button class="btn-ghost" id="btn-record-voice" title="Message vocal">🎙️ Vocal</button>
+          <button id="btn-send-message" class="btn-primary">Envoyer</button>
+        </div>
+        <span class="hint" id="voice-record-status"></span>
+        <span class="hint">Texte hors-réseau câblé de bout en bout. Image/vocal : format du protocole implémenté, boutons pas encore reliés à l'envoi (voir README).</span>
       </div>
       <div class="card">
         <div class="msg-thread" id="msg-thread"></div>
@@ -174,6 +189,16 @@
       <pre id="log-console"></pre>
     </section>
   </main>
+
+  <div id="login-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; align-items:center; justify-content:center; padding:16px;">
+    <div class="card" style="max-width:320px; width:100%;">
+      <div class="ptt-device-name" style="margin-bottom:4px;">Connexion requise</div>
+      <div class="hint" style="margin-bottom:14px;">Ce serveur AT2 Bridge est protégé par mot de passe.</div>
+      <input type="password" id="login-password" placeholder="Mot de passe" style="width:100%; margin-bottom:10px;" />
+      <button class="btn-primary" id="login-submit" style="width:100%;">Se connecter</button>
+      <div class="hint" id="login-error" style="color:var(--status-down); margin-top:8px; display:none;">Mot de passe incorrect.</div>
+    </div>
+  </div>
 
   <script src="/static/protocol.js"></script>
   <script src="/static/ble-client.js"></script>

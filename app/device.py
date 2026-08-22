@@ -15,6 +15,7 @@ from app.protocol.frame import At2Packet
 from app.transport.base import Transport
 from app.transport.ble_transport import BleTransport
 from app.transport.serial_transport import SerialTransport
+from app import store
 
 logger = logging.getLogger("at2.device")
 
@@ -68,6 +69,10 @@ class DeviceManager:
         self._transport, self._kind, self._target = t, "serial", port
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
+        # `port` (e.g. /dev/ttyACM0) is the best name we have here -- there's
+        # no friendly device name available over a plain serial link, unlike
+        # BLE which at least has an advertised name from the scan step.
+        store.remember_device(f"serial-{port}", port, "serial", port)
         self._log_line(f"Connecté en série sur {port} @ {baud_rate} bauds")
 
     async def connect_ble(self, address: str) -> None:
@@ -78,6 +83,13 @@ class DeviceManager:
         self._transport, self._kind, self._target = t, "ble", address
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
+        # Fallback name (address) -- app/static/app.js immediately overwrites
+        # this with the properly scanned device name right after a
+        # successful connect, since store.remember_device() dedupes by id
+        # and keeps the latest write. Connecting directly by address
+        # (e.g. via a known-device reconnect) without going through a
+        # fresh scan will keep this fallback name, which is expected.
+        store.remember_device(f"ble-{address}", address, "ble", address)
         self._log_line(f"Connecté en BLE sur {address}")
 
     async def disconnect(self) -> None:

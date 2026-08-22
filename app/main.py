@@ -4,8 +4,8 @@ import asyncio
 import base64
 import logging
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -17,8 +17,38 @@ from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("at2.main")
 
 app = FastAPI(title="AT2 Bridge")
+
+
+# ---------------------------------------------------------------------------
+# Exception handling
+#
+# Without this, any RuntimeError raised deep in app/device.py (most
+# commonly `_require_transport()` when no radio is connected) surfaces
+# to the client as a raw 500 with a Python traceback -- confirmed while
+# testing app/static/app.js against a running server with no radio
+# attached. Two handlers:
+#   - RuntimeError: these are deliberate, human-readable messages
+#     raised on purpose by device.py (e.g. "no active connection",
+#     "channel out of range") -- safe to relay directly, mapped to 409
+#     Conflict (the request was valid, but the current state disallows
+#     it right now).
+#   - Anything else unexpected: still logged in full server-side (per
+#     CONSIGNES_PROJET.md: never silently swallow an error), but the
+#     client gets a generic message instead of an internal traceback.
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(RuntimeError)
+async def runtime_error_handler(request: Request, exc: RuntimeError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    logger.exception("unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "internal server error"})
 
 
 # ---------------------------------------------------------------------------
