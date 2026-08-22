@@ -66,6 +66,71 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
+/* -- Light theme override -------------------------------------------------
+   Toggled via [data-theme="light"] on <html> (see app.js). Every rule in
+   this file already reads colors through the custom properties above, so
+   this block only needs to redefine the values -- no rule duplication. */
+[data-theme="light"] {
+  --color-bg: #f4f5f7;
+  --color-bg-alt: #eceef1;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f3f5;
+
+  --grid-line: rgba(0, 0, 0, 0.035);
+
+  --color-border: #d9dce1;
+  --color-border-strong: #b7bcc4;
+
+  --color-text: #0f1115;
+  --color-text-soft: #1f2328;
+  --color-text-muted: #3a3f46;
+  --color-text-dim: #5b616a;
+  --color-text-subtle: #7a808a;
+  --color-text-faint: #9aa0aa;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-ring: rgba(37, 99, 235, 0.14);
+  --color-primary-border: rgba(37, 99, 235, 0.45);
+  --color-primary-border-soft: rgba(37, 99, 235, 0.3);
+  --color-primary-outline: rgba(37, 99, 235, 0.15);
+
+  --status-up: #059669;
+  --status-up-bg: rgba(5, 150, 105, 0.10);
+  --status-up-border: rgba(5, 150, 105, 0.35);
+
+  --status-down: #dc2626;
+  --status-down-bg: rgba(220, 38, 38, 0.08);
+  --status-down-border: rgba(220, 38, 38, 0.35);
+
+  --status-degraded: #d97706;
+  --status-degraded-bg: rgba(217, 119, 6, 0.10);
+  --status-degraded-border: rgba(217, 119, 6, 0.35);
+
+  --status-info: #2563eb;
+  --status-info-bg: rgba(37, 99, 235, 0.08);
+
+  --status-neutral: #64748b;
+  --status-neutral-bg: rgba(100, 116, 139, 0.12);
+  --status-neutral-border: rgba(100, 116, 139, 0.28);
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.10), 0 0 0 1px var(--color-primary-outline), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* Card backgrounds use a hardcoded rgba(18,18,18,...) rather than a
+   variable in several places (ptt-panel, gps-panel, table, etc.) --
+   this override keeps those legible in light mode without editing
+   every individual rule. */
+[data-theme="light"] .card,
+[data-theme="light"] .table-wrap,
+[data-theme="light"] #log-console {
+  background-color: var(--color-surface);
+}
+[data-theme="light"] .topbar {
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
 * , *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {

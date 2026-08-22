@@ -20,6 +20,8 @@
       <button class="mode-btn" id="mode-local" data-mode="local">BLE local</button>
     </div>
 
+    <button class="btn-ghost" id="theme-toggle" title="Basculer thème clair/sombre">🌙 Sombre</button>
+
     <div class="conn-panel">
       <span id="status-pill" class="status-pill"><span class="dot"></span><span id="conn-label">Déconnecté</span></span>
       <div class="conn-controls" id="server-controls">
@@ -163,7 +165,45 @@
             <button class="btn-primary" data-action="set-vox">Appliquer</button>
           </div>
         </div>
-        <span class="hint">Ces trois réglages sont les seuls actuellement câblés à la radio (voir README) — d'autres commandes existent dans le protocole mais ne sont pas encore reliées à l'interface.</span>
+        <span class="hint">Ces trois réglages ont été vérifiés en communication avec le backend (voir README pour le détail testé/non testé sur radio réelle).</span>
+
+        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-border);">
+          <div class="ptt-device-sub" style="margin-bottom:10px; text-transform:uppercase; letter-spacing:0.06em; font-size:11px;">Réglages avancés</div>
+          <div class="settings-grid">
+            <div class="setting-card">
+              <label for="vox-sensitivity-slider">Sensibilité VOX (1–5)</label>
+              <input id="vox-sensitivity-slider" type="range" min="1" max="5" value="3" />
+              <button class="btn-primary" data-action="set-vox-sensitivity">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label for="tot-slider">Temporisation TX — secondes (0 = désactivé, max 240)</label>
+              <input id="tot-slider" type="range" min="0" max="240" step="10" value="120" />
+              <button class="btn-primary" data-action="set-tot">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label><input id="tx-inhibit-toggle" type="checkbox" /> Inhibition TX (bloque l'émission)</label>
+              <button class="btn-primary" data-action="set-tx-inhibit">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label><input id="noise-reduction-toggle" type="checkbox" /> Réduction de bruit</label>
+              <button class="btn-primary" data-action="set-noise-reduction">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label><input id="prompt-tone-toggle" type="checkbox" /> Tonalité de confirmation</label>
+              <button class="btn-primary" data-action="set-prompt-tone">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label for="device-name-input">Nom de l'appareil</label>
+              <input id="device-name-input" type="text" placeholder="AT2_XXXX" />
+              <button class="btn-primary" data-action="set-device-name">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label><input id="smart-link-toggle" type="checkbox" /> Smart Link (pont vers apps tierces)</label>
+              <button class="btn-primary" data-action="set-smart-link">Appliquer</button>
+            </div>
+          </div>
+          <span class="hint">Ces 7 réglages sont câblés à `app/protocol/commands.py` (protocole réel) mais jamais testés sur radio physique — voir README.</span>
+        </div>
       </div>
     </section>
 

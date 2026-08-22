@@ -95,6 +95,24 @@ class VoxRequest(BaseModel):
     enabled: bool
 
 
+class VoxSensitivityRequest(BaseModel):
+    level: int
+
+
+class TotRequest(BaseModel):
+    seconds: int
+
+
+class ToggleRequest(BaseModel):
+    """Generic on/off body, reused for the settings that are just a
+    single boolean: tx_inhibit, noise_reduction, prompt_tone, smart_link."""
+    enabled: bool
+
+
+class DeviceNameRequest(BaseModel):
+    name: str
+
+
 class TextMessageRequest(BaseModel):
     username: str = "AT2Bridge"
     text: str
@@ -236,6 +254,48 @@ async def set_squelch(req: SquelchRequest, _: None = Depends(auth.require_auth))
 @app.put("/api/device/vox")
 async def set_vox(req: VoxRequest, _: None = Depends(auth.require_auth)):
     await device_manager.set_vox(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/vox-sensitivity")
+async def set_vox_sensitivity(req: VoxSensitivityRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_vox_sensitivity(req.level)
+    return {"ok": True}
+
+
+@app.put("/api/device/tot")
+async def set_tot(req: TotRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_tot_seconds(req.seconds)
+    return {"ok": True}
+
+
+@app.put("/api/device/tx-inhibit")
+async def set_tx_inhibit(req: ToggleRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_tx_inhibit(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/noise-reduction")
+async def set_noise_reduction(req: ToggleRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_noise_reduction(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/prompt-tone")
+async def set_prompt_tone(req: ToggleRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_prompt_tone(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/name")
+async def set_device_name(req: DeviceNameRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_device_name(req.name)
+    return {"ok": True}
+
+
+@app.put("/api/device/smart-link")
+async def set_smart_link(req: ToggleRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_smart_link(req.enabled)
     return {"ok": True}
 
 

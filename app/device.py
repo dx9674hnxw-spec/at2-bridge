@@ -172,6 +172,34 @@ class DeviceManager:
         t = self._require_transport()
         await t.send_payload(commands.set_vox(enabled))
 
+    async def set_vox_sensitivity(self, level: int) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_vox_sensitivity(level))
+
+    async def set_tot_seconds(self, seconds: int) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_tot_seconds(seconds))
+
+    async def set_tx_inhibit(self, enabled: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_tx_inhibit(enabled))
+
+    async def set_noise_reduction(self, enabled: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_noise_reduction(enabled))
+
+    async def set_prompt_tone(self, enabled: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_prompt_tone(enabled))
+
+    async def set_device_name(self, name: str) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_device_name(name))
+
+    async def set_smart_link(self, enabled: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_smart_link(enabled))
+
     async def select_channel(self, channel_number: int) -> None:
         t = self._require_transport()
         await t.send_payload(commands.select_channel(channel_number))

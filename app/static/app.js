@@ -6,6 +6,26 @@ let connected = false;
 let localDeviceInfo = null;
 
 // ---------------------------------------------------------------------------
+// Theme (light/dark), persisted in localStorage -- pure UI preference,
+// unrelated to the radio protocol, so it's fine independent of anything
+// device-specific.
+// ---------------------------------------------------------------------------
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  $("#theme-toggle").textContent = theme === "light" ? "☀️ Clair" : "🌙 Sombre";
+}
+
+const savedTheme = localStorage.getItem("at2_theme") || "dark";
+applyTheme(savedTheme);
+
+$("#theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = current === "light" ? "dark" : "light";
+  localStorage.setItem("at2_theme", next);
+  applyTheme(next);
+});
+
+// ---------------------------------------------------------------------------
 // Auth (shared-password token, see app/auth.py -- no-op if server-side
 // auth is disabled, i.e. AT2_BRIDGE_PASSWORD unset)
 // ---------------------------------------------------------------------------
@@ -551,6 +571,17 @@ $$("[data-action]").forEach((btn) => {
       if (btn.dataset.action === "set-volume") await api("PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) });
       if (btn.dataset.action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
       if (btn.dataset.action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
+      if (btn.dataset.action === "set-vox-sensitivity") await api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) });
+      if (btn.dataset.action === "set-tot") await api("PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) });
+      if (btn.dataset.action === "set-tx-inhibit") await api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked });
+      if (btn.dataset.action === "set-noise-reduction") await api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked });
+      if (btn.dataset.action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
+      if (btn.dataset.action === "set-device-name") {
+        const name = $("#device-name-input").value.trim();
+        if (!name) return alert("Entre un nom d'appareil.");
+        await api("PUT", "/api/device/name", { name });
+      }
+      if (btn.dataset.action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
     } catch (e) { alert(e.message); }
   });
 });
