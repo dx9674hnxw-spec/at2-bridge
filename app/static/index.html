@@ -16,35 +16,36 @@
     </div>
 
     <div class="mode-toggle">
-      <button class="mode-btn active" id="mode-server" data-mode="server">Serveur</button>
-      <button class="mode-btn" id="mode-local" data-mode="local">BLE local</button>
+      <button class="mode-btn active" id="mode-server" data-mode="server" data-i18n="mode.server">Serveur</button>
+      <button class="mode-btn" id="mode-local" data-mode="local" data-i18n="mode.local">BLE local</button>
     </div>
 
-    <button class="btn-ghost" id="theme-toggle" title="Basculer thème clair/sombre">🌙 Sombre</button>
+    <button class="btn-ghost" id="theme-toggle" data-i18n-title="theme.title" title="Basculer thème clair/sombre" data-i18n="theme.dark">🌙 Sombre</button>
+    <button class="btn-ghost" id="lang-toggle">FR</button>
 
     <div class="conn-panel">
       <span id="status-pill" class="status-pill"><span class="dot"></span><span id="conn-label">Déconnecté</span></span>
       <div class="conn-controls" id="server-controls">
         <select id="serial-port-select"></select>
-        <button id="btn-refresh-ports" class="btn-ghost">↻</button>
-        <button id="btn-connect-serial" class="btn-primary">USB série</button>
-        <button id="btn-scan-ble" class="btn-ghost">Scanner BLE</button>
-        <button id="btn-disconnect" class="btn-danger" hidden>Déconnecter</button>
+        <button id="btn-refresh-ports" class="btn-ghost" data-i18n="btn.refreshPorts">↻</button>
+        <button id="btn-connect-serial" class="btn-primary" data-i18n="btn.connectSerial">USB série</button>
+        <button id="btn-scan-ble" class="btn-ghost" data-i18n="btn.scanBle">Scanner BLE</button>
+        <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
       </div>
       <div class="conn-controls" id="local-controls" hidden>
-        <button id="btn-local-connect" class="btn-primary">Connecter (Web Bluetooth)</button>
-        <button id="btn-local-disconnect" class="btn-danger" hidden>Déconnecter</button>
+        <button id="btn-local-connect" class="btn-primary" data-i18n="btn.connectLocal">Connecter (Web Bluetooth)</button>
+        <button id="btn-local-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
       </div>
     </div>
   </header>
 
   <div class="tabs-wrap">
     <nav class="tabs">
-      <button class="tab active" data-tab="devices">Appareils</button>
-      <button class="tab" data-tab="channels">Canaux</button>
-      <button class="tab" data-tab="device">Réglages</button>
-      <button class="tab" data-tab="messages">Messagerie</button>
-      <button class="tab" data-tab="log">Journal</button>
+      <button class="tab active" data-tab="devices" data-i18n="tab.devices">Appareils</button>
+      <button class="tab" data-tab="channels" data-i18n="tab.channels">Canaux</button>
+      <button class="tab" data-tab="device" data-i18n="tab.settings">Réglages</button>
+      <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
+      <button class="tab" data-tab="log" data-i18n="tab.log">Journal</button>
     </nav>
   </div>
 
@@ -55,10 +56,10 @@
       <div class="devices-grid">
         <div class="card" id="ptt-panel">
           <div class="chan-switch">
-            <button class="chan-arrow" id="chan-prev" title="Canal précédent">‹</button>
+            <button class="chan-arrow" id="chan-prev" data-i18n-title="chan.prev" title="Canal précédent">‹</button>
             <select id="chan-select" class="chan-select"></select>
-            <button class="chan-arrow" id="chan-next" title="Canal suivant">›</button>
-            <button class="chan-arrow" id="chan-rename" title="Renommer ce canal">✎</button>
+            <button class="chan-arrow" id="chan-next" data-i18n-title="chan.next" title="Canal suivant">›</button>
+            <button class="chan-arrow" id="chan-rename" data-i18n-title="chan.rename" title="Renommer ce canal">✎</button>
             <div class="chan-opts" id="chan-opts"></div>
           </div>
 
@@ -68,36 +69,36 @@
               <div class="ptt-device-sub" id="ptt-device-sub">—</div>
             </div>
             <span class="rf-indicator" id="rf-indicator">
-              <span class="rf-dot"></span><span id="rf-label">Standby</span>
+              <span class="rf-dot"></span><span id="rf-label" data-i18n="chan.standby">Standby</span>
             </span>
           </div>
 
           <div class="ptt-wave" id="ptt-wave"></div>
 
           <div class="ptt-controls">
-            <button class="ptt-btn" id="ptt-btn">PTT</button>
+            <button class="ptt-btn" id="ptt-btn" data-i18n="ptt.button">PTT</button>
             <div class="ptt-meta">
               <div class="ptt-timer" id="ptt-timer">00:00</div>
-              <div class="hint" id="ptt-hint">Maintiens pour émettre (mode serveur uniquement pour l'instant)</div>
+              <div class="hint" id="ptt-hint" data-i18n="ptt.hintServer">Maintiens pour émettre (mode serveur uniquement pour l'instant)</div>
             </div>
           </div>
         </div>
 
         <div class="card" id="gps-panel">
           <div class="gps-header">
-            <div class="gps-title">Position &amp; urgence</div>
-            <span class="gps-fix" id="gps-fix"><span class="dot"></span><span id="gps-fix-label">Localisation…</span></span>
+            <div class="gps-title" data-i18n="gps.title">Position &amp; urgence</div>
+            <span class="gps-fix" id="gps-fix"><span class="dot"></span><span id="gps-fix-label" data-i18n="gps.locating">Localisation…</span></span>
           </div>
 
           <div class="gps-coords" id="gps-coords">— , —</div>
-          <div class="gps-sub" id="gps-accuracy">précision inconnue</div>
+          <div class="gps-sub" id="gps-accuracy" data-i18n="gps.accuracyUnknown">précision inconnue</div>
 
           <div class="beacon-row">
             <label class="switch">
               <input type="checkbox" id="beacon-toggle" />
               <span class="switch-track"><span class="switch-thumb"></span></span>
             </label>
-            <span>Balise position auto</span>
+            <span data-i18n="gps.beaconAuto">Balise position auto</span>
             <select id="beacon-interval" class="beacon-interval">
               <option value="30">30 s</option>
               <option value="60" selected>1 min</option>
@@ -105,16 +106,16 @@
               <option value="900">15 min</option>
             </select>
           </div>
-          <div class="hint" id="beacon-status">Balise désactivée</div>
+          <div class="hint" id="beacon-status" data-i18n="gps.beaconOff">Balise désactivée</div>
 
-          <button class="btn-ghost gps-send-btn" id="gps-send-now">📍 Envoyer ma position maintenant</button>
+          <button class="btn-ghost gps-send-btn" id="gps-send-now" data-i18n="gps.sendNow">📍 Envoyer ma position maintenant</button>
 
           <div class="sos-row">
-            <button class="sos-btn" id="sos-btn">🆘 SOS</button>
+            <button class="sos-btn" id="sos-btn" data-i18n="gps.sos">🆘 SOS</button>
             <select id="sos-preset" class="sos-preset">
-              <option value="Perdu, besoin d'un itinéraire">Perdu, besoin d'un itinéraire</option>
-              <option value="Blessé, besoin de secours médical">Blessé, besoin de secours médical</option>
-              <option value="Bloqué, besoin d'une évacuation">Bloqué, besoin d'une évacuation</option>
+              <option value="Perdu, besoin d'un itinéraire" data-i18n="gps.sosPresetLost">Perdu, besoin d'un itinéraire</option>
+              <option value="Blessé, besoin de secours médical" data-i18n="gps.sosPresetInjured">Blessé, besoin de secours médical</option>
+              <option value="Bloqué, besoin d'une évacuation" data-i18n="gps.sosPresetStuck">Bloqué, besoin d'une évacuation</option>
             </select>
           </div>
         </div>
@@ -123,17 +124,17 @@
 
     <section id="tab-channels" class="tab-panel">
       <div class="panel-toolbar">
-        <button id="btn-read-channels" class="btn-primary">Lire les 30 canaux</button>
-        <button id="btn-write-channels" class="btn-primary">Écrire les 30 canaux</button>
-        <span class="hint">La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire.</span>
+        <button id="btn-read-channels" class="btn-primary" data-i18n="channels.readAll">Lire les 30 canaux</button>
+        <button id="btn-write-channels" class="btn-primary" data-i18n="channels.writeAll">Écrire les 30 canaux</button>
+        <span class="hint" data-i18n="channels.readHint">La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire.</span>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Ch</th><th>Nom (local)</th><th>RX MHz</th><th>TX MHz</th>
-              <th>Ton RX</th><th>Ton TX</th><th>BW étroite</th><th>Puissance haute</th>
-              <th>Scan</th><th>Numérique</th><th></th>
+              <th data-i18n="channels.colCh">Ch</th><th data-i18n="channels.colName">Nom (local)</th><th data-i18n="channels.colRx">RX MHz</th><th data-i18n="channels.colTx">TX MHz</th>
+              <th data-i18n="channels.colToneRx">Ton RX</th><th data-i18n="channels.colToneTx">Ton TX</th><th data-i18n="channels.colBw">BW étroite</th><th data-i18n="channels.colPower">Puissance haute</th>
+              <th data-i18n="channels.colScan">Scan</th><th data-i18n="channels.colDigital">Numérique</th><th></th>
             </tr>
           </thead>
           <tbody id="channel-table-body"></tbody>
@@ -145,80 +146,80 @@
       <div class="card">
         <div class="ptt-header">
           <div>
-            <div class="ptt-device-name">Réglages appareil</div>
-            <div class="ptt-device-sub" id="settings-target-sub">Aucune connexion active</div>
+            <div class="ptt-device-name" data-i18n="settings.title">Réglages appareil</div>
+            <div class="ptt-device-sub" id="settings-target-sub" data-i18n="settings.noConnection">Aucune connexion active</div>
           </div>
         </div>
         <div class="settings-grid">
           <div class="setting-card">
-            <label for="volume-slider">Volume (1–8)</label>
+            <label for="volume-slider" data-i18n="settings.volume">Volume (1–8)</label>
             <input id="volume-slider" type="range" min="1" max="8" value="4" />
-            <button class="btn-primary" data-action="set-volume">Appliquer</button>
+            <button class="btn-primary" data-action="set-volume" data-i18n="settings.apply">Appliquer</button>
           </div>
           <div class="setting-card">
-            <label for="squelch-slider">Squelch (0–9)</label>
+            <label for="squelch-slider" data-i18n="settings.squelch">Squelch (0–9)</label>
             <input id="squelch-slider" type="range" min="0" max="9" value="3" />
-            <button class="btn-primary" data-action="set-squelch">Appliquer</button>
+            <button class="btn-primary" data-action="set-squelch" data-i18n="settings.apply">Appliquer</button>
           </div>
           <div class="setting-card">
-            <label><input id="vox-toggle" type="checkbox" /> VOX activé</label>
-            <button class="btn-primary" data-action="set-vox">Appliquer</button>
+            <label><input id="vox-toggle" type="checkbox" /> <span data-i18n="settings.vox">VOX activé</span></label>
+            <button class="btn-primary" data-action="set-vox" data-i18n="settings.apply">Appliquer</button>
           </div>
         </div>
-        <span class="hint">Ces trois réglages ont été vérifiés en communication avec le backend (voir README pour le détail testé/non testé sur radio réelle).</span>
+        <span class="hint" data-i18n="settings.basicHint">Ces trois réglages ont été vérifiés en communication avec le backend (voir README pour le détail testé/non testé sur radio réelle).</span>
 
         <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-border);">
-          <div class="ptt-device-sub" style="margin-bottom:10px; text-transform:uppercase; letter-spacing:0.06em; font-size:11px;">Réglages avancés</div>
+          <div class="ptt-device-sub" style="margin-bottom:10px; text-transform:uppercase; letter-spacing:0.06em; font-size:11px;" data-i18n="settings.advancedTitle">Réglages avancés</div>
           <div class="settings-grid">
             <div class="setting-card">
-              <label for="vox-sensitivity-slider">Sensibilité VOX (1–5)</label>
+              <label for="vox-sensitivity-slider" data-i18n="settings.voxSensitivity">Sensibilité VOX (1–5)</label>
               <input id="vox-sensitivity-slider" type="range" min="1" max="5" value="3" />
-              <button class="btn-primary" data-action="set-vox-sensitivity">Appliquer</button>
+              <button class="btn-primary" data-action="set-vox-sensitivity" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label for="tot-slider">Temporisation TX — secondes (0 = désactivé, max 240)</label>
+              <label for="tot-slider" data-i18n="settings.tot">Temporisation TX — secondes (0 = désactivé, max 240)</label>
               <input id="tot-slider" type="range" min="0" max="240" step="10" value="120" />
-              <button class="btn-primary" data-action="set-tot">Appliquer</button>
+              <button class="btn-primary" data-action="set-tot" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="tx-inhibit-toggle" type="checkbox" /> Inhibition TX (bloque l'émission)</label>
-              <button class="btn-primary" data-action="set-tx-inhibit">Appliquer</button>
+              <label><input id="tx-inhibit-toggle" type="checkbox" /> <span data-i18n="settings.txInhibit">Inhibition TX (bloque l'émission)</span></label>
+              <button class="btn-primary" data-action="set-tx-inhibit" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="noise-reduction-toggle" type="checkbox" /> Réduction de bruit</label>
-              <button class="btn-primary" data-action="set-noise-reduction">Appliquer</button>
+              <label><input id="noise-reduction-toggle" type="checkbox" /> <span data-i18n="settings.noiseReduction">Réduction de bruit</span></label>
+              <button class="btn-primary" data-action="set-noise-reduction" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="prompt-tone-toggle" type="checkbox" /> Tonalité de confirmation</label>
-              <button class="btn-primary" data-action="set-prompt-tone">Appliquer</button>
+              <label><input id="prompt-tone-toggle" type="checkbox" /> <span data-i18n="settings.promptTone">Tonalité de confirmation</span></label>
+              <button class="btn-primary" data-action="set-prompt-tone" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label for="device-name-input">Nom de l'appareil</label>
+              <label for="device-name-input" data-i18n="settings.deviceName">Nom de l'appareil</label>
               <input id="device-name-input" type="text" placeholder="AT2_XXXX" />
-              <button class="btn-primary" data-action="set-device-name">Appliquer</button>
+              <button class="btn-primary" data-action="set-device-name" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="smart-link-toggle" type="checkbox" /> Smart Link (pont vers apps tierces)</label>
-              <button class="btn-primary" data-action="set-smart-link">Appliquer</button>
+              <label><input id="smart-link-toggle" type="checkbox" /> <span data-i18n="settings.smartLink">Smart Link (pont vers apps tierces)</span></label>
+              <button class="btn-primary" data-action="set-smart-link" data-i18n="settings.apply">Appliquer</button>
             </div>
           </div>
-          <span class="hint">Ces 7 réglages sont câblés à `app/protocol/commands.py` (protocole réel) mais jamais testés sur radio physique — voir README.</span>
+          <span class="hint" data-i18n="settings.advancedHint">Ces 7 réglages sont câblés au protocole réel mais jamais testés sur radio physique — voir README.</span>
         </div>
       </div>
     </section>
 
     <section id="tab-messages" class="tab-panel">
       <div class="card message-form">
-        <input id="msg-username" type="text" placeholder="Pseudo" value="elyha" />
-        <textarea id="msg-text" rows="3" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
+        <input id="msg-username" type="text" data-i18n-placeholder="msg.usernamePlaceholder" placeholder="Pseudo" value="elyha" />
+        <textarea id="msg-text" rows="3" data-i18n-placeholder="msg.textPlaceholder" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn-ghost" id="btn-attach-image" title="Joindre une image">🖼️ Image</button>
+          <button class="btn-ghost" id="btn-attach-image" data-i18n-title="msg.attachImage" title="Joindre une image" data-i18n="msg.attachImageBtn">🖼️ Image</button>
           <input type="file" id="image-file-input" accept="image/*" hidden />
-          <button class="btn-ghost" id="btn-record-voice" title="Message vocal">🎙️ Vocal</button>
-          <button id="btn-send-message" class="btn-primary">Envoyer</button>
+          <button class="btn-ghost" id="btn-record-voice" data-i18n-title="msg.recordVoice" title="Message vocal" data-i18n="msg.recordVoiceBtn">🎙️ Vocal</button>
+          <button id="btn-send-message" class="btn-primary" data-i18n="msg.send">Envoyer</button>
         </div>
         <span class="hint" id="voice-record-status"></span>
-        <span class="hint">Texte hors-réseau câblé de bout en bout. Image/vocal : format du protocole implémenté, boutons pas encore reliés à l'envoi (voir README).</span>
+        <span class="hint" data-i18n="msg.hint">Texte hors-réseau câblé de bout en bout. Image/vocal : format du protocole implémenté, boutons pas encore reliés à l'envoi (voir README).</span>
       </div>
       <div class="card">
         <div class="msg-thread" id="msg-thread"></div>
@@ -232,14 +233,15 @@
 
   <div id="login-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; align-items:center; justify-content:center; padding:16px;">
     <div class="card" style="max-width:320px; width:100%;">
-      <div class="ptt-device-name" style="margin-bottom:4px;">Connexion requise</div>
-      <div class="hint" style="margin-bottom:14px;">Ce serveur AT2 Bridge est protégé par mot de passe.</div>
-      <input type="password" id="login-password" placeholder="Mot de passe" style="width:100%; margin-bottom:10px;" />
-      <button class="btn-primary" id="login-submit" style="width:100%;">Se connecter</button>
-      <div class="hint" id="login-error" style="color:var(--status-down); margin-top:8px; display:none;">Mot de passe incorrect.</div>
+      <div class="ptt-device-name" style="margin-bottom:4px;" data-i18n="login.title">Connexion requise</div>
+      <div class="hint" style="margin-bottom:14px;" data-i18n="login.subtitle">Ce serveur AT2 Bridge est protégé par mot de passe.</div>
+      <input type="password" id="login-password" data-i18n-placeholder="login.passwordPlaceholder" placeholder="Mot de passe" style="width:100%; margin-bottom:10px;" />
+      <button class="btn-primary" id="login-submit" style="width:100%;" data-i18n="login.submit">Se connecter</button>
+      <div class="hint" id="login-error" style="color:var(--status-down); margin-top:8px; display:none;" data-i18n="login.error">Mot de passe incorrect.</div>
     </div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/protocol.js"></script>
   <script src="/static/ble-client.js"></script>
   <script src="/static/ptt-audio.js"></script>
