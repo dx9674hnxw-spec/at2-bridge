@@ -323,12 +323,16 @@ tbody tr:hover { background: var(--color-surface-hover); }
 ::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-pill); }
 
 @media (max-width: 640px) {
-  .topbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .topbar { row-gap: 8px; }
   .conn-panel { flex-direction: column; align-items: stretch; }
-  .conn-controls { justify-content: stretch; }
-  .conn-controls > * { flex: 1; min-width: 0; }
+  .conn-controls { justify-content: flex-start; }
+  .conn-controls > select { flex: 1 1 auto; min-width: 0; }
   main { padding: 12px 12px calc(20px + var(--safe-bottom)); }
   .ptt-btn { width: 96px; height: 96px; font-size: 14px; }
   .settings-grid { grid-template-columns: 1fr; }
   .status-pill { align-self: flex-start; }
+}
+
+@media (max-width: 420px) {
+  .tab { font-size: 11.5px; padding: 7px 10px; }
 }
