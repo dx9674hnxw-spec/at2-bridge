@@ -57,6 +57,7 @@ graph TD
     Browser[Navigateur Client] <-->|HTTP / WS| Server[Serveur Linux FastAPI / Docker]
     Server <-->|USB / BLE| Radio[Radio AT2]
     Browser <-->|Web Bluetooth| Radio
+```
 
 ## Déploiement
 
