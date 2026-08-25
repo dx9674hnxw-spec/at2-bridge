@@ -4,6 +4,8 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest)
+![Radio](https://img.shields.io/badge/📻_Radio-Baofeng_AT2-8A2BE2.svg)
+![Walkie-Talkie](https://img.shields.io/badge/Walkie--Talkie-Supported-4CAF50.svg)
 
 # AT2 Bridge
 
