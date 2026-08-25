@@ -10,7 +10,8 @@
 
 Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
 
->  Projet communautaire non affilié à Baofeng/Alervites. Protocole reconstitué par rétro-ingénierie (décompilation du CPS officiel + code source d'un projet Android tiers). Aucune garantie de compatibilité totale — teste prudemment.
+> [!WARNING]
+> **Projet communautaire non affilié à Baofeng/Alervites.** Protocole reconstitué par rétro-ingénierie. Aucune garantie de compatibilité totale — teste prudemment.
 
 ## Fonctionnalités
 
