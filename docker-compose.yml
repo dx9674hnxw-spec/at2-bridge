@@ -6,7 +6,7 @@ services:
 
     # BLE via BlueZ/D-Bus needs the host's Bluetooth stack: network_mode
     # host is the simplest reliable way to reach it (no port mapping
-    # needed then -- the app listens directly on the host's :8000).
+    # needed then -- the app listens directly on the host's :2910).
     network_mode: host
 
     # privileged simplifies USB/BLE device access; if you want to avoid
