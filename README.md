@@ -1,6 +1,6 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status: Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest)
@@ -57,60 +57,3 @@ graph TD
     Browser[Navigateur Client] <-->|HTTP / WS| Server[Serveur Linux FastAPI / Docker]
     Server <-->|USB / BLE| Radio[Radio AT2]
     Browser <-->|Web Bluetooth| Radio
-```
-
-## Déploiement
-
-```bash
-git clone https://github.com/dx9674hnxw-spec/at2-bridge.git
-cd at2-bridge
-docker compose up -d --build
-```
-
-Interface servie sur `http://<ip-du-serveur>:8000` (conteneur en `network_mode: host`).
-
-Pour activer l'authentification, définis `AT2_BRIDGE_PASSWORD` dans l'environnement du conteneur — le frontend affiche alors un écran de connexion au premier accès. Sans cette variable, l'interface reste ouverte à quiconque atteint le serveur (à réserver à un réseau de confiance type Tailscale dans ce cas).
-
-### Accès matériel requis
-
-- **USB série** : port typiquement `/dev/ttyACM0` ou `/dev/ttyUSB0`, sélectionnable dans l'interface.
-- **BLE (mode serveur)** : adaptateur Bluetooth sur le serveur, accès à BlueZ via D-Bus (déjà configuré dans `docker-compose.yml`).
-- **BLE (mode local)** : aucun matériel serveur requis — utilise le Bluetooth de l'appareil affichant la page web.
-
-### Développement local (sans Docker)
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-### Tests
-
-```bash
-python -m pytest app/tests -v
-```
-
-## Limitations connues
-
-- Aucune trame n'a été échangée avec une radio AT2 physique à ce jour.
-- La lecture groupée des 30 canaux est une déduction par symétrie, pas une commande observée.
-- Le PTT temps réel et la messagerie voix/image n'ont jamais été exercés de bout en bout avec du matériel.
-- Le mode BLE local n'implémente qu'un sous-ensemble du protocole (canal, texte) ; codeplug complet et PTT restent serveur uniquement.
-- Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit).
-- Une seule connexion radio active à la fois côté serveur.
-- L'authentification protège l'API et les WebSocket par token, mais reste un mot de passe partagé unique (pas de comptes multiples) ; le flux n'a été validé qu'en tests automatisés, pas en usage réel via l'interface.
-- Les 7 réglages avancés du protocole (VOX sensibilité, TOT, inhibition TX, réduction de bruit, tonalité, nom d'appareil, Smart Link) existent dans le code protocole mais ne sont pas exposés à l'UI.
-
-## Origine du protocole
-
-Deux sources croisées, confirmant un protocole **identique** entre USB série et BLE :
-
-1. Décompilation du CPS officiel Windows (Electron) — structure de trame et layout des canaux.
-2. Code source [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — CRC16 exact, UUID BLE réels, formats de messagerie hors-réseau (texte/voix/image) et protocole PTT temps réel.
-
-## Licences tierces
-
-Code porté (Kotlin → Python/JS) depuis [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0 — voir [`NOTICE`](./NOTICE) et [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md), y compris pour `libopencore-amrnb` (Apache 2.0).
-
-Code propre à ce projet sous licence MIT — voir [`LICENSE`](./LICENSE).
