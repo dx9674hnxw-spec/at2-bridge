@@ -1,12 +1,29 @@
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Status: Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)
-![Python](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest)
-![Radio](https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg)
+<h1 align="center">AT2 Bridge</h1>
 
-# AT2 Bridge
+<p align="center">
+  <!-- Statut -->
+  <img alt="Status" src="https://img.shields.io/badge/Status-Experimental-orange.svg" />
+  
+  <!-- Python -->
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white" />
+  
+  <!-- FastAPI -->
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi&logoColor=white" />
+  
+  <!-- Docker -->
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
+  
+  <!-- Tests -->
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest" />
+  
+  <!-- Matériel -->
+  <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
+  
+  <!-- Licence (avec lien vers ton repo) -->
+  <a href="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/LICENSE">
+    <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" />
+  </a>
+</p>
 
 Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
 
