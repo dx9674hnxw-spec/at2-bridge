@@ -1,12 +1,14 @@
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+
 # AT2 Bridge
 
 Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
 
-> ⚠️ Projet communautaire non affilié à Baofeng/Alervites. Protocole reconstitué par rétro-ingénierie (décompilation du CPS officiel + code source d'un projet Android tiers). Aucune garantie de compatibilité totale — teste prudemment.
+>  Projet communautaire non affilié à Baofeng/Alervites. Protocole reconstitué par rétro-ingénierie (décompilation du CPS officiel + code source d'un projet Android tiers). Aucune garantie de compatibilité totale — teste prudemment.
 
 ## Fonctionnalités
 
-### ✅ Implémenté et testé (sans radio)
+###  Implémenté et testé (sans radio)
 
 - **Codec de trame** — Encodage/décodage `AA55 [LEN] [PAYLOAD] [CRC16] 77EE`, CRC16-CCITT (init `0x1234`, poly `0x1021`).
 - **Codec de canal** — Enregistrements 24 octets (fréquences, tons CTCSS/DCS, bande passante, puissance), round-trip testé.
@@ -19,7 +21,7 @@ Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle
 - **Stockage local** (noms de canaux, appareils connus) — Persistance JSON testée, y compris l'enregistrement automatique d'un appareil à la connexion série.
 - **33 tests unitaires** — `app/tests/test_protocol.py`.
 
-### ⚠️ Implémenté mais non testé (nécessite la radio)
+###  Implémenté mais non testé (nécessite la radio)
 
 - **Lecture/écriture des canaux** (USB série et BLE) — jamais envoyé à une radio réelle.
 - **Lecture groupée des 30 canaux (codeplug)** — commande déduite par symétrie, non observée sur trafic réel.
@@ -32,7 +34,7 @@ Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle
 - **Reconnexion aux appareils connus** — persistance fonctionnelle, reconnexion réelle non testée.
 - **Formulaire de connexion (auth frontend)** — flux complet testé côté API (login, token, 401, session expirée), jamais utilisé via l'interface réelle en conditions de terrain.
 
-### 🚧 Non implémenté / Roadmap
+###  Non implémenté / Roadmap
 
 - **Réglages avancés** (sensibilité VOX, temporisation TX, inhibition TX, réduction de bruit, tonalité de confirmation, nom d'appareil, Smart Link) — commandes déjà présentes dans `app/protocol/commands.py` (portées du protocole réel) mais volontairement non exposées à l'UI pour l'instant.
 - **Lecture audio des messages vocaux reçus** — le message arrive et s'affiche, mais aucun lecteur audio n'est encore branché côté navigateur.
