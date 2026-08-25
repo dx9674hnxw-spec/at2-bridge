@@ -1,6 +1,6 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status: Experimental](https://img.shields.io/badge/Status-Experimental-orange.svg)
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest)
