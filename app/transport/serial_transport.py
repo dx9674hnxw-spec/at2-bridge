@@ -73,5 +73,15 @@ class SerialTransport(Transport):
     async def send_raw_frame(self, frame: bytes) -> None:
         if not self._ser or not self._connected:
             raise RuntimeError("serial transport not connected")
+        # frame = AA55 [LEN] [payload: 0x00 + family + command + body] [CRC16] 77EE.
+        # payload starts at offset 3 (after AA55+LEN); family/command are its
+        # bytes 1/2. This mirrors the "RX [family/command]" line format from
+        # DeviceManager.connect_serial so TX and RX are directly comparable
+        # in the UI Journal -- previously only RX was visible at all.
+        if len(frame) >= 6:
+            family, command = frame[4], frame[5]
+            self._log_line(f"TX [{family:02x}/{command:02x}] {frame.hex()}")
+        else:
+            self._log_line(f"TX (trame courte, brute): {frame.hex()}")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._ser.write, frame)

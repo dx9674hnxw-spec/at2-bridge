@@ -64,6 +64,13 @@ class BleTransport(Transport):
     async def send_raw_frame(self, frame: bytes) -> None:
         if not self._client or not self._connected:
             raise RuntimeError("BLE transport not connected")
+        # Same TX log format as SerialTransport.send_raw_frame -- see that
+        # file for why offsets 4/5 give family/command.
+        if len(frame) >= 6:
+            family, command = frame[4], frame[5]
+            self._log_line(f"TX [{family:02x}/{command:02x}] {frame.hex()}")
+        else:
+            self._log_line(f"TX (trame courte, brute): {frame.hex()}")
         # Chunk to the negotiated MTU minus ATT overhead if needed; bleak
         # handles write fragmentation for write-with-response internally
         # on most backends, but very old firmwares may need explicit
