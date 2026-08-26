@@ -65,6 +65,7 @@ class DeviceManager:
         await self.disconnect()
         t = SerialTransport()
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
+        t.on_log(self._log_line)
         await t.connect(port, baud_rate=baud_rate)
         self._transport, self._kind, self._target = t, "serial", port
         self._install_ptt_rx_listener(t)
@@ -79,6 +80,7 @@ class DeviceManager:
         await self.disconnect()
         t = BleTransport()
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
+        t.on_log(self._log_line)
         await t.connect(address)
         self._transport, self._kind, self._target = t, "ble", address
         self._install_ptt_rx_listener(t)
