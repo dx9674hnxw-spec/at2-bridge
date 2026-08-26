@@ -20,6 +20,7 @@ class Transport(ABC):
     def __init__(self) -> None:
         self._rx_buffer = bytearray()
         self._packet_listeners: list[Callable[[At2Packet], None]] = []
+        self._log_listeners: list[Callable[[str], None]] = []
         self._connected = False
 
     @property
@@ -28,6 +29,20 @@ class Transport(ABC):
 
     def on_packet(self, callback: Callable[[At2Packet], None]) -> None:
         self._packet_listeners.append(callback)
+
+    def on_log(self, callback: Callable[[str], None]) -> None:
+        """Register a callback for human-readable transport events (TX/RX
+        summaries, undecodable frames) meant for the UI log, distinct from
+        the Python-side `logger` -- see app/device.py, which wires this
+        into DeviceManager._log_line()."""
+        self._log_listeners.append(callback)
+
+    def _log_line(self, line: str) -> None:
+        for cb in list(self._log_listeners):
+            try:
+                cb(line)
+            except Exception:
+                logger.exception("transport log listener raised")
 
     def _feed(self, data: bytes) -> None:
         """Feed raw incoming bytes; extracts and dispatches full frames."""
@@ -38,10 +53,19 @@ class Transport(ABC):
                 break
             del self._rx_buffer[:consumed]
             if payload is None:
+                # Header found but the frame was incomplete/garbled and
+                # try_decode_frame dropped just the header to resync --
+                # this previously only went to the Python-side logger,
+                # invisible in the UI Journal. Surface it there too since
+                # this is exactly the kind of signal needed while
+                # validating against real hardware for the first time.
+                logger.warning("dropped garbled frame header while resyncing")
+                self._log_line("RX trame incomplète/corrompue ignorée (resync)")
                 continue
             packet = decode_packet(payload)
             if packet is None:
                 logger.warning("dropped undecodable payload: %s", payload.hex())
+                self._log_line(f"RX payload indécodable (brut complet): {payload.hex()}")
                 continue
             for cb in list(self._packet_listeners):
                 try:
