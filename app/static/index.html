@@ -15,26 +15,15 @@
       <span class="brand-name">AT2<span class="brand-name-thin">Bridge</span></span>
     </div>
 
-    <div class="mode-toggle">
-      <button class="mode-btn active" id="mode-server" data-mode="server" data-i18n="mode.server">Serveur</button>
-      <button class="mode-btn" id="mode-local" data-mode="local" data-i18n="mode.local">BLE local</button>
-    </div>
-
-    <button class="btn-ghost" id="theme-toggle" data-i18n-title="theme.title" title="Basculer thème clair/sombre" data-i18n="theme.dark">🌙 Sombre</button>
-    <button class="btn-ghost" id="lang-toggle">FR</button>
-
     <div class="conn-panel">
       <span id="status-pill" class="status-pill"><span class="dot"></span><span id="conn-label">Déconnecté</span></span>
-      <div class="conn-controls" id="server-controls">
-        <select id="serial-port-select"></select>
-        <button id="btn-refresh-ports" class="btn-ghost" data-i18n="btn.refreshPorts">↻</button>
-        <button id="btn-connect-serial" class="btn-primary" data-i18n="btn.connectSerial">USB série</button>
-        <button id="btn-scan-ble" class="btn-ghost" data-i18n="btn.scanBle">Scanner BLE</button>
-        <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
-      </div>
-      <div class="conn-controls" id="local-controls" hidden>
-        <button id="btn-local-connect" class="btn-primary" data-i18n="btn.connectLocal">Connecter (Web Bluetooth)</button>
-        <button id="btn-local-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
+
+      <div class="prefs-wrap">
+        <button class="btn-ghost" id="prefs-toggle" data-i18n-title="prefs.title" title="Préférences">⚙</button>
+        <div class="prefs-menu" id="prefs-menu" hidden>
+          <button class="prefs-item" id="theme-toggle" data-i18n="theme.dark">🌙 Sombre</button>
+          <button class="prefs-item" id="lang-toggle">FR</button>
+        </div>
       </div>
     </div>
   </header>
@@ -51,6 +40,25 @@
 
   <main>
     <section id="tab-devices" class="tab-panel active">
+      <div class="card" id="connection-card">
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-server" data-mode="server" data-i18n="mode.server">Serveur</button>
+          <button class="mode-btn" id="mode-local" data-mode="local" data-i18n="mode.local">BLE local</button>
+        </div>
+
+        <div class="conn-controls" id="server-controls" style="margin-top:12px;">
+          <select id="serial-port-select"></select>
+          <button id="btn-refresh-ports" class="btn-ghost" data-i18n="btn.refreshPorts">↻</button>
+          <button id="btn-connect-serial" class="btn-primary" data-i18n="btn.connectSerial">USB série</button>
+          <button id="btn-scan-ble" class="btn-ghost" data-i18n="btn.scanBle">Scanner BLE</button>
+          <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
+        </div>
+        <div class="conn-controls" id="local-controls" hidden style="margin-top:12px;">
+          <button id="btn-local-connect" class="btn-primary" data-i18n="btn.connectLocal">Connecter (Web Bluetooth)</button>
+          <button id="btn-local-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
+        </div>
+      </div>
+
       <div class="device-list" id="device-list"></div>
 
       <div class="devices-grid">

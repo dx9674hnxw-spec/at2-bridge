@@ -53,6 +53,23 @@ $("#theme-toggle").addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Preferences dropdown (⚙ button in the topbar, merges theme + language
+// into one menu now that the connection controls moved to the Devices tab).
+// ---------------------------------------------------------------------------
+$("#prefs-toggle").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("#prefs-menu").hidden = !$("#prefs-menu").hidden;
+});
+document.addEventListener("click", (e) => {
+  const menu = $("#prefs-menu");
+  if (!menu.hidden && !menu.contains(e.target) && e.target !== $("#prefs-toggle")) {
+    menu.hidden = true;
+  }
+});
+// Keep the menu open after picking a preference (theme/lang) so someone
+// can adjust both without re-opening -- only close on outside click above.
+
+// ---------------------------------------------------------------------------
 // Auth (shared-password token, see app/auth.py -- no-op if server-side
 // auth is disabled, i.e. AT2_BRIDGE_PASSWORD unset)
 // ---------------------------------------------------------------------------
