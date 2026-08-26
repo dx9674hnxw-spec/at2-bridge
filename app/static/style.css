@@ -193,6 +193,9 @@ body {
   border-radius: var(--radius-lg); box-shadow: var(--shadow-card-hover);
   padding: 6px; min-width: 140px;
 }
+
+.prefs-menu[hidden] { display: none; }
+
 .prefs-item {
   background-color: transparent; border: none; color: var(--color-text-soft);
   font-size: 13px; font-weight: 500; text-align: left; padding: 8px 10px;
