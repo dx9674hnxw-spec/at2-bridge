@@ -614,6 +614,37 @@ $("#btn-read-channels").addEventListener("click", async () => {
   } catch (e) { showToast(e.message, "error"); }
 });
 
+// -- Import depuis un export XML de la CPS officielle (pas une lecture live
+// -- ne remplit que le tableau a l'ecran, "Ecrire" reste necessaire pour
+// -- committer quoi que ce soit sur la radio, comme apres une lecture live.
+$("#btn-import-xml").addEventListener("click", () => $("#xml-file-input").click());
+
+$("#xml-file-input").addEventListener("change", async () => {
+  const file = $("#xml-file-input").files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const imported = await apiUpload("/api/channels/import-xml", form);
+    // "Ecrire les 30 canaux" exige exactement 30 lignes -- on part d'un
+    // tableau vide par defaut et on ne remplace que les canaux presents
+    // dans le fichier (les slots absents du XML restent vides/par defaut).
+    const merged = emptyChannels();
+    for (const imp of imported) {
+      const idx = merged.findIndex((c) => c.channel === imp.channel);
+      if (idx !== -1) merged[idx] = imp;
+    }
+    lastReadChannels = merged;
+    renderChannelTable(lastReadChannels);
+    renderChanOpts();
+    showToast(t("channels.importXmlSuccess", { count: imported.length }), "success");
+  } catch (e) {
+    showToast(e.message, "error");
+  } finally {
+    $("#xml-file-input").value = "";
+  }
+});
+
 $("#btn-write-channels").addEventListener("click", async () => {
   const configs = $$("#channel-table-body tr").map(readChannelRow);
   if (configs.length !== 30) return showToast(t("channels.need30rows"), "info");
