@@ -119,6 +119,51 @@ class DeviceManager:
         await t.send_payload(commands.clear_channel(channel_number))
         self._log_line(f"Canal {channel_number} effacé")
 
+    async def send_raw_frame_debug(self, frame_hex: str, listen_seconds: float = 2.0) -> dict:
+        """EXPERIMENTAL / DEBUG ONLY -- bypasses the entire protocol layer
+        (frame.py/commands.py) and writes an already-fully-encoded frame
+        (as a hex string, e.g. "aa55...77ee") directly to the wire.
+
+        Used to test protocol hypotheses derived from reverse-engineering
+        (e.g. the decompiled Windows CPS's per-channel read format) without
+        first committing them to commands.py/channel.py -- see
+        CONSIGNES_PROJET.md "Prochain test matériel prioritaire" (27/08/2026).
+
+        Collects whatever raw packets arrive within `listen_seconds` after
+        sending, and returns them for inspection alongside the normal
+        Journal log (which will also show them via the existing on_packet
+        RX logging already wired in connect_serial/connect_ble).
+        """
+        t = self._require_transport()
+        try:
+            frame_bytes = bytes.fromhex(frame_hex.strip())
+        except ValueError as e:
+            raise RuntimeError(f"hex de trame invalide: {e}") from e
+
+        received: list[dict] = []
+
+        def _listener(pkt: At2Packet) -> None:
+            received.append({
+                "family": f"0x{pkt.family:02x}",
+                "command": f"0x{pkt.command:02x}",
+                "body_hex": pkt.body.hex(),
+            })
+
+        t.on_packet(_listener)
+        self._log_line(f"[DEBUG] Envoi trame brute: {frame_bytes.hex()}")
+        try:
+            await t.send_raw_frame(frame_bytes)
+            await asyncio.sleep(listen_seconds)
+        finally:
+            t._packet_listeners.remove(_listener)  # noqa: SLF001
+
+        if received:
+            self._log_line(f"[DEBUG] {len(received)} paquet(s) reçu(s) en réponse")
+        else:
+            self._log_line("[DEBUG] Aucun paquet reçu en réponse")
+
+        return {"sent_hex": frame_bytes.hex(), "received": received}
+
     async def read_all_channels(self, timeout: float = 8.0) -> list[chan.ChannelConfig]:
         """Request the codeplug and reassemble channel records from the
         incoming family=0x02/command=0x02 packets.
