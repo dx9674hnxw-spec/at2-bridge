@@ -51,6 +51,7 @@ class Transport(ABC):
             payload, consumed = try_decode_frame(bytes(self._rx_buffer))
             if consumed == 0:
                 break
+            raw_consumed = bytes(self._rx_buffer[:consumed])
             del self._rx_buffer[:consumed]
             if payload is None:
                 # Header found but the frame was incomplete/garbled and
@@ -60,8 +61,15 @@ class Transport(ABC):
                 # this is exactly the kind of signal needed while
                 # validating against real hardware for the first time.
                 logger.warning("dropped garbled frame header while resyncing")
-                self._log_line("RX trame incomplète/corrompue ignorée (resync)")
+                self._log_line(f"RX trame incomplète/corrompue ignorée (resync), brut: {raw_consumed.hex()}")
                 continue
+            # Raw wire bytes for this exact frame (head+len+payload+crc+tail),
+            # logged BEFORE any interpretation -- needed to settle open
+            # protocol questions (1-byte vs 2-byte length field, whether a
+            # leading 0x00 genuinely exists) that the decoded family/command
+            # summary below can't answer on its own. See CONSIGNES_PROJET.md
+            # "Contradiction non résolue" (27/08/2026).
+            self._log_line(f"RX brut (trame complète sur le fil): {raw_consumed.hex()}")
             packet = decode_packet(payload)
             if packet is None:
                 logger.warning("dropped undecodable payload: %s", payload.hex())
