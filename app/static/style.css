@@ -354,3 +354,47 @@ tbody tr:hover { background: var(--color-surface-hover); }
 @media (max-width: 420px) {
   .tab { font-size: 11.5px; padding: 7px 10px; }
 }
+
+/* ---------------------------------------------------------------------
+   Toast notifications -- replace blocking alert() popups with
+   non-blocking, auto-dismissing banners stacked top-right, color-coded
+   by severity (border-left) similar to Portainer's own toast style.
+   --------------------------------------------------------------------- */
+.toast-container {
+  position: fixed;
+  top: calc(16px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--status-info);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card-hover);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--color-text-soft);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(12px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast.hide { opacity: 0; transform: translateX(12px); }
+
+.toast.toast-info { border-left-color: var(--status-info); }
+.toast.toast-success { border-left-color: var(--status-up); }
+.toast.toast-error { border-left-color: var(--status-down); }
+
+@media (max-width: 420px) {
+  .toast-container { left: 12px; right: 12px; max-width: none; }
+}
+

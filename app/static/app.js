@@ -159,6 +159,27 @@ function appendLog(line) {
 }
 
 // ---------------------------------------------------------------------------
+// Toast notifications (non-blocking, replaces alert() -- see style.css for
+// the color-coded border variants: info=blue, success=green, error=red)
+// ---------------------------------------------------------------------------
+function showToast(message, type = "info", durationMs = 4000) {
+  const container = $("#toast-container");
+  const el = document.createElement("div");
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  // Force a reflow before adding "show" so the CSS transition actually
+  // plays (otherwise the initial + final state would apply in the same
+  // frame and the fade-in would be skipped).
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    el.classList.add("hide");
+    setTimeout(() => el.remove(), 220);
+  }, durationMs);
+}
+
+// ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 $$(".tab").forEach((tab) => {
@@ -226,17 +247,17 @@ $("#btn-refresh-ports").addEventListener("click", refreshSerialPorts);
 
 $("#btn-connect-serial").addEventListener("click", async () => {
   const port = $("#serial-port-select").value;
-  if (!port) return alert(t("devices.selectPortFirst"));
+  if (!port) return showToast(t("devices.selectPortFirst"), "info");
   try {
     await api("POST", "/api/connection/serial/connect", { port, baud_rate: 115200 });
     await refreshStatus();
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 $("#btn-scan-ble").addEventListener("click", async () => {
   try {
     const devices = await api("GET", "/api/connection/ble/scan");
-    if (!devices.length) return alert(t("devices.noBleFound"));
+    if (!devices.length) return showToast(t("devices.noBleFound"), "info");
     const names = devices.map((d, i) => `${i}: ${d.name} (${d.address})`).join("\n");
     const choice = prompt(`Appareils trouvés :\n${names}\n\nEntre le numéro à connecter :`);
     const idx = parseInt(choice, 10);
@@ -247,7 +268,7 @@ $("#btn-scan-ble").addEventListener("click", async () => {
     });
     await refreshStatus();
     await loadDeviceList();
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 $("#btn-disconnect").addEventListener("click", async () => {
@@ -269,7 +290,7 @@ $("#btn-local-connect").addEventListener("click", async () => {
     localDeviceInfo = await AT2BleClient.connect();
     updateLocalStatusUi();
     appendLog(`BLE local connecté: ${localDeviceInfo.name}`);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 $("#btn-local-disconnect").addEventListener("click", async () => {
   await AT2BleClient.disconnect();
@@ -310,7 +331,7 @@ async function reconnectKnownDevice(id, transport, target) {
     if (transport === "ble") await api("POST", "/api/connection/ble/connect", { address: target });
     else await api("POST", "/api/connection/serial/connect", { port: target, baud_rate: 115200 });
     await refreshStatus();
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 }
 
 async function forgetKnownDevice(id) {
@@ -478,14 +499,14 @@ function requestLocation() {
 requestLocation();
 
 async function sendPositionPayload(url, note) {
-  if (!lastCoords) return alert(t("gps.noCoords"));
+  if (!lastCoords) return showToast(t("gps.noCoords"), "info");
   const username = $("#msg-username")?.value || "AT2Bridge";
   if (mode === "server") {
     await api("POST", url, { username, lat: lastCoords.lat, lon: lastCoords.lon, note });
   } else if (AT2BleClient.connected()) {
     await AT2BleClient.sendText(username, `${note} 📍 ${formatCoords(lastCoords.lat, lastCoords.lon)}`);
   } else {
-    alert(t("gps.noActiveConnection"));
+    showToast(t("gps.noActiveConnection"), "info");
   }
 }
 
@@ -493,7 +514,7 @@ $("#gps-send-now").addEventListener("click", async () => {
   try {
     await sendPositionPayload("/api/position/send", "");
     $("#beacon-status").textContent = t("gps.sentAt", { coords: formatCoords(lastCoords.lat, lastCoords.lon) });
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 $("#beacon-toggle").addEventListener("change", (e) => {
@@ -524,7 +545,7 @@ $("#sos-btn").addEventListener("click", async () => {
     btn.classList.add("sent");
     btn.textContent = t("gps.sosSent");
     setTimeout(() => { btn.classList.remove("sent"); btn.textContent = t("gps.sos"); }, 2200);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 // ---------------------------------------------------------------------------
@@ -581,7 +602,7 @@ async function writeChannelRow(row) {
   try {
     await api("PUT", `/api/channels/${cfg.channel}`, cfg);
     if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 }
 
 $("#btn-read-channels").addEventListener("click", async () => {
@@ -590,16 +611,16 @@ $("#btn-read-channels").addEventListener("click", async () => {
     lastReadChannels = channels.length ? channels : emptyChannels();
     renderChannelTable(lastReadChannels);
     renderChanOpts();
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 $("#btn-write-channels").addEventListener("click", async () => {
   const configs = $$("#channel-table-body tr").map(readChannelRow);
-  if (configs.length !== 30) return alert(t("channels.need30rows"));
+  if (configs.length !== 30) return showToast(t("channels.need30rows"), "info");
   try {
     await api("PUT", "/api/channels", configs);
-    alert(t("channels.writtenOk"));
-  } catch (e) { alert(e.message); }
+    showToast(t("channels.writtenOk"), "success");
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 renderChannelTable(emptyChannels());
@@ -620,11 +641,11 @@ $$("[data-action]").forEach((btn) => {
       if (btn.dataset.action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
       if (btn.dataset.action === "set-device-name") {
         const name = $("#device-name-input").value.trim();
-        if (!name) return alert(t("settings.deviceNameRequired"));
+        if (!name) return showToast(t("settings.deviceNameRequired"), "info");
         await api("PUT", "/api/device/name", { name });
       }
       if (btn.dataset.action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
-    } catch (e) { alert(e.message); }
+    } catch (e) { showToast(e.message, "error"); }
   });
 });
 
@@ -648,16 +669,16 @@ $("#btn-send-message").addEventListener("click", async () => {
   try {
     if (mode === "server") await api("POST", "/api/messages/text", { username, text });
     else if (AT2BleClient.connected()) await AT2BleClient.sendText(username, text);
-    else return alert(t("gps.noActiveConnection"));
+    else return showToast(t("gps.noActiveConnection"), "info");
     pushSentBubble(text);
     $("#msg-text").value = "";
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, "error"); }
 });
 
 // -- Image messages (server mode only -- image encoding happens server-side
 // with Pillow, see app/main.py; no BLE-local equivalent yet) ---------------
 $("#btn-attach-image").addEventListener("click", () => {
-  if (mode !== "server") return alert(t("msg.serverModeRequiredImage"));
+  if (mode !== "server") return showToast(t("msg.serverModeRequiredImage"), "info");
   $("#image-file-input").click();
 });
 
@@ -672,7 +693,7 @@ $("#image-file-input").addEventListener("change", async () => {
     await apiUpload("/api/messages/image", form);
     pushSentBubble(t("msg.imageSent", { filename: file.name }));
   } catch (e) {
-    alert(e.message);
+    showToast(e.message, "error");
   } finally {
     $("#image-file-input").value = "";
   }
@@ -685,7 +706,7 @@ let voiceRecording = false;
 let voiceChunks = [];
 
 $("#btn-record-voice").addEventListener("click", async () => {
-  if (mode !== "server") return alert(t("msg.serverModeRequiredVoice"));
+  if (mode !== "server") return showToast(t("msg.serverModeRequiredVoice"), "info");
   const btn = $("#btn-record-voice");
   const status = $("#voice-record-status");
 
@@ -700,7 +721,7 @@ $("#btn-record-voice").addEventListener("click", async () => {
       voiceRecording = false;
       btn.textContent = t("msg.recordVoiceBtn");
       status.textContent = "";
-      alert(t("msg.micUnavailable", { error: e.message }));
+      showToast(t("msg.micUnavailable", { error: e.message }), "error");
     }
   } else {
     voiceRecording = false;
@@ -726,7 +747,7 @@ $("#btn-record-voice").addEventListener("click", async () => {
       status.textContent = "";
     } catch (e) {
       status.textContent = "";
-      alert(e.message);
+      showToast(e.message, "error");
     }
   }
 });
@@ -747,8 +768,8 @@ $("#btn-send-raw-frame").addEventListener("click", async () => {
   const input = $("#raw-frame-input");
   const frameHex = input.value.trim().replace(/\s+/g, "");
   if (!frameHex) return;
-  if (!/^[0-9a-fA-F]+$/.test(frameHex)) return alert(t("debug.rawFrameInvalidHex"));
-  if (mode === "server" && !connected) return alert(t("debug.rawFrameNoConnection"));
+  if (!/^[0-9a-fA-F]+$/.test(frameHex)) return showToast(t("debug.rawFrameInvalidHex"), "error");
+  if (mode === "server" && !connected) return showToast(t("debug.rawFrameNoConnection"), "info");
 
   const btn = $("#btn-send-raw-frame");
   const originalLabel = btn.textContent;
@@ -759,7 +780,7 @@ $("#btn-send-raw-frame").addEventListener("click", async () => {
     // La réponse détaillée (paquets reçus, hex complet) apparaît dans le
     // Journal via _log_line côté serveur -- pas besoin de la ré-afficher ici.
   } catch (e) {
-    alert(e.message);
+    showToast(e.message, "error");
   } finally {
     btn.disabled = false;
     btn.textContent = originalLabel;
