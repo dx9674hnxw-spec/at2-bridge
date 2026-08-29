@@ -741,6 +741,32 @@ function connectLogSocket() {
 }
 
 // ---------------------------------------------------------------------------
+// Debug: raw frame send (experimental -- see CONSIGNES_PROJET.md)
+// ---------------------------------------------------------------------------
+$("#btn-send-raw-frame").addEventListener("click", async () => {
+  const input = $("#raw-frame-input");
+  const frameHex = input.value.trim().replace(/\s+/g, "");
+  if (!frameHex) return;
+  if (!/^[0-9a-fA-F]+$/.test(frameHex)) return alert(t("debug.rawFrameInvalidHex"));
+  if (mode === "server" && !connected) return alert(t("debug.rawFrameNoConnection"));
+
+  const btn = $("#btn-send-raw-frame");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("debug.rawFrameSending");
+  try {
+    await api("POST", "/api/debug/send-raw-frame", { frame_hex: frameHex, listen_seconds: 2.0 });
+    // La réponse détaillée (paquets reçus, hex complet) apparaît dans le
+    // Journal via _log_line côté serveur -- pas besoin de la ré-afficher ici.
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Incoming offline messages (text/voice/image) -- /ws/messages
 // ---------------------------------------------------------------------------
 function pushReceivedBubble(msg) {

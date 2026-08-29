@@ -43,6 +43,15 @@ const I18N_DICT = {
     "tab.messages": "Messagerie",
     "tab.log": "Journal",
 
+    // Debug: envoi de trame brute (expérimental)
+    "debug.rawFrameTitle": "🧪 Debug — Envoi de trame brute (expérimental)",
+    "debug.rawFrameHint": "Contourne toute la couche protocole. Réservé aux tests d'hypothèses de rétro-ingénierie — voir CONSIGNES_PROJET.md.",
+    "debug.rawFramePlaceholder": "aa55...77ee",
+    "debug.rawFrameSend": "Envoyer",
+    "debug.rawFrameSending": "Envoi en cours…",
+    "debug.rawFrameInvalidHex": "Hex de trame invalide.",
+    "debug.rawFrameNoConnection": "Aucune connexion active — connecte-toi d'abord.",
+
     // Devices tab
     "devices.empty": "Aucun appareil connu pour l'instant — scanne en BLE ou connecte-toi en série pour en enregistrer un.",
     "devices.connect": "Connecter",
@@ -191,6 +200,15 @@ const I18N_DICT = {
     "tab.settings": "Settings",
     "tab.messages": "Messaging",
     "tab.log": "Log",
+
+    // Debug: raw frame send (experimental)
+    "debug.rawFrameTitle": "🧪 Debug — Send raw frame (experimental)",
+    "debug.rawFrameHint": "Bypasses the entire protocol layer. For testing reverse-engineering hypotheses only — see CONSIGNES_PROJET.md.",
+    "debug.rawFramePlaceholder": "aa55...77ee",
+    "debug.rawFrameSend": "Send",
+    "debug.rawFrameSending": "Sending…",
+    "debug.rawFrameInvalidHex": "Invalid frame hex.",
+    "debug.rawFrameNoConnection": "No active connection — connect first.",
 
     "devices.empty": "No known devices yet — scan over BLE or connect via serial to remember one.",
     "devices.connect": "Connect",

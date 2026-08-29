@@ -235,6 +235,14 @@
     </section>
 
     <section id="tab-log" class="tab-panel">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="ptt-device-sub" style="margin-bottom:6px; font-weight:600;" data-i18n="debug.rawFrameTitle">🧪 Debug — Envoi de trame brute (expérimental)</div>
+        <div class="hint" style="margin-bottom:10px;" data-i18n="debug.rawFrameHint">Contourne toute la couche protocole. Réservé aux tests d'hypothèses de rétro-ingénierie — voir CONSIGNES_PROJET.md.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="raw-frame-input" style="flex:1; min-width:220px; font-family:var(--font-mono);" data-i18n-placeholder="debug.rawFramePlaceholder" placeholder="aa55...77ee" />
+          <button class="btn-primary" id="btn-send-raw-frame" data-i18n="debug.rawFrameSend">Envoyer</button>
+        </div>
+      </div>
       <pre id="log-console"></pre>
     </section>
   </main>
