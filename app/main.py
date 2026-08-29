@@ -140,6 +140,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RawFrameDebugRequest(BaseModel):
+    """EXPERIMENTAL / DEBUG ONLY -- see device.py::send_raw_frame_debug.
+    frame_hex must be an already fully-encoded frame (AA55...77EE) as a
+    hex string, e.g. produced by a protocol hypothesis under test."""
+    frame_hex: str
+    listen_seconds: float = 2.0
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -233,6 +241,16 @@ async def clear_channel(channel_number: int, _: None = Depends(auth.require_auth
 async def select_channel(channel_number: int, _: None = Depends(auth.require_auth)):
     await device_manager.select_channel(channel_number)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Debug: raw frame injection (EXPERIMENTAL -- protocol hypothesis testing,
+# see CONSIGNES_PROJET.md "Prochain test matériel prioritaire" 27/08/2026)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/debug/send-raw-frame")
+async def send_raw_frame_debug(req: RawFrameDebugRequest, _: None = Depends(auth.require_auth)):
+    return await device_manager.send_raw_frame_debug(req.frame_hex, req.listen_seconds)
 
 
 # ---------------------------------------------------------------------------
