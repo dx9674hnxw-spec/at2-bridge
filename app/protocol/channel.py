@@ -196,3 +196,114 @@ def parse_codeplug_read_chunks(chunks: list[bytes]) -> list[ChannelConfig]:
     if len(raw) % CHANNEL_RECORD_LEN != 0:
         raise ValueError(f"unexpected codeplug read length: {len(raw)} bytes")
     return [decode_channel_record(raw[i:i + CHANNEL_RECORD_LEN]) for i in range(0, len(raw), CHANNEL_RECORD_LEN)]
+
+
+# ---------------------------------------------------------------------------
+# Import from a CPS-format XML export (the human-readable config file saved
+# by the official Windows CPS -- NOT a protocol capture, just a config
+# snapshot). Field-by-field mapping cross-validated on 27-28/08/2026 against
+# real hardware reads for channels 1, 11, 12 (frequencies, tones, mode,
+# encrypt key all matched exactly) -- see CONSIGNES_PROJET.md.
+#
+# This only produces ChannelConfig objects for the UI to review/edit; it
+# never writes to the radio directly -- the person still has to click
+# "Write" afterwards, same as after a live "Read" from the radio.
+# ---------------------------------------------------------------------------
+
+_CPS_XML_CHANNEL_TAG = "信道数据"
+
+_CPS_XML_ATTR = {
+    "channel": "信道号",
+    "rx_freq": "接收频率",
+    "tx_freq": "发射频率",
+    "rx_tone_value": "接收CTCSS",
+    "rx_tone_type": "接收CTCSS类型",
+    "tx_tone_value": "发射CTCSS",
+    "tx_tone_type": "发射CTCSS类型",
+    "rx_tone_polarity": "接收CTCSS数字编码",
+    "tx_tone_polarity": "发射CTCSS数字编码",
+    "busy_lock": "繁忙锁定",
+    "bandwidth": "宽窄带",
+    "power": "发射功率",
+    "scan_add": "扫描添加",
+    "hop": "跳频",
+    "mode": "对讲模式",
+    "encrypt_key": "加密密钥",
+}
+
+
+def _cps_xml_tone_to_label(value: str, type_: str, polarity: str) -> str:
+    """Converts the CPS XML's tone representation (separate value/type/
+    polarity attributes, e.g. value="67.0" type="CTCSS") into our own
+    tone label format (e.g. "67.0Hz", "D023N", "OFF") -- see
+    tone_options()/parse_tone_label() above.
+
+    NOTE: the exact string used by the CPS XML for *reversed* DCS
+    polarity has not been observed yet (every DCS/CTCSS example seen so
+    far uses polarity="normal") -- this assumes "reverse" by elimination
+    by symmetry with "normal", not confirmed. Any other/unrecognized
+    polarity string is treated as normal rather than raising, since a
+    wrong polarity on import is a minor, easily-corrected-by-eye mistake
+    in the channel table, not worth failing the whole import over.
+    """
+    value = (value or "").strip()
+    if not value:
+        return "OFF"
+    if type_ == "DCS":
+        return f"{value}{'I' if polarity == 'reverse' else 'N'}"
+    return f"{value}Hz"
+
+
+def parse_cps_xml(xml_bytes: bytes) -> list[ChannelConfig]:
+    """Parses a CPS XML export (as produced by the official Windows CPS's
+    own save/export feature) into a list of ChannelConfig, one per
+    channel found (usually 30, but this doesn't assume/require exactly
+    30 -- it returns whatever channel entries are present).
+
+    Channels with no frequency set (blank/unconfigured slots) are
+    skipped entirely rather than turned into a bogus all-zero
+    ChannelConfig, since a channel wholly absent from the XML is not the
+    same thing as a channel deliberately cleared to 0.0 MHz.
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as e:
+        raise ValueError(f"XML illisible: {e}") from e
+
+    configs: list[ChannelConfig] = []
+    for elem in root.iter(_CPS_XML_CHANNEL_TAG):
+        attrs = {k: elem.get(v, "") for k, v in _CPS_XML_ATTR.items()}
+
+        channel_str = attrs["channel"].strip()
+        if not channel_str:
+            continue
+        channel = int(channel_str)
+
+        rx_str = attrs["rx_freq"].strip()
+        tx_str = attrs["tx_freq"].strip()
+        if not rx_str and not tx_str:
+            continue  # blank/unconfigured channel slot -- skip, not a 0.0 MHz channel
+
+        rx_tone = _cps_xml_tone_to_label(attrs["rx_tone_value"], attrs["rx_tone_type"], attrs["rx_tone_polarity"])
+        tx_tone = _cps_xml_tone_to_label(attrs["tx_tone_value"], attrs["tx_tone_type"], attrs["tx_tone_polarity"])
+        encrypt_key_str = attrs["encrypt_key"].strip()
+
+        configs.append(ChannelConfig(
+            channel=channel,
+            rx_mhz=float(rx_str) if rx_str else None,
+            tx_mhz=float(tx_str) if tx_str else None,
+            rx_tone=rx_tone,
+            tx_tone=tx_tone,
+            busy_lock=(attrs["busy_lock"].strip().upper() == "ON"),
+            bandwidth_narrow=(attrs["bandwidth"].strip().upper() == "NARROW"),
+            high_power=(attrs["power"].strip().upper() == "HIGH"),
+            scan_add=(attrs["scan_add"].strip().upper() == "ON"),
+            hop_on=(attrs["hop"].strip().upper() == "OPEN"),
+            mode_digital=(attrs["mode"].strip().upper() == "DIGITAL"),
+            encrypt_key=int(encrypt_key_str) if encrypt_key_str else 0,
+        ))
+
+    return configs
+
