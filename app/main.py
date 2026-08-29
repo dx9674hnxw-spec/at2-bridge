@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app import auth, store
 from app.device import device_manager
-from app.protocol.channel import ChannelConfig, tone_options
+from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
 from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
@@ -213,6 +213,26 @@ async def get_tone_options(_: None = Depends(auth.require_auth)):
 @app.get("/api/channels")
 async def read_channels(_: None = Depends(auth.require_auth)):
     channels = await device_manager.read_all_channels()
+    return [c.__dict__ for c in channels]
+
+
+@app.post("/api/channels/import-xml")
+async def import_channels_xml(
+    file: UploadFile = File(...),
+    _: None = Depends(auth.require_auth),
+):
+    """Parses a CPS-format XML export (the official Windows CPS's own
+    config save/export, NOT a live protocol capture) into channel
+    configs for the UI to review. This never writes to the radio by
+    itself -- same as after a live "Read", the person still clicks
+    "Write" to actually commit anything. See channel.py::parse_cps_xml."""
+    raw = await file.read()
+    try:
+        channels = parse_cps_xml(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not channels:
+        raise HTTPException(status_code=400, detail="aucun canal configuré trouvé dans ce fichier")
     return [c.__dict__ for c in channels]
 
 
