@@ -155,8 +155,6 @@ python -m pytest app/tests -v
 
 ## Limitations connues
 
-- Aucune trame n'a été échangée avec une radio AT2 physique à ce jour.
-- La lecture groupée des 30 canaux est une déduction par symétrie, pas une commande observée.
 - Le PTT temps réel et la messagerie voix/image n'ont jamais été exercés de bout en bout avec du matériel.
 - Le mode BLE local n'implémente qu'un sous-ensemble du protocole (canal, texte) ; codeplug complet et PTT restent serveur uniquement.
 - Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit).
