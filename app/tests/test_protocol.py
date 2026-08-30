@@ -368,6 +368,166 @@ def test_auth_require_auth_ws_helper(monkeypatch):
     assert auth.require_auth_ws(token="garbage") is False
 
 
+# ---------------------------------------------------------------------------
+# CPS XML import -- snippet mirrors channels 1 and 11 from a real export
+# provided by Ely (27/08/2026), cross-validated field-by-field against
+# real hardware reads of those same channels on 27-28/08/2026 (frequency,
+# tone, mode, encrypt key all matched independently -- see
+# CONSIGNES_PROJET.md). Channel 2 here is deliberately blank/unconfigured
+# (no frequency attributes) to test that blank slots are skipped.
+# ---------------------------------------------------------------------------
+
+_CPS_XML_SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
+<AT>
+  <信道参数列表>
+    <信道数据 信道号="1" 接收频率="430.12500" 发射频率="430.12500"
+      接收CTCSS="67.0" 接收CTCSS类型="CTCSS" 发射CTCSS="67.0" 发射CTCSS类型="CTCSS"
+      接收CTCSS数字编码="normal" 发射CTCSS数字编码="normal"
+      繁忙锁定="OFF" 宽窄带="WIDE" 发射功率="HIGH" 扫描添加="OFF" 跳频="Close"
+      对讲模式="Analog" 加密密钥="" />
+    <信道数据 信道号="2" 接收频率="" 发射频率=""
+      接收CTCSS="" 接收CTCSS类型="CTCSS" 发射CTCSS="" 发射CTCSS类型="CTCSS"
+      接收CTCSS数字编码="normal" 发射CTCSS数字编码="normal"
+      繁忙锁定="OFF" 宽窄带="WIDE" 发射功率="HIGH" 扫描添加="OFF" 跳频=""
+      对讲模式="Analog" 加密密钥="" />
+    <信道数据 信道号="11" 接收频率="432.72500" 发射频率="432.72500"
+      接收CTCSS="" 接收CTCSS类型="CTCSS" 发射CTCSS="" 发射CTCSS类型="CTCSS"
+      接收CTCSS数字编码="normal" 发射CTCSS数字编码="normal"
+      繁忙锁定="OFF" 宽窄带="WIDE" 发射功率="HIGH" 扫描添加="OFF" 跳频=""
+      对讲模式="Digital" 加密密钥="1" />
+  </信道参数列表>
+</AT>"""
+
+
+def test_parse_cps_xml_matches_hardware_confirmed_channels():
+    import pytest
+    from app.protocol.channel import parse_cps_xml
+
+    configs = parse_cps_xml(_CPS_XML_SAMPLE.encode("utf-8"))
+
+    # Blank channel 2 must be skipped, not turned into a bogus 0.0 MHz entry.
+    assert [c.channel for c in configs] == [1, 11]
+
+    ch1 = configs[0]
+    assert ch1.rx_mhz == pytest.approx(430.125)
+    assert ch1.tx_mhz == pytest.approx(430.125)
+    assert ch1.rx_tone == "67.0Hz"
+    assert ch1.tx_tone == "67.0Hz"
+    assert ch1.busy_lock is False
+    assert ch1.bandwidth_narrow is False
+    assert ch1.high_power is True
+    assert ch1.scan_add is False
+    assert ch1.hop_on is False
+    assert ch1.mode_digital is False
+    assert ch1.encrypt_key == 0
+
+    ch11 = configs[1]
+    assert ch11.rx_mhz == pytest.approx(432.725)
+    assert ch11.rx_tone == "OFF"
+    assert ch11.mode_digital is True
+    assert ch11.encrypt_key == 1
+
+
+def test_parse_cps_xml_rejects_invalid_xml():
+    import pytest
+    from app.protocol.channel import parse_cps_xml
+
+    with pytest.raises(ValueError):
+        parse_cps_xml(b"this is not xml")
+
+
+# ---------------------------------------------------------------------------
+# CPS-style frame dialect and per-channel read/write -- every hex string
+# below is a REAL frame that was sent to or received from Ely's physical
+# AT2 radio over USB serial on 27-28/08/2026 (see CONSIGNES_PROJET.md),
+# not a synthetic/assumed example. These tests exist specifically to catch
+# any future regression against hardware-confirmed ground truth.
+# ---------------------------------------------------------------------------
+
+def test_encode_cps_frame_matches_real_channel_1_read_request():
+    from app.protocol.channel import build_channel_read_request
+    from app.protocol.frame import encode_cps_frame
+
+    frame = encode_cps_frame(build_channel_read_request(1))
+    assert frame.hex() == "aa550600110202000100d2d177ee"
+
+
+def test_try_decode_cps_frame_matches_real_channel_1_read_response():
+    from app.protocol.frame import try_decode_cps_frame, decode_cps_packet
+
+    raw = bytes.fromhex(
+        "aa551b00910202010100945190029451900200000000000001000101000000d2c877ee"
+    )
+    payload, consumed = try_decode_cps_frame(raw)
+    assert consumed == len(raw)
+    pkt = decode_cps_packet(payload)
+    assert pkt.opcode == 0x91
+    assert pkt.group == 0x02
+    assert pkt.param == 0x02
+    assert len(pkt.body) == 24
+
+
+def test_decode_channel_read_response_matches_hardware_confirmed_channels():
+    import pytest
+    from app.protocol.channel import decode_channel_read_response
+
+    # Channel 1: simplex 430.125 MHz, CTCSS 67.0Hz both ways, analog.
+    ch1 = decode_channel_read_response(
+        bytes.fromhex("02010100945190029451900200000000000001000101000000")
+    )
+    assert ch1.channel == 1
+    assert ch1.rx_mhz == pytest.approx(430.125)
+    assert ch1.tx_mhz == pytest.approx(430.125)
+    assert ch1.rx_tone == "67.0Hz"
+    assert ch1.mode_digital is False
+    assert ch1.encrypt_key == 0
+
+    # Channel 11: simplex 432.725 MHz, tones off, digital, encrypt key 1
+    # (matches the real CPS XML export Ely provided for this same channel).
+    ch11 = decode_channel_read_response(
+        bytes.fromhex("02010b0034499402344994027f007f00000001000101000101")
+    )
+    assert ch11.channel == 11
+    assert ch11.rx_mhz == pytest.approx(432.725)
+    assert ch11.rx_tone == "OFF"
+    assert ch11.mode_digital is True
+    assert ch11.encrypt_key == 1
+
+    # Channel 12: same shape, encrypt key 2 (also matches the XML export).
+    ch12 = decode_channel_read_response(
+        bytes.fromhex("02010c00d4cf9502d4cf95027f007f00000001000101000102")
+    )
+    assert ch12.channel == 12
+    assert ch12.rx_mhz == pytest.approx(433.725)
+    assert ch12.mode_digital is True
+    assert ch12.encrypt_key == 2
+
+
+def test_decode_channel_read_response_rejects_wrong_length():
+    import pytest
+    from app.protocol.channel import decode_channel_read_response
+
+    with pytest.raises(ValueError):
+        decode_channel_read_response(bytes(24))  # one byte short
+
+
+def test_build_channel_write_request_round_trips_a_read_response():
+    """Decoding a real read response then re-encoding it for a write must
+    reproduce the exact write frame already computed and sent to hardware
+    on 27-28/08/2026 (structurally validated against the official CPS's
+    own field order -- see channel.py::build_channel_write_fields).
+    Whether this write actually persists on the radio is a SEPARATE,
+    still-open question -- this test only pins down the encoding."""
+    from app.protocol.channel import decode_channel_read_response, build_channel_write_request
+    from app.protocol.frame import encode_cps_frame
+
+    ch12 = decode_channel_read_response(
+        bytes.fromhex("02010c00d4cf9502d4cf95027f007f00000001000101000102")
+    )
+    frame = encode_cps_frame(build_channel_write_request(ch12))
+    assert frame.hex() == "aa551b00120202000c00d4cf9502d4cf95027f007f00000001000101000102429377ee"
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-v"]))
