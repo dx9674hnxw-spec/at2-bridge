@@ -108,11 +108,26 @@ class DeviceManager:
     # -- channels ---------------------------------------------------------
 
     async def write_channel(self, config: chan.ChannelConfig) -> None:
+        """Writes one channel using the CPS-style per-channel format
+        (opcode=0x12, confirmed structurally correct against the
+        decompiled official CPS's own field order/encoding, 27-28/08/2026).
+
+        IMPORTANT: a write-then-read round-trip on real hardware was
+        still in progress as of this writing -- the previous format
+        (family=0x02/command=0x02, ported from the Android app) got
+        ACK'd but was CONFIRMED to have no actual effect (read-back
+        showed the old value unchanged). Do not mark this ✅ in the
+        README/CONSIGNES_PROJET.md until a write-then-read round-trip
+        with a real hardware confirmation exists. See
+        CONSIGNES_PROJET.md "accusé de réception ≠ confirmation
+        fonctionnelle".
+        """
+        from app.protocol.frame import encode_cps_frame
+
         t = self._require_transport()
-        record = chan.encode_channel_record(config)
-        from app.protocol.frame import build_payload
-        await t.send_payload(build_payload(0x02, 0x02, record))
-        self._log_line(f"Canal {config.channel} écrit")
+        request = chan.build_channel_write_request(config)
+        await t.send_raw_frame(encode_cps_frame(request))
+        self._log_line(f"Canal {config.channel} écrit (format CPS, non confirmé fonctionnellement)")
 
     async def clear_channel(self, channel_number: int) -> None:
         t = self._require_transport()
@@ -164,45 +179,60 @@ class DeviceManager:
 
         return {"sent_hex": frame_bytes.hex(), "received": received}
 
-    async def read_all_channels(self, timeout: float = 8.0) -> list[chan.ChannelConfig]:
-        """Request the codeplug and reassemble channel records from the
-        incoming family=0x02/command=0x02 packets.
+    async def read_channel(self, channel: int, timeout: float = 0.5) -> chan.ChannelConfig | None:
+        """Reads one channel using the CPS-style per-channel read --
+        confirmed working on real hardware 27-28/08/2026 for channels 1,
+        11, 12 (frequency, tone, mode, encrypt key all matched
+        independently-known values, including a real CPS XML export for
+        the same channels -- see CONSIGNES_PROJET.md).
 
-        NOTE: the exact chunking of the *read* response was not directly
-        observed (see commands.query_channel_config docstring). This
-        collects raw 0x02/0x02 packet bodies until either 720 bytes have
-        been reassembled or `timeout` elapses, then parses what it has.
+        Returns None if the radio doesn't respond within `timeout`. In
+        every case tested so far this has meant "this channel slot is
+        blank / never configured" (e.g. channel 20 on Ely's radio, which
+        the CPS XML export also shows as absent) rather than a genuine
+        error, so callers treat a None here as an empty slot, not a
+        failure.
         """
+        from app.protocol.frame import encode_cps_frame
+
         t = self._require_transport()
-        collected = bytearray()
-        done = asyncio.Event()
-
-        def _listener(pkt: At2Packet) -> None:
-            if pkt.family == 0x02 and pkt.command == 0x02:
-                collected.extend(pkt.body)
-                if len(collected) >= chan.CHANNEL_COUNT * chan.CHANNEL_RECORD_LEN:
-                    done.set()
-
-        t.on_packet(_listener)
-        await t.send_payload(commands.query_channel_config())
+        request = chan.build_channel_read_request(channel)
+        wait_task = asyncio.ensure_future(
+            t.wait_for_packet(lambda p: p.family == 0x91 and p.command == 0x02, timeout=timeout)
+        )
+        await t.send_raw_frame(encode_cps_frame(request))
+        pkt = await wait_task
+        if pkt is None:
+            return None
         try:
-            await asyncio.wait_for(done.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
-            self._log_line(f"Lecture codeplug incomplète: {len(collected)} octets reçus")
-        finally:
-            t._packet_listeners.remove(_listener)  # noqa: SLF001
+            return chan.decode_channel_read_response(pkt.body)
+        except ValueError:
+            logger.warning("unexpected channel read body for channel %d: %s", channel, pkt.body.hex())
+            self._log_line(f"Canal {channel}: réponse de lecture inattendue ({pkt.body.hex()})")
+            return None
 
-        usable = bytes(collected[: (len(collected) // chan.CHANNEL_RECORD_LEN) * chan.CHANNEL_RECORD_LEN])
-        if not usable:
-            return []
-        return chan.parse_codeplug_read_chunks([usable])
+    async def read_all_channels(self) -> list[chan.ChannelConfig]:
+        """Reads all 30 channels one at a time (matching the official
+        CPS's own behaviour, confirmed by decompiling its JS source --
+        it never sends a single bulk-read command either). Channels that
+        don't respond (empty/unconfigured slots) are simply omitted from
+        the result rather than causing the whole read to fail."""
+        results: list[chan.ChannelConfig] = []
+        for channel in range(1, chan.CHANNEL_COUNT + 1):
+            config = await self.read_channel(channel)
+            if config is not None:
+                results.append(config)
+            await asyncio.sleep(0.05)
+        self._log_line(f"Lecture codeplug: {len(results)}/{chan.CHANNEL_COUNT} canaux configurés trouvés")
+        return results
 
     async def write_all_channels(self, configs: list[chan.ChannelConfig]) -> None:
-        t = self._require_transport()
-        chunks = chan.build_codeplug_write_chunks(configs)
-        for i, chunk in enumerate(chunks):
-            await t.send_payload(commands.write_channel_chunk(chunk))
-            self._log_line(f"Codeplug: bloc {i + 1}/{len(chunks)} envoyé")
+        """Writes each channel individually (matching the official CPS's
+        own per-channel write behaviour). See write_channel()'s
+        docstring for the important caveat about write confirmation."""
+        for i, config in enumerate(configs):
+            await self.write_channel(config)
+            self._log_line(f"Codeplug: canal {i + 1}/{len(configs)} envoyé")
             await asyncio.sleep(0.05)
 
     # -- device settings ----------------------------------------------------
