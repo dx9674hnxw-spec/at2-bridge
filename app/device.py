@@ -402,6 +402,12 @@ class PttSession:
     """One push-to-talk transmission: buffers 20ms PCM frames, AMR-encodes
     them, and sends them to the radio in 100ms (5-frame) packets, exactly
     matching PttVoiceSender.kt's pacing and chunking.
+
+    Instrumented with per-stage counters (28/08/2026) since PTT has been
+    confirmed on real hardware to send zero voice frames in every attempt
+    so far, with no visibility into WHERE in the pipeline (browser mic
+    capture -> WebSocket -> AMR encode -> packet send) it's failing --
+    see CONSIGNES_PROJET.md.
     """
 
     def __init__(self, transport: Transport, log_line) -> None:
@@ -415,11 +421,31 @@ class PttSession:
         self._pending_amr: list[bytes] = []
         self._last_send = 0.0
 
+        # Per-stage counters for diagnosing the "zero voice frames sent"
+        # issue -- see class docstring.
+        self._pcm_frames_received = 0
+        self._amr_encode_failures = 0
+        self._amr_frames_encoded = 0
+        self._packets_sent = 0
+        self._amr_frames_sent = 0
+        self._logged_first_encode_failure = False
+
+        self._log_line("PTT: session démarrée (attente de frames audio du navigateur)")
+
     async def feed_pcm_frame(self, pcm_320_bytes: bytes) -> None:
         """Call once per 20ms with exactly 320 bytes of 16-bit mono PCM @8kHz."""
+        self._pcm_frames_received += 1
         encoded = self._codec.encode(pcm_320_bytes)
         if encoded is None:
+            self._amr_encode_failures += 1
+            if not self._logged_first_encode_failure:
+                self._logged_first_encode_failure = True
+                self._log_line(
+                    f"PTT: ⚠️ échec d'encodage AMR sur la frame PCM #{self._pcm_frames_received} "
+                    f"({len(pcm_320_bytes)} octets reçus, 320 attendus)"
+                )
             return
+        self._amr_frames_encoded += 1
         self._pending_amr.append(encoded)
         if len(self._pending_amr) >= self._ptt_proto.FRAMES_PER_PACKET:
             await self._flush(self._ptt_proto.FRAMES_PER_PACKET)
@@ -435,12 +461,21 @@ class PttSession:
         self._last_send = asyncio.get_event_loop().time()
         payload = self._ptt_proto.build_ptt_voice_payload(chunk)
         await self._transport.send_payload(payload)
+        self._packets_sent += 1
+        self._amr_frames_sent += len(chunk)
 
     async def close(self) -> None:
         if len(self._pending_amr) >= self._ptt_proto.TAIL_MIN_FRAMES:
             await self._flush(len(self._pending_amr))
         self._codec.close()
-        self._log_line("PTT: transmission terminée")
+        self._log_line(
+            "PTT: transmission terminée — "
+            f"{self._pcm_frames_received} frame(s) PCM reçue(s) du navigateur, "
+            f"{self._amr_frames_encoded} encodée(s) en AMR "
+            f"({self._amr_encode_failures} échec(s) d'encodage), "
+            f"{self._packets_sent} paquet(s) envoyé(s) à la radio "
+            f"({self._amr_frames_sent} frame(s) AMR au total)"
+        )
 
 
 device_manager = DeviceManager()
