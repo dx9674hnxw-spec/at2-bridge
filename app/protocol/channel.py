@@ -199,6 +199,117 @@ def parse_codeplug_read_chunks(chunks: list[bytes]) -> list[ChannelConfig]:
 
 
 # ---------------------------------------------------------------------------
+# Per-channel read/write using the "CPS-style" frame dialect (see
+# frame.py::encode_cps_frame / try_decode_cps_frame). Confirmed on real
+# hardware 27-28/08/2026: reads for channels 1, 11, 12 all matched
+# independently-known values (frequency, tone, mode, encrypt key) --
+# including cross-validation against a real CPS XML export for the same
+# channels. The WRITE side (build_channel_write_fields) is reverse-engineered
+# from the same field order/encoding as the official CPS's own
+# generateChannelListWriteFrequency, but a full write-then-read round-trip
+# on hardware was still in progress as of this writing -- see
+# CONSIGNES_PROJET.md before treating a write as confirmed functional.
+#
+# This 25-byte READ response layout is DIFFERENT from the older 24-byte
+# CHANNEL_RECORD_LEN layout above (decode_channel_record/
+# encode_channel_record, build_codeplug_write_chunks) -- that older layout
+# was ported from the Android BLE app and its bulk codeplug read/write
+# never got any response at all from real hardware. Do not mix the two.
+# ---------------------------------------------------------------------------
+
+_TONE_OFF_BYTE = 0x7F
+
+
+def decode_channel_read_response(body: bytes) -> ChannelConfig:
+    """Parses the 25-byte body of a CPS-style channel read response
+    (CpsPacket.body when opcode=0x91, group=0x02, param=0x02).
+
+    Layout (offsets into `body`):
+      0-1   : fixed markers (always seen as 0x02, 0x01 so far)
+      2-3   : channel number, uint16 little-endian
+      4-7   : RX frequency, uint32 LE, value = round(mhz * 100000)
+      8-11  : TX frequency, same encoding
+      12    : RX tone value   (0x7F = OFF, matches tone_label()'s convention)
+      13    : RX tone type    (0x00 CTCSS, 0x01 DCS)
+      14    : TX tone value
+      15    : TX tone type
+      16    : RX tone polarity
+      17    : TX tone polarity
+      18    : busy lock
+      19    : bandwidth (0x01 narrow, 0x00 wide)
+      20    : power (0x01 high, 0x00 low)
+      21    : scan add
+      22    : frequency hopping
+      23    : mode (0x01 digital, 0x00 analog)
+      24    : encrypt key index
+    """
+    if len(body) != 25:
+        raise ValueError(f"expected a 25-byte channel read body, got {len(body)}")
+    channel = int.from_bytes(body[2:4], "little")
+    rx_mhz = _decode_freq(body[4:8])
+    tx_mhz = _decode_freq(body[8:12])
+    rx_tone = tone_label(body[12], body[13], body[16])
+    tx_tone = tone_label(body[14], body[15], body[17])
+    return ChannelConfig(
+        channel=channel,
+        rx_mhz=rx_mhz,
+        tx_mhz=tx_mhz,
+        rx_tone=rx_tone,
+        tx_tone=tx_tone,
+        busy_lock=(body[18] == 0x00),
+        bandwidth_narrow=(body[19] == 0x01),
+        high_power=(body[20] == 0x01),
+        scan_add=(body[21] == 0x00),
+        hop_on=(body[22] == 0x01),
+        mode_digital=(body[23] == 0x01),
+        encrypt_key=body[24],
+    )
+
+
+def build_channel_read_request(channel: int) -> bytes:
+    """Logical payload (before CPS frame wrapping) to read one channel's
+    data: opcode=0x11 (read) + group=0x02 (communicationParames) +
+    param=0x02 (channelList) + 0x00 (reserved) + channel number (uint16 LE)."""
+    if not (1 <= channel <= CHANNEL_COUNT):
+        raise ValueError(f"channel out of range: {channel}")
+    return bytes([0x11, 0x02, 0x02, 0x00]) + channel.to_bytes(2, "little")
+
+
+def build_channel_write_fields(config: ChannelConfig) -> bytes:
+    """Encodes a ChannelConfig into the 23-byte field sequence expected
+    after the opcode/group/param/reserved prefix in a CPS-style channel
+    write request -- field order and widths match the official CPS's own
+    channelInfosWrite table exactly (channelNumber, rxFreq, txFreq,
+    rxCtcss, rxCtcssType, txCtcss, txCtcssType, rxCtcssDigCode,
+    txCtcssDigCode, busyLock, bw, freqPower, scanFlag, freqHopp,
+    freqMode, encIndex)."""
+    rx_val, rx_type, rx_pol = parse_tone_label(config.rx_tone)
+    tx_val, tx_type, tx_pol = parse_tone_label(config.tx_tone)
+    out = bytearray()
+    out += config.channel.to_bytes(2, "little")
+    out += _encode_freq(config.rx_mhz)
+    out += _encode_freq(config.tx_mhz)
+    out += bytes([rx_val & 0xFF, rx_type & 0xFF, tx_val & 0xFF, tx_type & 0xFF, rx_pol & 0xFF, tx_pol & 0xFF])
+    out += bytes([
+        0x00 if config.busy_lock else 0x01,
+        0x01 if config.bandwidth_narrow else 0x00,
+        0x01 if config.high_power else 0x00,
+        0x00 if config.scan_add else 0x01,
+        0x01 if config.hop_on else 0x00,
+        0x01 if config.mode_digital else 0x00,
+        config.encrypt_key & 0xFF,
+    ])
+    return bytes(out)
+
+
+def build_channel_write_request(config: ChannelConfig) -> bytes:
+    """Logical payload (before CPS frame wrapping) to write one channel:
+    opcode=0x12 (write) + group=0x02 + param=0x02 + 0x00 (reserved) +
+    the 23-byte field sequence from build_channel_write_fields()."""
+    return bytes([0x12, 0x02, 0x02, 0x00]) + build_channel_write_fields(config)
+
+
+# ---------------------------------------------------------------------------
 # Import from a CPS-format XML export (the human-readable config file saved
 # by the official Windows CPS -- NOT a protocol capture, just a config
 # snapshot). Field-by-field mapping cross-validated on 27-28/08/2026 against
