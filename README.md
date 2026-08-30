@@ -79,6 +79,47 @@ graph TD
     Server <-->|USB / BLE| Radio[Radio AT2]
     Browser <-->|Web Bluetooth| Radio
 ```
+## Web Bluetooth
+
+Le mode BLE local est exécuté par le navigateur de l'utilisateur. Le serveur Linux n'est pas dans le chemin Bluetooth dans ce mode : la radio doit donc être à portée Bluetooth de l'ordinateur ou du téléphone qui affiche l'interface web.
+
+### Navigateurs compatibles
+
+- Utiliser Chrome ou Edge sur Windows, macOS, Linux ou Android.
+- Firefox ne prend pas en charge Web Bluetooth.
+- Les navigateurs iOS ne prennent pas Web Bluetooth en charge, y compris Chrome et Edge sur iPhone/iPad, car ils reposent sur WebKit.
+- Sur Linux, Web Bluetooth peut nécessiter l'activation de fonctionnalités expérimentales du navigateur selon le build utilisé.
+
+### HTTPS requis
+
+L'API Web Bluetooth exige un contexte sécurisé : HTTPS ou `localhost`.
+
+Pour un test de développement sur un réseau local en HTTP, par exemple `http://<ip-du-serveur>:2910`, Chrome peut recevoir une exception locale :
+
+1. Ouvrir `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+2. Ajouter l'origine exacte, par exemple :
+
+   ```text
+   `http://<ip-du-serveur>:2910`
+   ```
+
+3. Activer le flag puis cliquer sur **Relaunch**.
+4. Recharger l'interface avec `Ctrl + F5`.
+
+> [!CAUTION]
+> Cette exception doit rester limitée à un environnement de développement ou à un réseau local maîtrisé. En usage normal, placer l'application derrière HTTPS valide est préférable.
+
+### Démarrage du scan
+
+1. Fermer Bluetooth LE Explorer ou toute application actuellement connectée à la radio.
+2. Fermer Ola Radio ou désactiver le Bluetooth du téléphone si celui-ci peut se reconnecter automatiquement à l'AT2.
+3. Désactiver/réactiver le Bluetooth sur la radio juste avant la recherche, afin de relancer son annonce BLE.
+4. Ouvrir l'interface dans Chrome/Edge depuis l'appareil équipé du Bluetooth.
+5. Lancer la connexion BLE locale.
+6. Sélectionner un appareil de type `AT2_...`, par exemple `AT2_01A`.
+
+
+
 
 ## Déploiement
 
