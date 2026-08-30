@@ -100,7 +100,7 @@ Pour un test de développement sur un réseau local en HTTP, par exemple `http:/
 2. Ajouter l'origine exacte, par exemple :
 
    ```text
-   `http://<ip-du-serveur>:2910`
+   http://<ip-du-serveur>:2910
    ```
 
 3. Activer le flag puis cliquer sur **Relaunch**.
