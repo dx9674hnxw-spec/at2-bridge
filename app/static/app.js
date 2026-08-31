@@ -598,6 +598,7 @@ function readChannelRow(row) {
 }
 
 async function writeChannelRow(row) {
+  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   const cfg = readChannelRow(row);
   try {
     await api("PUT", `/api/channels/${cfg.channel}`, cfg);
@@ -606,6 +607,7 @@ async function writeChannelRow(row) {
 }
 
 $("#btn-read-channels").addEventListener("click", async () => {
+  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   try {
     const channels = await api("GET", "/api/channels");
     lastReadChannels = channels.length ? channels : emptyChannels();
@@ -646,6 +648,7 @@ $("#xml-file-input").addEventListener("change", async () => {
 });
 
 $("#btn-write-channels").addEventListener("click", async () => {
+  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   const configs = $$("#channel-table-body tr").map(readChannelRow);
   if (configs.length !== 30) return showToast(t("channels.need30rows"), "info");
   try {
@@ -661,21 +664,33 @@ renderChannelTable(emptyChannels());
 // ---------------------------------------------------------------------------
 $$("[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
+    const action = btn.dataset.action;
     try {
-      if (btn.dataset.action === "set-volume") await api("PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) });
-      if (btn.dataset.action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
-      if (btn.dataset.action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
-      if (btn.dataset.action === "set-vox-sensitivity") await api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) });
-      if (btn.dataset.action === "set-tot") await api("PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) });
-      if (btn.dataset.action === "set-tx-inhibit") await api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked });
-      if (btn.dataset.action === "set-noise-reduction") await api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked });
-      if (btn.dataset.action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
-      if (btn.dataset.action === "set-device-name") {
+      if (action === "set-volume") {
+        const level = parseInt($("#volume-slider").value, 10);
+        if (mode === "server") await api("PUT", "/api/device/volume", { level });
+        else if (AT2BleClient.connected()) await AT2BleClient.setVolume(level);
+        else return showToast(t("gps.noActiveConnection"), "info");
+        return;
+      }
+      // Les autres réglages ne sont pas encore câblés côté client BLE
+      // (ble-client.js ne supporte pour l'instant que connect/selectChannel/
+      // setVolume/sendText) -- éviter un appel serveur voué à échouer avec
+      // un 409 confus quand aucune connexion serveur n'est active.
+      if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+      if (action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
+      if (action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
+      if (action === "set-vox-sensitivity") await api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) });
+      if (action === "set-tot") await api("PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) });
+      if (action === "set-tx-inhibit") await api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked });
+      if (action === "set-noise-reduction") await api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked });
+      if (action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
+      if (action === "set-device-name") {
         const name = $("#device-name-input").value.trim();
         if (!name) return showToast(t("settings.deviceNameRequired"), "info");
         await api("PUT", "/api/device/name", { name });
       }
-      if (btn.dataset.action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
+      if (action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
     } catch (e) { showToast(e.message, "error"); }
   });
 });

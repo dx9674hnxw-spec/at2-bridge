@@ -51,6 +51,7 @@ const I18N_DICT = {
     "debug.rawFrameSending": "Envoi en cours…",
     "debug.rawFrameInvalidHex": "Hex de trame invalide.",
     "debug.rawFrameNoConnection": "Aucune connexion active — connecte-toi d'abord.",
+    "mode.notSupportedLocal": "Pas encore disponible en mode BLE local — utilise le mode Serveur.",
 
     // Devices tab
     "devices.empty": "Aucun appareil connu pour l'instant — scanne en BLE ou connecte-toi en série pour en enregistrer un.",
@@ -212,6 +213,7 @@ const I18N_DICT = {
     "debug.rawFrameSending": "Sending…",
     "debug.rawFrameInvalidHex": "Invalid frame hex.",
     "debug.rawFrameNoConnection": "No active connection — connect first.",
+    "mode.notSupportedLocal": "Not available in local BLE mode yet — use Server mode.",
 
     "devices.empty": "No known devices yet — scan over BLE or connect via serial to remember one.",
     "devices.connect": "Connect",
