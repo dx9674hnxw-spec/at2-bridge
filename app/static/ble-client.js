@@ -176,6 +176,62 @@ const AT2BleClient = (() => {
     }
   }
 
+  // -- channel read/write (CPS-style dialect, confirmed on real hardware
+  // 27-28/08/2026 -- see app/protocol/channel.py and static/protocol.js).
+  // Incoming BLE notifications are already decoded by the "legacy" frame
+  // decoder in handleNotify()/AT2Protocol.decodeFrame(); for payloads in
+  // our size range this coincidentally (but reliably, verified against
+  // real hardware) produces a packet whose `body` is exactly the 25-byte
+  // shape decodeChannelReadResponse() expects -- no separate CPS-frame
+  // receive path is needed, only a distinct SEND encoding.
+
+  function waitForPacket(predicate, timeoutMs = 1000) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const unsubscribe = onPacket((pkt) => {
+        if (settled || !predicate(pkt)) return;
+        settled = true;
+        unsubscribe();
+        clearTimeout(timer);
+        resolve(pkt);
+      });
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        unsubscribe();
+        resolve(null);
+      }, timeoutMs);
+    });
+  }
+
+  async function readChannel(channel, timeoutMs = 500) {
+    const request = AT2Protocol.buildChannelReadRequest(channel);
+    const frame = AT2Protocol.encodeCpsFrame(request);
+    const waitPromise = waitForPacket((p) => p.family === 0x91 && p.command === 0x02, timeoutMs);
+    await sendFrame(frame);
+    const pkt = await waitPromise;
+    if (!pkt) return null; // empty/unconfigured channel slot -- not an error
+    return AT2Protocol.decodeChannelReadResponse(pkt.body);
+  }
+
+  async function readAllChannels() {
+    const results = [];
+    for (let channel = 1; channel <= 30; channel++) {
+      const config = await readChannel(channel);
+      if (config) results.push(config);
+    }
+    return results;
+  }
+
+  async function writeChannel(config) {
+    // NOTE: write ACKs from the radio do not confirm the write actually
+    // persisted -- see CONSIGNES_PROJET.md "accusé de réception ≠
+    // confirmation fonctionnelle". Same caveat as the server-mode path.
+    const request = AT2Protocol.buildChannelWriteRequest(config);
+    const frame = AT2Protocol.encodeCpsFrame(request);
+    await sendFrame(frame);
+  }
+
   return {
     isSupported,
     connect,
@@ -184,6 +240,9 @@ const AT2BleClient = (() => {
     selectChannel,
     setVolume,
     sendText,
+    readChannel,
+    readAllChannels,
+    writeChannel,
     onPacket
   };
 })();

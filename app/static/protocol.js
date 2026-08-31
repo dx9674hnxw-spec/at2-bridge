@@ -115,5 +115,145 @@ const AT2Protocol = (() => {
     return frames;
   }
 
-  return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames };
+  // ---------------------------------------------------------------------
+  // "CPS-style" frame dialect -- confirmed on real hardware 27-28/08/2026
+  // for per-channel read/write (opcode 0x11 read / 0x12 write). See
+  // app/protocol/frame.py::encode_cps_frame for the authoritative Python
+  // implementation and the hardware test log this was derived from.
+  // Differs from the frame above: 2-byte little-endian length field, and
+  // NO leading 0x00 byte before the payload's first real byte.
+  // ---------------------------------------------------------------------
+
+  function encodeCpsFrame(payload) {
+    if (!payload.length) throw new Error("payload must not be empty");
+    const crc = crc16Ccitt(payload);
+    const len = payload.length;
+    return new Uint8Array([
+      ...HEAD,
+      len & 0xff, (len >> 8) & 0xff,
+      ...payload,
+      crc & 0xff, (crc >> 8) & 0xff,
+      ...TAIL,
+    ]);
+  }
+
+  function decodeCpsFrame(bytes) {
+    if (bytes.length < 8) return null;
+    if (bytes[0] !== HEAD[0] || bytes[1] !== HEAD[1]) return null;
+    const len = bytes[2] | (bytes[3] << 8);
+    const payloadStart = 4;
+    const payloadEnd = payloadStart + len;
+    if (bytes[payloadEnd + 1] === undefined) return null;
+    const payload = bytes.slice(payloadStart, payloadEnd);
+    const gotCrc = bytes[payloadEnd] | (bytes[payloadEnd + 1] << 8);
+    if (crc16Ccitt(payload) !== gotCrc) return null;
+    return { opcode: payload[0], group: payload[1], param: payload[2], body: payload.slice(3) };
+  }
+
+  // -- channel read/write (mirrors app/protocol/channel.py) -----------------
+
+  const CTCSS_VALUES = [
+    "67.0", "69.3", "71.9", "74.4", "77.0", "79.7", "82.5", "85.4", "88.5", "91.5",
+    "94.8", "97.4", "100.0", "103.5", "107.2", "110.9", "114.8", "118.8", "123.0", "127.3",
+    "131.8", "136.5", "141.3", "146.2", "150.0", "151.4", "156.7", "159.8", "162.2", "165.5",
+    "167.9", "171.3", "173.8", "177.3", "179.9", "183.5", "186.2", "189.9", "192.8", "196.6",
+    "199.5", "203.5", "206.5", "210.7", "218.1", "225.7", "229.1", "233.6", "241.8", "250.3",
+    "254.1",
+  ];
+
+  const DCS_VALUES = [
+    "D023", "D025", "D026", "D031", "D032", "D036", "D043", "D047", "D051", "D053",
+    "D054", "D065", "D071", "D072", "D073", "D074", "D114", "D115", "D116", "D122",
+    "D125", "D131", "D132", "D134", "D143", "D145", "D152", "D155", "D156", "D162",
+    "D165", "D172", "D174", "D205", "D212", "D223", "D225", "D226", "D243", "D244",
+    "D245", "D246", "D251", "D252", "D255", "D261", "D263", "D265", "D266", "D271",
+    "D274", "D306", "D311", "D315", "D325", "D331", "D332", "D343", "D346", "D351",
+    "D356", "D364", "D365", "D371", "D411", "D412", "D413", "D423", "D431", "D432",
+    "D445", "D446", "D452", "D454", "D455", "D462", "D464", "D465", "D466", "D503",
+    "D506", "D516", "D523", "D526", "D532", "D546", "D565", "D606", "D612", "D624",
+    "D627", "D631", "D632", "D645", "D654", "D662", "D664", "D703", "D712", "D723",
+    "D731", "D732", "D734", "D743", "D754",
+  ];
+
+  function toneLabel(value, type, polarity) {
+    if (value === 0x7f && type === 0x00) return "OFF";
+    if (type === 0x00) return value < CTCSS_VALUES.length ? `${CTCSS_VALUES[value]}Hz` : "OFF";
+    if (type === 0x01) return value < DCS_VALUES.length ? DCS_VALUES[value] + (polarity === 0x01 ? "I" : "N") : "OFF";
+    return "OFF";
+  }
+
+  function parseToneLabel(label) {
+    const text = (label || "").trim().toUpperCase();
+    if (text === "OFF") return [0x7f, 0x00, 0x00];
+    if (text.endsWith("N") || text.endsWith("I")) {
+      const base = text.slice(0, -1);
+      const idx = DCS_VALUES.indexOf(base);
+      if (idx !== -1) return [idx, 0x01, text.endsWith("I") ? 0x01 : 0x00];
+    }
+    const normalized = text.endsWith("HZ") ? text.slice(0, -2) : text;
+    const idx = CTCSS_VALUES.indexOf(normalized);
+    if (idx !== -1) return [idx, 0x00, 0x00];
+    throw new Error(`unrecognized tone label: ${label}`);
+  }
+
+  function encodeFreq(mhz) {
+    if (mhz === null || mhz === undefined) return [0, 0, 0, 0];
+    const raw = Math.round(mhz * 100000);
+    return [raw & 0xff, (raw >> 8) & 0xff, (raw >> 16) & 0xff, (raw >>> 24) & 0xff];
+  }
+
+  function decodeFreq(bytes) {
+    const raw = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0;
+    if (raw === 0) return null;
+    return Math.round((raw / 100000) * 1e5) / 1e5;
+  }
+
+  function buildChannelReadRequest(channel) {
+    if (channel < 1 || channel > 30) throw new Error("channel out of range");
+    return [0x11, 0x02, 0x02, 0x00, channel & 0xff, (channel >> 8) & 0xff];
+  }
+
+  function buildChannelWriteFields(config) {
+    const [rxVal, rxType, rxPol] = parseToneLabel(config.rx_tone);
+    const [txVal, txType, txPol] = parseToneLabel(config.tx_tone);
+    return [
+      config.channel & 0xff, (config.channel >> 8) & 0xff,
+      ...encodeFreq(config.rx_mhz),
+      ...encodeFreq(config.tx_mhz),
+      rxVal & 0xff, rxType & 0xff, txVal & 0xff, txType & 0xff, rxPol & 0xff, txPol & 0xff,
+      config.busy_lock ? 0x00 : 0x01,
+      config.bandwidth_narrow ? 0x01 : 0x00,
+      config.high_power ? 0x01 : 0x00,
+      config.scan_add ? 0x00 : 0x01,
+      config.hop_on ? 0x01 : 0x00,
+      config.mode_digital ? 0x01 : 0x00,
+      config.encrypt_key & 0xff,
+    ];
+  }
+
+  function buildChannelWriteRequest(config) {
+    return [0x12, 0x02, 0x02, 0x00, ...buildChannelWriteFields(config)];
+  }
+
+  function decodeChannelReadResponse(body) {
+    if (body.length !== 25) throw new Error(`expected a 25-byte channel read body, got ${body.length}`);
+    const channel = body[2] | (body[3] << 8);
+    return {
+      channel,
+      rx_mhz: decodeFreq(body.slice(4, 8)),
+      tx_mhz: decodeFreq(body.slice(8, 12)),
+      rx_tone: toneLabel(body[12], body[13], body[16]),
+      tx_tone: toneLabel(body[14], body[15], body[17]),
+      busy_lock: body[18] === 0x00,
+      bandwidth_narrow: body[19] === 0x01,
+      high_power: body[20] === 0x01,
+      scan_add: body[21] === 0x00,
+      hop_on: body[22] === 0x01,
+      mode_digital: body[23] === 0x01,
+      encrypt_key: body[24],
+    };
+  }
+
+  return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
+    encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse };
 })();

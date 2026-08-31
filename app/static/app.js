@@ -598,18 +598,30 @@ function readChannelRow(row) {
 }
 
 async function writeChannelRow(row) {
-  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   const cfg = readChannelRow(row);
   try {
-    await api("PUT", `/api/channels/${cfg.channel}`, cfg);
-    if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
+    if (mode === "server") {
+      await api("PUT", `/api/channels/${cfg.channel}`, cfg);
+      if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
+    } else if (AT2BleClient.connected()) {
+      await AT2BleClient.writeChannel(cfg);
+      if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
+    } else {
+      return showToast(t("gps.noActiveConnection"), "info");
+    }
   } catch (e) { showToast(e.message, "error"); }
 }
 
 $("#btn-read-channels").addEventListener("click", async () => {
-  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   try {
-    const channels = await api("GET", "/api/channels");
+    let channels;
+    if (mode === "server") {
+      channels = await api("GET", "/api/channels");
+    } else if (AT2BleClient.connected()) {
+      channels = await AT2BleClient.readAllChannels();
+    } else {
+      return showToast(t("gps.noActiveConnection"), "info");
+    }
     lastReadChannels = channels.length ? channels : emptyChannels();
     renderChannelTable(lastReadChannels);
     renderChanOpts();
@@ -648,11 +660,16 @@ $("#xml-file-input").addEventListener("change", async () => {
 });
 
 $("#btn-write-channels").addEventListener("click", async () => {
-  if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   const configs = $$("#channel-table-body tr").map(readChannelRow);
   if (configs.length !== 30) return showToast(t("channels.need30rows"), "info");
   try {
-    await api("PUT", "/api/channels", configs);
+    if (mode === "server") {
+      await api("PUT", "/api/channels", configs);
+    } else if (AT2BleClient.connected()) {
+      for (const cfg of configs) await AT2BleClient.writeChannel(cfg);
+    } else {
+      return showToast(t("gps.noActiveConnection"), "info");
+    }
     showToast(t("channels.writtenOk"), "success");
   } catch (e) { showToast(e.message, "error"); }
 });
