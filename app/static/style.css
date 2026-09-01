@@ -342,13 +342,13 @@ tbody tr:hover { background: var(--color-surface-hover); }
 
 @media (max-width: 640px) {
   .topbar { row-gap: 8px; }
-  .conn-panel { flex-direction: column; align-items: stretch; }
+  .conn-panel { /*flex-direction: column;*/ align-items: stretch; }
   .conn-controls { justify-content: flex-start; }
   .conn-controls > select { flex: 1 1 auto; min-width: 0; }
   main { padding: 12px 12px calc(20px + var(--safe-bottom)); }
   .ptt-btn { width: 96px; height: 96px; font-size: 14px; }
   .settings-grid { grid-template-columns: 1fr; }
-  .status-pill { align-self: flex-start; }
+  /*.status-pill { align-self: flex-start; }*/
 }
 
 @media (max-width: 420px) {
