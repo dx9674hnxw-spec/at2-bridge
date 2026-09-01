@@ -145,7 +145,7 @@ html, body {
 
 body {
   background-image:
-    radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.035), transparent 26%),
+    radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.035), transparent 0%),
     linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
   background-size: 100% 100%, var(--grid-size) var(--grid-size), var(--grid-size) var(--grid-size);
