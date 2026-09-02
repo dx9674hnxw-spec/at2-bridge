@@ -19,3 +19,15 @@ in the distribution. See THIRD_PARTY_NOTICES.md for further detail,
 including the upstream project's own vendored third-party notices
 (OpenCORE-AMR) which apply to functionality NOT ported here (real-time
 PTT voice codec is on the roadmap, see README.md).
+
+This project also contains a browser-compiled build of OpenCORE-AMR
+(via Emscripten), used for client-side PTT voice encode/decode in BLE
+local mode:
+
+  opencore-amr-js
+  https://github.com/yxl/opencore-amr-js
+  Licensed under the Apache License, Version 2.0
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  app/static/amrnb.js <- js/amrnb.js (one small documented patch, see
+                         THIRD_PARTY_NOTICES.md and the file's own header)
