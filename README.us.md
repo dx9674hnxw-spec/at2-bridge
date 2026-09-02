@@ -43,51 +43,51 @@
 
 
 
-Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
+Self-hosted web application (Docker) for controlling an Alervites/Baofeng AT2 two-way radio from a Linux server or directly from a browser via local BLE—channels, device settings, off-network messaging (text/image/voice), real-time PTT, location/SOS, and authentication.
 
 > [!WARNING]
-> **Projet communautaire non affilié à Baofeng/Alervites.** Protocole reconstitué par rétro-ingénierie. Aucune garantie de compatibilité totale — teste prudemment.
+> **Community project not affiliated with Baofeng/Alervites.** Protocol reconstructed through reverse engineering. No guarantee of full compatibility—test with caution.
 
-## Fonctionnalités
+## Features
 
 > [!TIP]
->###  Implémenté et testé (sans radio)
+>###  Implemented and tested (without radio)
 >
->- **Codec de trame** — Encodage/décodage `AA55 [LEN] [PAYLOAD] [CRC16] 77EE`, CRC16-CCITT (init `0x1234`, poly `0x1021`).
->- **Codec de canal** — Enregistrements 24 octets (fréquences, tons CTCSS/DCS, bande passante, puissance), round-trip testé.
->- **Codec AMR-NB (voix)** — Binding ctypes vers `libopencore-amrnb` réel, round-trip encode/decode validé.
->- **Chunking PTT temps réel** — Paquets vocaux (5 trames AMR/paquet, cadencement 100ms), format confirmé par le code source de référence.
->- **Messagerie texte/voix/image (construction + décodage + réassemblage)** — Les trois formats hors-réseau portés depuis `At2OfflineMessageCodec.kt` ; round-trip testé pour les trois types, y compris messages concurrents entrelacés et chunks orphelins.
->- **Backend FastAPI** — 32 routes HTTP + 4 WebSocket, toutes s'importent et répondent.
->- **Authentification** — Token HMAC signé, activable/désactivable via variable d'environnement, testée (émission, vérification, expiration, altération de signature).
->- **Gestion d'erreurs propre** — `RuntimeError` (ex: pas de connexion active) renvoyées en HTTP 409 clair ; toute autre erreur inattendue loggée en entier côté serveur mais sans traceback exposé au client.
->- **Stockage local** (noms de canaux, appareils connus) — Persistance JSON testée, y compris l'enregistrement automatique d'un appareil à la connexion série.
->- **33 tests unitaires** — `app/tests/test_protocol.py`.
+>- **Frame codec** — Encoding/decoding `AA55 [LEN] [PAYLOAD] [CRC16] 77EE`, CRC16-CCITT (init `0x1234`, poly `0x1021`).
+>- **Channel codec** — 24-byte records (frequencies, CTCSS/DCS tones, bandwidth, power), round-trip tested.
+>- **AMR-NB (voice) codec** — ctypes binding to the actual `libopencore-amrnb`, round-trip encoding/decoding validated.
+>- **Real-time PTT chunking** — Voice packets (5 AMR frames per packet, 100 ms timing), format confirmed by the reference source code.
+>- **Text/voice/image messaging (construction + decoding + reassembly)** — The three off-network formats ported from `At2OfflineMessageCodec.kt`; round-trip testing performed for all three types, including interleaved concurrent messages and orphaned chunks.
+>- **FastAPI Backend** — 32 HTTP routes + 4 WebSockets, all of which import and respond.
+>- **Authentication** — Signed HMAC token, enabled/disabled via environment variable, tested (issuance, verification, expiration, signature tampering).
+>- **Clean error handling** — `RuntimeError` (e.g., no active connection) returned as a plain HTTP 409; all other unexpected errors are logged in full on the server side but without exposing the traceback to the client.
+>- **Local storage** (channel names, known devices) — JSON persistence tested, including automatic registration of a device upon serial connection.
+>- **33 unit tests** — `app/tests/test_protocol.py`.
 
   
 > [!WARNING]
->###  Implémenté mais non testé (nécessite la radio)
+>###  Implemented but not tested (requires radio)
 >
->- **Lecture/écriture des canaux** (USB série et BLE) — jamais envoyé à une radio réelle.
->- **Lecture groupée des 30 canaux (codeplug)** — commande déduite par symétrie, non observée sur trafic réel.
->- **Réglages appareil** (volume/squelch/VOX) — seuls réglages câblés à ce jour ; jamais vérifiés sur radio.
->- **Envoi de messages texte/voix/image hors-réseau** — format testé unitairement, jamais émis vers une radio.
->- **Réception de messages hors-réseau** — décodage + WebSocket (`/ws/messages`) + affichage dans le fil de discussion entièrement câblés côté client, jamais reçu de vraie trame radio ; lecture audio des messages vocaux reçus non implémentée (affichage texte uniquement pour l'instant).
->- **PTT temps réel (voix)** — capture micro → 8kHz mono → AMR-NB → trames radio, chaîne complète jamais testée avec une radio en face.
->- **Position/SOS** — repose sur le canal de messagerie texte (pas de type structuré dédié), jamais émis en conditions réelles.
->- **Mode BLE local (Web Bluetooth)** — port JS minimal (canal, texte), jamais connecté à une radio réelle.
->- **Reconnexion aux appareils connus** — persistance fonctionnelle, reconnexion réelle non testée.
->- **Formulaire de connexion (auth frontend)** — flux complet testé côté API (login, token, 401, session expirée), jamais utilisé via l'interface réelle en conditions de terrain.
+>- **Channel read/write** (USB serial and BLE) — never sent to an actual radio.
+>- **Batch read of all 30 channels (codeplug)** — command inferred by symmetry; not observed in actual traffic.
+>- **Device settings** (volume/squelch/VOX) — the only settings hard-coded to date; never verified on a radio.
+>- **Sending text/voice/image messages outside the network** — format tested in unit tests, never transmitted to a radio.
+>- **Receiving off-network messages** — decoding + WebSocket (`/ws/messages`) + display in the chat feed are fully implemented on the client side; no actual radio frames have ever been received; audio playback of received voice messages not implemented (text display only for now).
+>- **Real-time PTT (voice)** — microphone capture → 8 kHz mono → AMR-NB → radio frames; full chain never tested with a radio on the other end.
+>- **Location/SOS** — relies on the text messaging channel (no dedicated structured type); never transmitted under real-world conditions.
+>- **Local BLE mode (Web Bluetooth)** — minimal JS port (channel, text); never connected to an actual radio.
+>- **Reconnection to known devices** — functional persistence; actual reconnection not tested.
+>- **Login form (frontend auth)** — full flow tested on the API side (login, token, 401, expired session), never used via the actual interface in field conditions.
 
 > [!CAUTION]
->###  Non implémenté / Roadmap
+>###  Not implemented / Roadmap
 >
->- **Réglages avancés** (sensibilité VOX, temporisation TX, inhibition TX, réduction de bruit, tonalité de confirmation, nom d'appareil, Smart Link) — commandes déjà présentes dans `app/protocol/commands.py` (portées du protocole réel) mais volontairement non exposées à l'UI pour l'instant.
->- **Lecture audio des messages vocaux reçus** — le message arrive et s'affiche, mais aucun lecteur audio n'est encore branché côté navigateur.
->- **Type de message structuré "Position"** — actuellement du texte formaté, pas le format natif observé dans l'app Ola Radio.
->- **Gestion simultanée de plusieurs radios** — une seule connexion active à la fois côté serveur.
->- **Flux vidéo / photos périodiques** — non implémenté ; débit du protocole (≈330 o/s messagerie, 4,8 kbps PTT) rend une vraie vidéo irréaliste.
->- **Nettoyage des messages partiels abandonnés** — l'assembleur de messages entrants n'a pas de timeout si une transmission est interrompue en cours de route.
+>- **Advanced Settings** (VOX sensitivity, TX delay, TX inhibit, noise reduction, confirmation tone, device name, Smart Link) — commands already present in `app/protocol/commands.py` (part of the actual protocol) but intentionally not exposed to the UI at this time.
+>- **Audio playback of received voice messages** — the message arrives and is displayed, but no audio player is yet connected on the browser side.
+>- **“Position” structured message type** — currently formatted text, not the native format seen in the Ola Radio app.
+>- **Simultaneous management of multiple radios** — only one active connection at a time on the server side.
+>- **Periodic video/photo streams** — not implemented; the protocol’s throughput (≈330 messages/s, 4.8 kbps PTT) makes true video unrealistic.
+>- **Cleaning up abandoned partial messages** — the incoming message assembler has no timeout if a transmission is interrupted midway.
 
 ## Architecture
 
@@ -99,47 +99,47 @@ graph TD
 ```
 ## Web Bluetooth
 
-Le mode BLE local est exécuté par le navigateur de l'utilisateur. Le serveur Linux n'est pas dans le chemin Bluetooth dans ce mode : la radio doit donc être à portée Bluetooth de l'ordinateur ou du téléphone qui affiche l'interface web.
+Local BLE mode is run by the user's browser. The Linux server is not part of the Bluetooth path in this mode; therefore, the radio must be within Bluetooth range of the computer or phone displaying the web interface.
 
-### Navigateurs compatibles
+### Compatible browsers
 
-- Utiliser Chrome ou Edge sur Windows, macOS, Linux ou Android.
-- Firefox ne prend pas en charge Web Bluetooth.
-- Les navigateurs iOS ne prennent pas Web Bluetooth en charge, y compris Chrome et Edge sur iPhone/iPad, car ils reposent sur WebKit.
-- Sur Linux, Web Bluetooth peut nécessiter l'activation de fonctionnalités expérimentales du navigateur selon le build utilisé.
+- Use Chrome or Edge on Windows, macOS, Linux, or Android.
+- Firefox does not support Web Bluetooth.
+- iOS browsers do not support Web Bluetooth, including Chrome and Edge on iPhone/iPad, because they are based on WebKit.
+- On Linux, Web Bluetooth may require enabling experimental browser features, depending on the build you are using.
 
-### HTTPS requis
+### HTTPS required
 
-L'API Web Bluetooth exige un contexte sécurisé : HTTPS ou `localhost`.
+The Web Bluetooth API requires a secure context : HTTPS ou `localhost`.
 
-Pour un test de développement sur un réseau local en HTTP, par exemple `http://<ip-du-serveur>:2910`, Chrome peut recevoir une exception locale :
+When testing a development environment on a local network using HTTP—for example, `http://<server-ip>:2910`—Chrome may encounter a local exception:
 
-1. Ouvrir `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
-2. Ajouter l'origine exacte, par exemple :
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+2. Add the exact origin, for example:
 
    ```text
    http://<ip-du-serveur>:2910
    ```
 
-3. Activer le flag puis cliquer sur **Relaunch**.
-4. Recharger l'interface avec `Ctrl + F5`.
+3. Check the box, then click **Relaunch**.
+4. Refresh the interface using `Ctrl + F5`.
 
 > [!CAUTION]
-> Cette exception doit rester limitée à un environnement de développement ou à un réseau local maîtrisé. En usage normal, placer l'application derrière HTTPS valide est préférable.
+> This exception should be limited to a development environment or a controlled local network. Under normal circumstances, it is preferable to place the application behind valid HTTPS.
 
 ### Démarrage du scan
 
-1. Fermer Bluetooth LE Explorer ou toute application actuellement connectée à la radio.
-2. Fermer Ola Radio ou désactiver le Bluetooth du téléphone si celui-ci peut se reconnecter automatiquement à l'AT2.
-3. Désactiver/réactiver le Bluetooth sur la radio juste avant la recherche, afin de relancer son annonce BLE.
-4. Ouvrir l'interface dans Chrome/Edge depuis l'appareil équipé du Bluetooth.
-5. Lancer la connexion BLE locale.
-6. Sélectionner un appareil de type `AT2_...`, par exemple `AT2_01A`.
+1. Close Bluetooth LE Explorer or any app currently connected to the radio.
+2. Close Ola Radio or turn off Bluetooth on your phone if it can automatically reconnect to the AT2.
+3. Turn Bluetooth off and then back on on the radio just before starting the search, to restart its BLE broadcast.
+4. Open the interface in Chrome/Edge on the Bluetooth-enabled device.
+5. Initiate the local BLE connection.
+6. Select a device of the type `AT2_...`, for example `AT2_01A`.
 
 
 
 
-## Déploiement
+## Deployment
 
 ```bash
 git clone https://github.com/dx9674hnxw-spec/at2-bridge.git
@@ -147,15 +147,15 @@ cd at2-bridge
 docker compose up -d --build
 ```
 
-Interface servie sur `http://<ip-du-serveur>:8000` (conteneur en `network_mode: host`).
+The interface is served at `http://<server-ip>:8000` (container in `network_mode: host`).
 
-Pour activer l'authentification, définis `AT2_BRIDGE_PASSWORD` dans l'environnement du conteneur — le frontend affiche alors un écran de connexion au premier accès. Sans cette variable, l'interface reste ouverte à quiconque atteint le serveur (à réserver à un réseau de confiance type Tailscale dans ce cas).
+To enable authentication, set `AT2_BRIDGE_PASSWORD` in the container's environment—the frontend will then display a login screen upon first access. Without this variable, the interface remains open to anyone who reaches the server (in this case, it should be reserved for a trusted network such as Tailscale).
 
-### Accès matériel requis
+### Hardware Requirements
 
-- **USB série** : port typiquement `/dev/ttyACM0` ou `/dev/ttyUSB0`, sélectionnable dans l'interface.
-- **BLE (mode serveur)** : adaptateur Bluetooth sur le serveur, accès à BlueZ via D-Bus (déjà configuré dans `docker-compose.yml`).
-- **BLE (mode local)** : aucun matériel serveur requis — utilise le Bluetooth de l'appareil affichant la page web.
+- **USB serial**: typically the `/dev/ttyACM0` or `/dev/ttyUSB0` port, selectable in the interface.
+- **BLE (server mode)**: Bluetooth adapter on the server, access to BlueZ via D-Bus (already configured in `docker-compose.yml`).
+- **BLE (local mode)**: no server hardware required—uses the Bluetooth of the device displaying the web page.
 
 ### Développement local (sans Docker)
 
@@ -171,24 +171,24 @@ uvicorn app.main:app --reload
 python -m pytest app/tests -v
 ```
 
-## Limitations connues
+## Known Limitations
 
-- Le PTT temps réel et la messagerie voix/image n'ont jamais été exercés de bout en bout avec du matériel.
-- Le mode BLE local n'implémente qu'un sous-ensemble du protocole (canal, texte) ; codeplug complet et PTT restent serveur uniquement.
-- Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit).
-- Une seule connexion radio active à la fois côté serveur.
-- L'authentification protège l'API et les WebSocket par token, mais reste un mot de passe partagé unique (pas de comptes multiples) ; le flux n'a été validé qu'en tests automatisés, pas en usage réel via l'interface.
-- Les 7 réglages avancés du protocole (VOX sensibilité, TOT, inhibition TX, réduction de bruit, tonalité, nom d'appareil, Smart Link) existent dans le code protocole mais ne sont pas exposés à l'UI.
+- Real-time PTT and voice/video messaging have never been tested end-to-end using hardware.
+- Local BLE mode implements only a subset of the protocol (channel, text); full codeplug and PTT remain server-only.
+- Web Bluetooth is unavailable on all iOS browsers (Apple/WebKit restriction).
+- Only one active radio connection at a time on the server side.
+- Authentication protects the API and WebSockets via a token, but remains a single shared password (no multiple accounts); the flow has only been validated in automated tests, not in actual use via the interface.
+- The 7 advanced protocol settings (VOX sensitivity, TOT, TX inhibit, noise reduction, tone, device name, Smart Link) exist in the protocol code but are not exposed to the UI.
 
-## Origine du protocole
+## Origin of the Protocol
 
-Deux sources croisées, confirmant un protocole **identique** entre USB série et BLE :
+Two independent sources confirm an **identical** protocol between USB Serial and BLE:
 
-1. Décompilation du CPS officiel Windows (Electron) — structure de trame et layout des canaux.
-2. Code source [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — CRC16 exact, UUID BLE réels, formats de messagerie hors-réseau (texte/voix/image) et protocole PTT temps réel.
+1. Decompilation of the official Windows CPS (Electron) — frame structure and channel layout.
+2. Source code [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — Exact CRC16, real BLE UUIDs, off-network messaging formats (text/voice/image), and real-time PTT protocol.
 
-## Licences tierces
+## Third-Party Licenses
 
-Code porté (Kotlin → Python/JS) depuis [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0 — voir [`NOTICE`](./NOTICE) et [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md), y compris pour `libopencore-amrnb` (Apache 2.0).
+Code ported (Kotlin → Python/JS) from [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0 — see [`NOTICE`](./NOTICE) and [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md), including for `libopencore-amrnb` (Apache 2.0).
 
-Code propre à ce projet sous licence MIT — voir [`LICENSE`](./LICENSE).
+Code specific to this project is licensed under the MIT License — see [`LICENSE`](./LICENSE).
