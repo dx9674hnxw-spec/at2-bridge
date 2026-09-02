@@ -80,7 +80,8 @@ const I18N_DICT = {
 
     // PTT panel
     "ptt.hintServer": "Maintiens pour émettre — encode et transmet la voix en temps réel",
-    "ptt.hintLocal": "PTT vocal indisponible en mode BLE local (nécessite le décodeur du serveur)",
+    "ptt.hintLocalBle": "Maintiens pour émettre — encodage AMR dans le navigateur, transmis directement en BLE",
+    "ptt.micError": "Micro indisponible : {error}",
     "ptt.button": "PTT",
 
     // GPS panel
@@ -239,7 +240,8 @@ const I18N_DICT = {
     "chan.selectError": "Channel select error: {error}",
 
     "ptt.hintServer": "Hold to transmit — encodes and streams voice in real time",
-    "ptt.hintLocal": "Live PTT unavailable in local BLE mode (needs the server's decoder)",
+    "ptt.hintLocalBle": "Hold to transmit — AMR-encoded in the browser, sent directly over BLE",
+    "ptt.micError": "Microphone unavailable: {error}",
     "ptt.button": "PTT",
 
     "gps.title": "Position & emergency",

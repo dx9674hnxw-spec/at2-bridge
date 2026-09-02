@@ -199,8 +199,8 @@ function applyModeUi() {
   $("#mode-local").classList.toggle("active", mode === "local");
   $("#server-controls").hidden = mode !== "server";
   $("#local-controls").hidden = mode !== "local";
-  $("#ptt-hint").textContent = mode === "server" ? t("ptt.hintServer") : t("ptt.hintLocal");
-  $("#ptt-btn").disabled = mode === "local";
+  $("#ptt-hint").textContent = mode === "server" ? t("ptt.hintServer") : t("ptt.hintLocalBle");
+  $("#ptt-btn").disabled = false;
 }
 
 const localSupported = AT2BleClient.isSupported();
@@ -413,6 +413,7 @@ function setWaveHeights(active) {
 let waveTimer = setInterval(() => setWaveHeights(false), 90);
 
 let pttSocket = null;
+let pttSession = null; // BLE local mode
 let pttActive = false;
 let pttStart = null;
 let pttTimerInterval = null;
@@ -423,7 +424,10 @@ function formatTimer(ms) {
 }
 
 async function startPtt() {
-  if (mode !== "server" || !connected || pttActive) return;
+  if (pttActive) return;
+  if (mode === "server" && !connected) return;
+  if (mode === "local" && !AT2BleClient.connected()) return showToast(t("gps.noActiveConnection"), "info");
+
   pttActive = true;
   pttStart = Date.now();
   $("#ptt-btn").classList.add("pressed");
@@ -434,23 +438,46 @@ async function startPtt() {
     $("#ptt-timer").textContent = formatTimer(Date.now() - pttStart);
   }, 200);
 
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  pttSocket = new WebSocket(wsUrl("/ws/ptt"));
-  pttSocket.binaryType = "arraybuffer";
-  pttSocket.onmessage = (evt) => {
-    const pcm = new Int16Array(evt.data);
-    PttAudio.playPcmFrame(pcm);
-    $("#rf-indicator").classList.add("rx");
-  };
-  pttSocket.onopen = async () => {
-    await PttAudio.startCapture((int16Frame) => {
-      if (pttSocket && pttSocket.readyState === WebSocket.OPEN) {
-        pttSocket.send(int16Frame.buffer);
+  if (mode === "server") {
+    pttSocket = new WebSocket(wsUrl("/ws/ptt"));
+    pttSocket.binaryType = "arraybuffer";
+    pttSocket.onmessage = (evt) => {
+      const pcm = new Int16Array(evt.data);
+      PttAudio.playPcmFrame(pcm);
+      $("#rf-indicator").classList.add("rx");
+    };
+    pttSocket.onopen = async () => {
+      try {
+        await PttAudio.startCapture((int16Frame) => {
+          if (pttSocket && pttSocket.readyState === WebSocket.OPEN) {
+            pttSocket.send(int16Frame.buffer);
+          }
+          setWaveHeights(true);
+        });
+      } catch (e) {
+        showToast(t("ptt.micError", { error: e.message }), "error");
+        stopPtt();
       }
-      setWaveHeights(true);
+    };
+    pttSocket.onerror = () => appendLog("PTT WS erreur");
+  } else {
+    // BLE local mode: AMR encode/decode happens entirely in the browser
+    // (see static/ptt-amr-codec.js + static/amrnb.js) since PTT has been
+    // confirmed BLE-only -- see CONSIGNES_PROJET.md.
+    pttSession = AT2BleClient.startPtt((pcm) => {
+      PttAudio.playPcmFrame(pcm);
+      $("#rf-indicator").classList.add("rx");
     });
-  };
-  pttSocket.onerror = () => appendLog("PTT WS erreur");
+    try {
+      await PttAudio.startCapture((int16Frame) => {
+        pttSession.feedPcmFrame(int16Frame).catch((e) => appendLog(`PTT BLE erreur d'envoi: ${e.message}`));
+        setWaveHeights(true);
+      });
+    } catch (e) {
+      showToast(t("ptt.micError", { error: e.message }), "error");
+      stopPtt();
+    }
+  }
 }
 
 function stopPtt() {
@@ -458,6 +485,7 @@ function stopPtt() {
   pttActive = false;
   PttAudio.stopCapture();
   if (pttSocket) { pttSocket.close(); pttSocket = null; }
+  if (pttSession) { pttSession.close().catch(() => {}); pttSession = null; }
   $("#ptt-btn").classList.remove("pressed");
   waveEl.classList.remove("active");
   $("#rf-indicator").classList.remove("tx", "rx");

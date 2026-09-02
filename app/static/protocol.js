@@ -254,6 +254,41 @@ const AT2Protocol = (() => {
     };
   }
 
+  // -- live PTT voice packets (mirrors app/protocol/ptt.py) -----------------
+
+  const PTT_FAMILY = 0x02;
+  const PTT_CMD = 0x04;
+  const PTT_VOICE_SUBTYPE = [0x03, 0x00, 0x00];
+  const PTT_FRAMES_PER_PACKET = 5;
+  const PTT_TAIL_MIN_FRAMES = 4;
+  const PTT_PACKET_PACING_MS = 100;
+
+  function buildPttVoicePayload(amrFrames) {
+    if (amrFrames.length < PTT_TAIL_MIN_FRAMES || amrFrames.length > PTT_FRAMES_PER_PACKET) {
+      throw new Error(`expected ${PTT_TAIL_MIN_FRAMES}-${PTT_FRAMES_PER_PACKET} AMR frames, got ${amrFrames.length}`);
+    }
+    const data = [];
+    for (const f of amrFrames) {
+      if (f.length !== 12) throw new Error("each AMR frame must be 12 bytes");
+      data.push(...f);
+    }
+    return buildPayload(PTT_FAMILY, PTT_CMD, [...PTT_VOICE_SUBTYPE, ...data]);
+  }
+
+  function isPttVoicePacket(pkt) {
+    return pkt.family === PTT_FAMILY && pkt.command === PTT_CMD
+      && pkt.body[0] === PTT_VOICE_SUBTYPE[0] && pkt.body[1] === PTT_VOICE_SUBTYPE[1] && pkt.body[2] === PTT_VOICE_SUBTYPE[2];
+  }
+
+  function extractAmrFrames(body) {
+    const data = body.slice(3);
+    const frames = [];
+    for (let i = 0; i + 12 <= data.length; i += 12) frames.push(data.slice(i, i + 12));
+    return frames;
+  }
+
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
-    encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse };
+    encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
+    buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
+    PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();

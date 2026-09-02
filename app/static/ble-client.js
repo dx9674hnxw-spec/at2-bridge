@@ -232,6 +232,63 @@ const AT2BleClient = (() => {
     await sendFrame(frame);
   }
 
+  // -- live PTT (client-side AMR encode/decode, since PTT is confirmed
+  // BLE-only -- see CONSIGNES_PROJET.md "Live PTT limité au Bluetooth").
+  // Mirrors app/device.py's PttSession exactly (same pacing/chunking
+  // constants, from AT2Protocol.PTT_*), except encode/decode both
+  // happen in the browser via ptt-amr-codec.js instead of server-side.
+
+  function startPtt(onRxPcm) {
+    if (typeof PttAmr === "undefined") {
+      throw new Error("ptt-amr-codec.js (and amrnb.js) must be loaded for live PTT");
+    }
+    const codec = new PttAmr.Codec();
+    let pending = [];
+    let lastSend = 0;
+
+    const rxUnsubscribe = onPacket((pkt) => {
+      if (!AT2Protocol.isPttVoicePacket(pkt)) return;
+      for (const amrFrame of AT2Protocol.extractAmrFrames(pkt.body)) {
+        const pcm = codec.decode(amrFrame);
+        if (onRxPcm) onRxPcm(pcm);
+      }
+    });
+
+    async function flush(count) {
+      if (pending.length < count) return;
+      const chunk = pending.slice(0, count);
+      pending = pending.slice(count);
+      const now = performance.now();
+      const gap = now - lastSend;
+      if (lastSend && gap < AT2Protocol.PTT_PACKET_PACING_MS) {
+        await new Promise((resolve) => setTimeout(resolve, AT2Protocol.PTT_PACKET_PACING_MS - gap));
+      }
+      lastSend = performance.now();
+      const payload = AT2Protocol.buildPttVoicePayload(chunk);
+      const frame = AT2Protocol.encodeFrame(payload);
+      await sendFrame(frame);
+    }
+
+    return {
+      /** pcm: Int16Array of exactly 160 samples (20ms @ 8kHz mono). */
+      async feedPcmFrame(pcm) {
+        const encoded = codec.encode(pcm);
+        if (!encoded) return;
+        pending.push(encoded);
+        if (pending.length >= AT2Protocol.PTT_FRAMES_PER_PACKET) {
+          await flush(AT2Protocol.PTT_FRAMES_PER_PACKET);
+        }
+      },
+      async close() {
+        if (pending.length >= AT2Protocol.PTT_TAIL_MIN_FRAMES) {
+          await flush(pending.length);
+        }
+        rxUnsubscribe();
+        codec.close();
+      },
+    };
+  }
+
   return {
     isSupported,
     connect,
@@ -243,6 +300,7 @@ const AT2BleClient = (() => {
     readChannel,
     readAllChannels,
     writeChannel,
+    startPtt,
     onPacket
   };
 })();
