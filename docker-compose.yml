@@ -22,7 +22,7 @@ services:
 
     environment:
       - PYTHONUNBUFFERED=1
-      - AT2_BRIDGE_PASSWORD=0000 # default password
+      - AT2_BRIDGE_PASSWORD=0000 # Default password can be disabled with #
 
 volumes:
   at2-bridge-data:
