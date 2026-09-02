@@ -1,7 +1,7 @@
 services:
   at2-bridge:
     build: .
-    container_name: at2-bridge
+    container_name: at2-bridge_test
     restart: unless-stopped
 
     # BLE via BlueZ/D-Bus needs the host's Bluetooth stack: network_mode
