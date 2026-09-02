@@ -23,7 +23,25 @@
   <a href="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" />
   </a>
+
+<p align="center">
+  <a href="./README.md">
+    <img
+      src="https://img.shields.io/badge/🇫🇷%20FRANÇAIS-555555?style=for-the-badge"
+      alt="Version française"
+    />
+  </a>
+  <a href="./README.us.md">
+    <img
+      src="https://img.shields.io/badge/🇺🇸%20ENGLISH-555555?style=for-the-badge"
+      alt="English version"
+    />
+  </a>
 </p>
+ 
+</p>
+
+
 
 Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
 
