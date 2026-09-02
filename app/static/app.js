@@ -74,6 +74,7 @@ document.addEventListener("click", (e) => {
 // auth is disabled, i.e. AT2_BRIDGE_PASSWORD unset)
 // ---------------------------------------------------------------------------
 let authToken = sessionStorage.getItem("at2_token") || null;
+let authRequired = false;
 
 function wsUrl(path) {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -90,9 +91,22 @@ function hideLoginOverlay() {
   $("#login-overlay").style.display = "none";
 }
 
+function clearAuthSession() {
+  authToken = null;
+  sessionStorage.removeItem("at2_token");
+}
+
+function handleAuthExpired() {
+  clearAuthSession();
+  authRequired = true;
+  stopServerSockets();
+  showLoginOverlay(false);
+}
+
 async function checkAuthStatus() {
   const res = await fetch("/api/auth/status");
   const { enabled } = await res.json();
+  authRequired = enabled;
   if (enabled && !authToken) {
     showLoginOverlay(false);
     return false;
@@ -128,9 +142,7 @@ async function api(method, path, body) {
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) {
-    authToken = null;
-    sessionStorage.removeItem("at2_token");
-    showLoginOverlay(false);
+    handleAuthExpired();
     throw new Error(t("login.sessionExpired"));
   }
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
@@ -142,9 +154,7 @@ async function apiUpload(path, formData) {
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(path, { method: "POST", headers, body: formData });
   if (res.status === 401) {
-    authToken = null;
-    sessionStorage.removeItem("at2_token");
-    showLoginOverlay(false);
+    handleAuthExpired();
     throw new Error(t("login.sessionExpired"));
   }
   if (!res.ok) throw new Error(`POST ${path} -> ${res.status}: ${await res.text()}`);
@@ -209,11 +219,17 @@ if (!localSupported) {
   $("#mode-local").title = t("mode.localUnsupported");
 }
 
-$("#mode-server").addEventListener("click", () => { mode = "server"; applyModeUi(); refreshStatus(); });
+$("#mode-server").addEventListener("click", () => {
+  mode = "server";
+  applyModeUi();
+  startServerSockets();
+  refreshStatus();
+});
 $("#mode-local").addEventListener("click", () => {
   if (!localSupported) return;
   mode = "local";
   applyModeUi();
+  stopServerSockets();
   updateLocalStatusUi();
 });
 applyModeUi();
@@ -818,10 +834,86 @@ $("#btn-record-voice").addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 // Live log (server mode only)
 // ---------------------------------------------------------------------------
-function connectLogSocket() {
-  const ws = new WebSocket(wsUrl("/ws/log"));
-  ws.onmessage = (evt) => appendLog(evt.data);
-  ws.onclose = () => setTimeout(connectLogSocket, 2000);
+const WS_RETRY_BASE_MS = 2000;
+const WS_RETRY_MAX_MS = 30000;
+const wsState = {
+  log: { path: "/ws/log", socket: null, retryTimer: null, retryDelayMs: WS_RETRY_BASE_MS, manualClose: false },
+  messages: { path: "/ws/messages", socket: null, retryTimer: null, retryDelayMs: WS_RETRY_BASE_MS, manualClose: false },
+};
+
+function canReconnectServerSockets() {
+  return mode === "server" && (!authRequired || !!authToken);
+}
+
+function clearSocketRetry(state) {
+  if (state.retryTimer) {
+    clearTimeout(state.retryTimer);
+    state.retryTimer = null;
+  }
+}
+
+function closeManagedSocket(state) {
+  state.manualClose = true;
+  clearSocketRetry(state);
+  if (state.socket) {
+    state.socket.close();
+    state.socket = null;
+  }
+}
+
+function scheduleSocketReconnect(state, connectFn) {
+  if (!canReconnectServerSockets() || state.retryTimer) return;
+  const delay = state.retryDelayMs;
+  state.retryTimer = setTimeout(() => {
+    state.retryTimer = null;
+    connectFn();
+  }, delay);
+  state.retryDelayMs = Math.min(Math.floor(state.retryDelayMs * 2), WS_RETRY_MAX_MS);
+}
+
+function connectManagedSocket(kind, onMessage) {
+  const state = wsState[kind];
+  if (!state || !canReconnectServerSockets()) return;
+  if (state.socket && (state.socket.readyState === WebSocket.OPEN || state.socket.readyState === WebSocket.CONNECTING)) return;
+
+  clearSocketRetry(state);
+  state.manualClose = false;
+
+  const ws = new WebSocket(wsUrl(state.path));
+  state.socket = ws;
+
+  ws.onopen = () => {
+    if (state.socket !== ws) return;
+    state.retryDelayMs = WS_RETRY_BASE_MS;
+  };
+
+  ws.onmessage = (evt) => {
+    if (state.socket !== ws) return;
+    onMessage(evt);
+  };
+
+  ws.onclose = (evt) => {
+    if (state.socket !== ws) return;
+    state.socket = null;
+    if (state.manualClose) return;
+    if (evt.code === 4401) {
+      handleAuthExpired();
+      return;
+    }
+    scheduleSocketReconnect(state, () => connectManagedSocket(kind, onMessage));
+  };
+}
+
+function stopServerSockets() {
+  closeManagedSocket(wsState.log);
+  closeManagedSocket(wsState.messages);
+}
+
+function startServerSockets() {
+  connectManagedSocket("log", (evt) => appendLog(evt.data));
+  connectManagedSocket("messages", (evt) => {
+    try { pushReceivedBubble(JSON.parse(evt.data)); } catch (e) { appendLog(t("msg.unreadable", { error: e.message })); }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -873,27 +965,26 @@ function pushReceivedBubble(msg) {
   thread.scrollTop = thread.scrollHeight;
 }
 
-function connectMessagesSocket() {
-  const ws = new WebSocket(wsUrl("/ws/messages"));
-  ws.onmessage = (evt) => {
-    try { pushReceivedBubble(JSON.parse(evt.data)); } catch (e) { appendLog(t("msg.unreadable", { error: e.message })); }
-  };
-  ws.onclose = () => setTimeout(connectMessagesSocket, 2000);
-}
-
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+let appStarted = false;
+
 function startApp() {
-  connectLogSocket();
-  connectMessagesSocket();
+  startServerSockets();
+  if (appStarted) return;
+  appStarted = true;
   loadDeviceList();
   loadChannelNames().then(() => applyActiveChannel(false));
   api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; }).catch(() => {});
   refreshStatus();
   refreshSerialPorts();
-  setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
+  setInterval(() => {
+    if (mode === "server") {
+      refreshStatus();
+      startServerSockets();
+    }
+  }, 5000);
 }
 
 checkAuthStatus().then((ok) => { if (ok) startApp(); });
-
