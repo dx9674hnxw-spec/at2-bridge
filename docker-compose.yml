@@ -22,6 +22,7 @@ services:
 
     environment:
       - PYTHONUNBUFFERED=1
+      - AT2_BRIDGE_PASSWORD=0000 # default password
 
 volumes:
   at2-bridge-data:
