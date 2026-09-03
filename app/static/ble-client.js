@@ -135,18 +135,38 @@ const AT2BleClient = (() => {
     );
   }
 
+  // Web Bluetooth allows only ONE GATT operation in flight at a time on
+  // a given connection -- calling writeValue again before the previous
+  // write's promise resolves throws "GATT operation already in
+  // progress". PTT can produce several 20ms frames per audio callback
+  // (see ptt-audio.js), so without serializing here, concurrent sends
+  // were a real, reproducible failure (confirmed on real hardware
+  // 28/08/2026). This queue makes ALL sendFrame() calls -- from any
+  // feature, not just PTT -- safely sequential.
+  let sendQueue = Promise.resolve();
+
+  function queuedWrite(data) {
+    const next = sendQueue.then(async () => {
+      if (typeof txChar.writeValueWithResponse === "function") {
+        await txChar.writeValueWithResponse(data);
+      } else {
+        await txChar.writeValue(data);
+      }
+    });
+    // Swallow the error here so one failed write doesn't permanently
+    // wedge the queue for subsequent, unrelated sends -- the caller
+    // still sees the rejection via the returned promise below.
+    sendQueue = next.catch(() => {});
+    return next;
+  }
+
   async function sendFrame(frame) {
     if (!txChar || !connected()) {
       throw new Error("Radio AT2 non connectée.");
     }
 
     const data = frame instanceof Uint8Array ? frame : new Uint8Array(frame);
-
-    if (typeof txChar.writeValueWithResponse === "function") {
-      await txChar.writeValueWithResponse(data);
-    } else {
-      await txChar.writeValue(data);
-    }
+    await queuedWrite(data);
   }
 
   async function selectChannel(channel) {

@@ -5,6 +5,23 @@ let mode = "server"; // "server" | "local"
 let connected = false;
 let localDeviceInfo = null;
 
+/** Returns "server" | "local" | null based on which transport is
+ * ACTUALLY connected, not just which tab is currently selected.
+ * Prefers the selected `mode` when it matches a real connection, but
+ * falls back to whatever IS connected if they've drifted apart (e.g.
+ * an accidental click back to the "Serveur" tab while a BLE session
+ * is still live) -- confirmed as a real, reproducible source of
+ * confusing "no active connection" errors on 28/08/2026, see
+ * CONSIGNES_PROJET.md. */
+function activeTransport() {
+  const bleReady = AT2BleClient.connected();
+  if (mode === "local" && bleReady) return "local";
+  if (mode === "server" && connected) return "server";
+  if (bleReady) return "local";
+  if (connected) return "server";
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Language (i18n.js defines t()/setLang()/getLang()/applyTranslations()).
 // Apply translations immediately so the login overlay (if shown before
@@ -379,8 +396,9 @@ async function applyActiveChannel(select = true) {
   $("#ptt-device-sub").textContent = `${t("channelLabel", { n: String(activeChannel).padStart(2, "0") })}${channelNames[activeChannel] ? " · " + channelNames[activeChannel] : ""}`;
   if (select) {
     try {
-      if (mode === "server") await api("POST", `/api/channels/${activeChannel}/select`);
-      else if (AT2BleClient.connected()) await AT2BleClient.selectChannel(activeChannel);
+      const transport = activeTransport();
+      if (transport === "server") await api("POST", `/api/channels/${activeChannel}/select`);
+      else if (transport === "local") await AT2BleClient.selectChannel(activeChannel);
     } catch (e) { appendLog(t("chan.selectError", { error: e.message })); }
   }
 }
@@ -425,8 +443,8 @@ function formatTimer(ms) {
 
 async function startPtt() {
   if (pttActive) return;
-  if (mode === "server" && !connected) return;
-  if (mode === "local" && !AT2BleClient.connected()) return showToast(t("gps.noActiveConnection"), "info");
+  const transport = activeTransport();
+  if (!transport) return showToast(t("gps.noActiveConnection"), "info");
 
   pttActive = true;
   pttStart = Date.now();
@@ -438,7 +456,7 @@ async function startPtt() {
     $("#ptt-timer").textContent = formatTimer(Date.now() - pttStart);
   }, 200);
 
-  if (mode === "server") {
+  if (transport === "server") {
     pttSocket = new WebSocket(wsUrl("/ws/ptt"));
     pttSocket.binaryType = "arraybuffer";
     pttSocket.onmessage = (evt) => {
@@ -529,9 +547,10 @@ requestLocation();
 async function sendPositionPayload(url, note) {
   if (!lastCoords) return showToast(t("gps.noCoords"), "info");
   const username = $("#msg-username")?.value || "AT2Bridge";
-  if (mode === "server") {
+  const transport = activeTransport();
+  if (transport === "server") {
     await api("POST", url, { username, lat: lastCoords.lat, lon: lastCoords.lon, note });
-  } else if (AT2BleClient.connected()) {
+  } else if (transport === "local") {
     await AT2BleClient.sendText(username, `${note} 📍 ${formatCoords(lastCoords.lat, lastCoords.lon)}`);
   } else {
     showToast(t("gps.noActiveConnection"), "info");
@@ -628,10 +647,11 @@ function readChannelRow(row) {
 async function writeChannelRow(row) {
   const cfg = readChannelRow(row);
   try {
-    if (mode === "server") {
+    const transport = activeTransport();
+    if (transport === "server") {
       await api("PUT", `/api/channels/${cfg.channel}`, cfg);
       if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
-    } else if (AT2BleClient.connected()) {
+    } else if (transport === "local") {
       await AT2BleClient.writeChannel(cfg);
       if (cfg.name) await api("PUT", `/api/channel-names/${cfg.channel}`, { name: cfg.name });
     } else {
@@ -643,9 +663,10 @@ async function writeChannelRow(row) {
 $("#btn-read-channels").addEventListener("click", async () => {
   try {
     let channels;
-    if (mode === "server") {
+    const transport = activeTransport();
+    if (transport === "server") {
       channels = await api("GET", "/api/channels");
-    } else if (AT2BleClient.connected()) {
+    } else if (transport === "local") {
       channels = await AT2BleClient.readAllChannels();
     } else {
       return showToast(t("gps.noActiveConnection"), "info");
@@ -691,9 +712,10 @@ $("#btn-write-channels").addEventListener("click", async () => {
   const configs = $$("#channel-table-body tr").map(readChannelRow);
   if (configs.length !== 30) return showToast(t("channels.need30rows"), "info");
   try {
-    if (mode === "server") {
+    const transport = activeTransport();
+    if (transport === "server") {
       await api("PUT", "/api/channels", configs);
-    } else if (AT2BleClient.connected()) {
+    } else if (transport === "local") {
       for (const cfg of configs) await AT2BleClient.writeChannel(cfg);
     } else {
       return showToast(t("gps.noActiveConnection"), "info");
@@ -713,16 +735,17 @@ $$("[data-action]").forEach((btn) => {
     try {
       if (action === "set-volume") {
         const level = parseInt($("#volume-slider").value, 10);
-        if (mode === "server") await api("PUT", "/api/device/volume", { level });
-        else if (AT2BleClient.connected()) await AT2BleClient.setVolume(level);
+        const transport = activeTransport();
+        if (transport === "server") await api("PUT", "/api/device/volume", { level });
+        else if (transport === "local") await AT2BleClient.setVolume(level);
         else return showToast(t("gps.noActiveConnection"), "info");
         return;
       }
       // Les autres réglages ne sont pas encore câblés côté client BLE
       // (ble-client.js ne supporte pour l'instant que connect/selectChannel/
-      // setVolume/sendText) -- éviter un appel serveur voué à échouer avec
-      // un 409 confus quand aucune connexion serveur n'est active.
-      if (mode !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+      // setVolume/sendText/PTT) -- éviter un appel serveur voué à échouer
+      // avec un 409 confus quand aucune connexion serveur n'est active.
+      if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
       if (action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
       if (action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
       if (action === "set-vox-sensitivity") await api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) });
@@ -758,8 +781,9 @@ $("#btn-send-message").addEventListener("click", async () => {
   const text = $("#msg-text").value.trim();
   if (!text) return;
   try {
-    if (mode === "server") await api("POST", "/api/messages/text", { username, text });
-    else if (AT2BleClient.connected()) await AT2BleClient.sendText(username, text);
+    const transport = activeTransport();
+    if (transport === "server") await api("POST", "/api/messages/text", { username, text });
+    else if (transport === "local") await AT2BleClient.sendText(username, text);
     else return showToast(t("gps.noActiveConnection"), "info");
     pushSentBubble(text);
     $("#msg-text").value = "";
@@ -769,7 +793,7 @@ $("#btn-send-message").addEventListener("click", async () => {
 // -- Image messages (server mode only -- image encoding happens server-side
 // with Pillow, see app/main.py; no BLE-local equivalent yet) ---------------
 $("#btn-attach-image").addEventListener("click", () => {
-  if (mode !== "server") return showToast(t("msg.serverModeRequiredImage"), "info");
+  if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredImage"), "info");
   $("#image-file-input").click();
 });
 
@@ -797,7 +821,7 @@ let voiceRecording = false;
 let voiceChunks = [];
 
 $("#btn-record-voice").addEventListener("click", async () => {
-  if (mode !== "server") return showToast(t("msg.serverModeRequiredVoice"), "info");
+  if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredVoice"), "info");
   const btn = $("#btn-record-voice");
   const status = $("#voice-record-status");
 
@@ -860,7 +884,7 @@ $("#btn-send-raw-frame").addEventListener("click", async () => {
   const frameHex = input.value.trim().replace(/\s+/g, "");
   if (!frameHex) return;
   if (!/^[0-9a-fA-F]+$/.test(frameHex)) return showToast(t("debug.rawFrameInvalidHex"), "error");
-  if (mode === "server" && !connected) return showToast(t("debug.rawFrameNoConnection"), "info");
+  if (!connected) return showToast(t("debug.rawFrameNoConnection"), "info");
 
   const btn = $("#btn-send-raw-frame");
   const originalLabel = btn.textContent;
