@@ -6,18 +6,19 @@ let connected = false;
 let localDeviceInfo = null;
 
 /** Returns "server" | "local" | null based on which transport is
- * ACTUALLY connected, not just which tab is currently selected.
- * Prefers the selected `mode` when it matches a real connection, but
- * falls back to whatever IS connected if they've drifted apart (e.g.
- * an accidental click back to the "Serveur" tab while a BLE session
- * is still live) -- confirmed as a real, reproducible source of
- * confusing "no active connection" errors on 28/08/2026, see
- * CONSIGNES_PROJET.md. */
+ * ACTUALLY connected -- ignores the `mode` tab entirely for routing
+ * purposes (mode only controls which panel/controls are visible).
+ * A stray click back to the "Serveur" tab while a BLE session was
+ * still live previously caused PTT/channel actions to silently go to
+ * a stale server connection instead -- confirmed via browser console
+ * on 29/08/2026 (stack trace showed the server WebSocket path firing
+ * for a PTT press made while BLE was connected). Preferring whichever
+ * transport is actually connected removes this whole class of bugs;
+ * there's no real use case in this app for wanting to route a command
+ * to a DIFFERENT transport than the one currently connected. BLE wins
+ * if, unusually, both happen to be connected at once. */
 function activeTransport() {
-  const bleReady = AT2BleClient.connected();
-  if (mode === "local" && bleReady) return "local";
-  if (mode === "server" && connected) return "server";
-  if (bleReady) return "local";
+  if (AT2BleClient.connected()) return "local";
   if (connected) return "server";
   return null;
 }
@@ -482,16 +483,20 @@ async function startPtt() {
     // BLE local mode: AMR encode/decode happens entirely in the browser
     // (see static/ptt-amr-codec.js + static/amrnb.js) since PTT has been
     // confirmed BLE-only -- see CONSIGNES_PROJET.md.
-    pttSession = AT2BleClient.startPtt((pcm) => {
-      PttAudio.playPcmFrame(pcm);
-      $("#rf-indicator").classList.add("rx");
-    });
     try {
+      pttSession = AT2BleClient.startPtt(
+        (pcm) => {
+          PttAudio.playPcmFrame(pcm);
+          $("#rf-indicator").classList.add("rx");
+        },
+        appendLog
+      );
       await PttAudio.startCapture((int16Frame) => {
         pttSession.feedPcmFrame(int16Frame).catch((e) => appendLog(`PTT BLE erreur d'envoi: ${e.message}`));
         setWaveHeights(true);
       });
     } catch (e) {
+      appendLog(`PTT BLE erreur d'initialisation: ${e.message}`);
       showToast(t("ptt.micError", { error: e.message }), "error");
       stopPtt();
     }

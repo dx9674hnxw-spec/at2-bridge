@@ -258,13 +258,29 @@ const AT2BleClient = (() => {
   // constants, from AT2Protocol.PTT_*), except encode/decode both
   // happen in the browser via ptt-amr-codec.js instead of server-side.
 
-  function startPtt(onRxPcm) {
+  function startPtt(onRxPcm, onLog) {
+    const log = onLog || (() => {});
     if (typeof PttAmr === "undefined") {
       throw new Error("ptt-amr-codec.js (and amrnb.js) must be loaded for live PTT");
     }
     const codec = new PttAmr.Codec();
     let pending = [];
     let lastSend = 0;
+
+    // Per-stage counters -- mirrors app/device.py's PttSession instrumentation
+    // (28/08/2026), added here too since a silent encode() failure (codec
+    // always returning null) would otherwise produce zero TX frames with
+    // NO error, NO log line, and NO visible symptom anywhere -- exactly
+    // matching a real "PTT does nothing" report. This makes that failure
+    // mode impossible to miss on the next test.
+    let pcmFramesReceived = 0;
+    let encodeFailures = 0;
+    let amrFramesEncoded = 0;
+    let packetsSent = 0;
+    let amrFramesSent = 0;
+    let loggedFirstFailure = false;
+
+    log("PTT BLE: session démarrée (attente de frames audio du navigateur)");
 
     const rxUnsubscribe = onPacket((pkt) => {
       if (!AT2Protocol.isPttVoicePacket(pkt)) return;
@@ -287,13 +303,34 @@ const AT2BleClient = (() => {
       const payload = AT2Protocol.buildPttVoicePayload(chunk);
       const frame = AT2Protocol.encodeFrame(payload);
       await sendFrame(frame);
+      packetsSent += 1;
+      amrFramesSent += chunk.length;
     }
 
     return {
       /** pcm: Int16Array of exactly 160 samples (20ms @ 8kHz mono). */
       async feedPcmFrame(pcm) {
-        const encoded = codec.encode(pcm);
-        if (!encoded) return;
+        pcmFramesReceived += 1;
+        let encoded;
+        try {
+          encoded = codec.encode(pcm);
+        } catch (e) {
+          encodeFailures += 1;
+          if (!loggedFirstFailure) {
+            loggedFirstFailure = true;
+            log(`PTT BLE: ⚠️ exception d'encodage AMR sur la frame #${pcmFramesReceived}: ${e.message}`);
+          }
+          return;
+        }
+        if (!encoded) {
+          encodeFailures += 1;
+          if (!loggedFirstFailure) {
+            loggedFirstFailure = true;
+            log(`PTT BLE: ⚠️ échec d'encodage AMR sur la frame #${pcmFramesReceived} (encoder a renvoyé null, ${pcm.length} échantillons reçus, 160 attendus)`);
+          }
+          return;
+        }
+        amrFramesEncoded += 1;
         pending.push(encoded);
         if (pending.length >= AT2Protocol.PTT_FRAMES_PER_PACKET) {
           await flush(AT2Protocol.PTT_FRAMES_PER_PACKET);
@@ -305,6 +342,12 @@ const AT2BleClient = (() => {
         }
         rxUnsubscribe();
         codec.close();
+        log(
+          "PTT BLE: transmission terminée — " +
+          `${pcmFramesReceived} frame(s) PCM reçue(s) du navigateur, ` +
+          `${amrFramesEncoded} encodée(s) en AMR (${encodeFailures} échec(s) d'encodage), ` +
+          `${packetsSent} paquet(s) envoyé(s) à la radio (${amrFramesSent} frame(s) AMR au total)`
+        );
       },
     };
   }
