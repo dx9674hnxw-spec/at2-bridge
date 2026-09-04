@@ -48,9 +48,9 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 > [!WARNING]
 >###  Implemented, pending hardware confirmation
 >
->- **Real-time PTT in local BLE mode** — AMR-NB encoding and decoding entirely in the browser (see dedicated section below). The full pipeline was verified through an integration test simulating the Web Bluetooth API, using the project's real code: PTT frames correctly built, paced, and transmitted. **Not yet confirmed on physical hardware, however.**
+>- **Real-time PTT in local BLE mode** — AMR-NB encoding and decoding entirely in the browser (see dedicated section below). PTT frames were correctly built, paced, and transmitted, but the radio never actually keyed up: comparing against the reference Android app revealed that a distinct "key transmitter on/off" command (`family 0x02 / command 0x04`, subtype `0x02`, plus a one-time "offline session on" subtype `0x07`) was missing entirely — voice packets alone are apparently not enough to make the radio transmit. Both commands are now sent (key-on before the first voice packet, key-off after the last) in `app/protocol/ptt.py`, `app/device.py::PttSession`, `app/static/protocol.js` and `app/static/ble-client.js`. **Still not confirmed on physical hardware** — please test and report back.
 >- **Device settings other than volume** (squelch, VOX, TX timeout, TX inhibit, noise reduction, prompt tone, device name, Smart Link) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back.
->- **Real-time PTT in server mode** — never verified end-to-end on hardware.
+>- **Real-time PTT in server mode** — same missing key-on/key-off commands as above, now added to `app/device.py::PttSession`; never verified end-to-end on hardware.
 >- **Receiving offline messages** — the reception pipeline (decoding + WebSocket + display) is wired up client-side, but no real incoming frame has been received in testing yet.
 >- **Position/SOS** — relies on the text messaging channel (no structured "Position" type exists in the real protocol).
 >- **Reconnecting to known devices.**
