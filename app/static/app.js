@@ -1009,12 +1009,25 @@ $$("[data-action]").forEach((btn) => {
       if (action === "set-tx-inhibit") await api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked });
       if (action === "set-noise-reduction") await api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked });
       if (action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
+      if (action === "set-prompt-language") await api("PUT", "/api/device/prompt-language", { english: $("#prompt-language-toggle").checked });
+      if (action === "set-tx-interval") await api("PUT", "/api/device/tx-interval", { seconds: parseInt($("#tx-interval-slider").value, 10) });
       if (action === "set-device-name") {
         const name = $("#device-name-input").value.trim();
         if (!name) return showToast(t("settings.deviceNameRequired"), "info");
         await api("PUT", "/api/device/name", { name });
       }
       if (action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
+      if (action === "set-dual-watch") await api("PUT", "/api/device/dual-watch", { enabled: $("#dual-watch-toggle").checked });
+      if (action === "set-dual-watch-channel-a") {
+        const channel = parseInt($("#dual-watch-channel-a").value, 10);
+        await api("PUT", "/api/device/dual-watch/channel", { side: "A", channel });
+      }
+      if (action === "set-dual-watch-channel-b") {
+        const channel = parseInt($("#dual-watch-channel-b").value, 10);
+        await api("PUT", "/api/device/dual-watch/channel", { side: "B", channel });
+      }
+      if (action === "set-dual-watch-focus-a") await api("PUT", "/api/device/dual-watch/focus", { side: "A" });
+      if (action === "set-dual-watch-focus-b") await api("PUT", "/api/device/dual-watch/focus", { side: "B" });
     } catch (e) { showToast(e.message, "error"); }
   });
 });
