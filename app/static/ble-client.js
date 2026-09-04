@@ -307,9 +307,21 @@ const AT2BleClient = (() => {
       amrFramesSent += chunk.length;
     }
 
-    return {
-      /** pcm: Int16Array of exactly 160 samples (20ms @ 8kHz mono). */
-      async feedPcmFrame(pcm) {
+    // feedPcmFrame() is called fire-and-forget from app.js (the audio
+    // callback isn't async), so several calls can be "in flight" at once.
+    // Chaining them through `opChain` guarantees true sequential
+    // processing and, critically, lets close() await the ENTIRE chain
+    // before flushing the tail/logging the summary -- without this, a
+    // short PTT press could release the button right as a threshold-
+    // triggered flush() (with its pacing delay + BLE write) was still in
+    // progress, and close() would log "0 packets sent" despite one being
+    // about to complete a moment later. Confirmed as a real bug on real
+    // hardware 29/08/2026 (short presses undercounted; longer ones didn't,
+    // simply because they left more slack time before release).
+    let opChain = Promise.resolve();
+
+    function feedPcmFrame(pcm) {
+      opChain = opChain.then(async () => {
         pcmFramesReceived += 1;
         let encoded;
         try {
@@ -335,8 +347,15 @@ const AT2BleClient = (() => {
         if (pending.length >= AT2Protocol.PTT_FRAMES_PER_PACKET) {
           await flush(AT2Protocol.PTT_FRAMES_PER_PACKET);
         }
-      },
+      });
+      return opChain;
+    }
+
+    return {
+      /** pcm: Int16Array of exactly 160 samples (20ms @ 8kHz mono). */
+      feedPcmFrame,
       async close() {
+        await opChain.catch(() => {}); // wait for every already-queued frame first
         if (pending.length >= AT2Protocol.PTT_TAIL_MIN_FRAMES) {
           await flush(pending.length);
         }

@@ -1,4 +1,19 @@
 const $ = (sel) => document.querySelector(sel);
+
+/** Escapes HTML-significant characters before interpolating untrusted
+ * content into innerHTML templates. "Untrusted" here includes anything
+ * that ultimately comes from the radio link (message sender/text --
+ * ANY transmitter in range can craft these), from shared server storage
+ * that any authenticated user of the instance's single shared password
+ * can write (channel names), or server-side error text echoed back
+ * verbatim into the UI. Without this, any of those is a stored/reflected
+ * XSS vector. See CONSIGNES_PROJET.md. */
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
+}
+
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 let mode = "server"; // "server" | "local"
@@ -303,7 +318,7 @@ function renderAlertHistory() {
   list.innerHTML = alertHistory.map((e) => `
     <div class="alert-history-item alert-history-${e.type}">
       <span class="alert-history-time">${e.timestamp}</span>
-      <span class="alert-history-msg">${e.message}</span>
+      <span class="alert-history-msg">${escapeHtml(e.message)}</span>
     </div>`).join("");
 }
 
@@ -488,6 +503,15 @@ $("#btn-local-connect").addEventListener("click", async () => {
     localDeviceInfo = await AT2BleClient.connect();
     updateLocalStatusUi();
     appendLog(`BLE local connecté: ${localDeviceInfo.name}`);
+    // Mémorisation explicite (comme pour série/BLE serveur) -- transport
+    // distinct "ble-local" car Web Bluetooth ne permet jamais de se
+    // reconnecter silencieusement à une adresse précise (le sélecteur
+    // natif du navigateur se rouvre toujours) ; reconnectKnownDevice()
+    // le gère différemment de la BLE serveur pour cette raison.
+    await api("POST", "/api/known-devices", {
+      id: `ble-local-${localDeviceInfo.id}`, name: localDeviceInfo.name, transport: "ble-local", target: localDeviceInfo.id,
+    });
+    await loadDeviceList();
   } catch (e) { showToast(e.message, "error"); }
 });
 $("#btn-local-disconnect").addEventListener("click", async () => {
@@ -508,19 +532,20 @@ async function loadDeviceList() {
       return;
     }
     list.innerHTML = known.map((d) => {
-      // Reliable "is this the active connection" check only exists for
-      // server mode (target+kind come from a real API call). Local BLE
-      // connections can't be matched this way: the browser's Web Bluetooth
-      // device.id is an opaque per-browser identifier, not the same as the
-      // MAC address stored here, so no attempt is made to highlight a
-      // local-BLE row as "active" -- a known, documented limitation rather
-      // than a guessed/fragile match.
-      const isActive = mode === "server" && connected && d.transport === activeServerKind && d.target === activeServerTarget;
+      // Server-mode match: target+kind come from a real API call, fully
+      // reliable. Local-BLE match: now ALSO reliable, since we store the
+      // exact same localDeviceInfo.id ourselves at connect time (see
+      // btn-local-connect) rather than trying to guess/derive a MAC
+      // address independently.
+      const isActive = (mode === "server" && connected && d.transport === activeServerKind && d.target === activeServerTarget)
+        || (mode === "local" && d.transport === "ble-local" && AT2BleClient.connected() && d.target === localDeviceInfo?.id);
+      const transportLabel = d.transport === "serial" ? t("transport.serial")
+        : d.transport === "ble-local" ? t("transport.bleLocal") : t("transport.ble");
       return `
       <div class="card device-card${isActive ? " is-connected" : ""}">
         <img class="device-thumb" src="/static/at2-icon.png" alt="AT2" />
         <div class="device-card-info">
-          <div class="device-card-name">${d.name} <span class="transport-badge transport-badge-${d.transport}">${d.transport === "ble" ? t("transport.ble") : t("transport.serial")}</span></div>
+          <div class="device-card-name">${escapeHtml(d.name)} <span class="transport-badge transport-badge-${d.transport === "serial" ? "serial" : "ble"}">${transportLabel}</span></div>
           <div class="device-card-model">${d.target}</div>
         </div>
         <div class="device-card-actions">
@@ -536,9 +561,20 @@ async function loadDeviceList() {
 
 async function reconnectKnownDevice(id, transport, target) {
   try {
-    if (transport === "ble") await api("POST", "/api/connection/ble/connect", { address: target });
-    else await api("POST", "/api/connection/serial/connect", { port: target, baud_rate: 115200 });
+    if (transport === "ble-local") {
+      // Web Bluetooth ne permet jamais de cibler silencieusement une
+      // adresse précise -- le sélecteur natif du navigateur se rouvre
+      // systématiquement, quel que soit l'appareil "connu" cliqué.
+      localDeviceInfo = await AT2BleClient.connect();
+      updateLocalStatusUi();
+      appendLog(`BLE local connecté: ${localDeviceInfo.name}`);
+    } else if (transport === "ble") {
+      await api("POST", "/api/connection/ble/connect", { address: target });
+    } else {
+      await api("POST", "/api/connection/serial/connect", { port: target, baud_rate: 115200 });
+    }
     await refreshStatus();
+    await loadDeviceList();
   } catch (e) { showToast(e.message, "error"); }
 }
 
@@ -807,7 +843,7 @@ function channelRowHtml(ch) {
   return `
     <tr data-channel="${ch.channel}">
       <td>${ch.channel}</td>
-      <td><input type="text" class="ch-name" value="${channelNames[ch.channel] || ch.name || ""}" placeholder="—" /></td>
+      <td><input type="text" class="ch-name" value="${escapeHtml(channelNames[ch.channel] || ch.name || "")}" placeholder="—" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-rx" value="${ch.rx_mhz ?? ""}" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-tx" value="${ch.tx_mhz ?? ""}" /></td>
       <td>${toneSelect(ch.rx_tone ?? "OFF")}</td>
@@ -981,7 +1017,7 @@ function pushSentBubble(text) {
   const thread = $("#msg-thread");
   const el = document.createElement("div");
   el.className = "msg-bubble mine";
-  el.innerHTML = `<div class="meta">${t("msg.me")} · ${new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${text}</div>`;
+  el.innerHTML = `<div class="meta">${t("msg.me")} · ${new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${escapeHtml(text)}</div>`;
   thread.appendChild(el);
   thread.scrollTop = thread.scrollHeight;
 }
@@ -1122,7 +1158,7 @@ function pushReceivedBubble(msg) {
   const time = new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" });
   let body;
   if (msg.kind === "text") {
-    body = `<div class="msg-body">${msg.text ?? ""}</div>`;
+    body = `<div class="msg-body">${escapeHtml(msg.text ?? "")}</div>`;
   } else if (msg.kind === "image" && msg.data_base64) {
     body = `<div class="msg-body"><img src="data:image/jpeg;base64,${msg.data_base64}" style="max-width:220px; border-radius:6px; display:block;" /></div>`;
   } else if (msg.kind === "voice") {
@@ -1130,7 +1166,7 @@ function pushReceivedBubble(msg) {
   } else {
     body = `<div class="msg-body">${t("msg.unknownKind", { kind: msg.kind })}</div>`;
   }
-  el.innerHTML = `<div class="meta">${msg.sender || "?"} · ${time}</div>${body}`;
+  el.innerHTML = `<div class="meta">${escapeHtml(msg.sender || "?")} · ${time}</div>${body}`;
   thread.appendChild(el);
   thread.scrollTop = thread.scrollHeight;
 }
