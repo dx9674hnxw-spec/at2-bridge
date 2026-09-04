@@ -14,7 +14,7 @@
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
   
   <!-- Tests -->
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-39_passed-success.svg?logo=pytest" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-53_passed-success.svg?logo=pytest" />
   
   <!-- Hardware -->
   <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
@@ -43,13 +43,17 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >- **Offline text/voice/image messaging** (server mode) — construction, decoding, and reassembly of all three formats.
 >- **Local BLE mode (Web Bluetooth)** — direct browser↔radio connection with no intermediate server: channel selection, volume, text messaging, channel read/write.
 >- **Frame codec** (both protocol dialects, see below), AMR-NB codec (native binding server-side, JS/WebAssembly port client-side), HMAC token authentication, local storage (channel names, known devices), clean error handling (no traceback exposed to the client).
->- **39 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference.
+>- **53 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference, and byte-exact tests transcribed directly from the reference Android app's `At2Commands.kt` for every device-setting command below.
 
 > [!WARNING]
 >###  Implemented, pending hardware confirmation
 >
 >- **Real-time PTT in local BLE mode** — AMR-NB encoding and decoding entirely in the browser (see dedicated section below). PTT frames were correctly built, paced, and transmitted, but the radio never actually keyed up: comparing against the reference Android app revealed that a distinct "key transmitter on/off" command (`family 0x02 / command 0x04`, subtype `0x02`, plus a one-time "offline session on" subtype `0x07`) was missing entirely — voice packets alone are apparently not enough to make the radio transmit. Both commands are now sent (key-on before the first voice packet, key-off after the last) in `app/protocol/ptt.py`, `app/device.py::PttSession`, `app/static/protocol.js` and `app/static/ble-client.js`. **Still not confirmed on physical hardware** — please test and report back.
->- **Device settings other than volume** (squelch, VOX, TX timeout, TX inhibit, noise reduction, prompt tone, device name, Smart Link) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back.
+>- **Channel selection (quick select, both server and local BLE mode)** — **fixed a byte-format bug**: this command was one byte short of the reference app's real frame (missing the fixed `command=0x02` byte, so the radio saw `command=0x0E` directly instead of `command=0x02, subtype=0x0E`). This is almost certainly what the former "old channel-selection command" note below was describing. Byte-exact against `At2Commands.kt::selectChannel` now (see `test_select_channel_matches_reference_app`) — **still needs a real hardware re-test** to confirm the fix actually restores correct behavior.
+>- **Volume** — **fixed a byte-format bug**: was missing a `0x01` subtype byte the reference app always sends (`app/protocol/commands.py::set_volume`/`protocol.js::setVolume`). The shorter frame may well have been silently tolerated by the radio (this is why it was previously listed as "confirmed working" below) — re-test to be sure the fix doesn't change that.
+>- **Prompt tone (confirmation beep) setting** — **fixed a more serious byte-format bug**: the old command used `family=0x02, command=0x04` — the *same* family/command pair as text messaging and PTT — with a body that could be mistaken for the start of a text message. Now uses the reference app's real `family=0x02, command=0x01, subtype=0x04`, with no such collision.
+>- **Dual Watch, prompt language (Chinese/English), TX interval ("hop")** — newly added (`app/protocol/commands.py`, exposed as `PUT /api/device/dual-watch(/channel|/focus)`, `/prompt-language`, `/tx-interval`, server mode only), ported byte-for-byte from the reference app. Like every other advanced setting below, never verified by independent read-back.
+>- **Device settings other than volume** (squelch, VOX, VOX sensitivity, TX timeout, TX interval, TX inhibit, noise reduction, prompt tone, prompt language, device name, Smart Link, Dual Watch) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back. There is currently no "read settings back from the radio" feature at all (the `query_*` builders in `commands.py` exist but aren't wired to any endpoint yet).
 >- **Real-time PTT in server mode** — same missing key-on/key-off commands as above, now added to `app/device.py::PttSession`; never verified end-to-end on hardware.
 >- **Receiving offline messages** — the reception pipeline (decoding + WebSocket + display) is wired up client-side, but no real incoming frame has been received in testing yet.
 >- **Position/SOS** — relies on the text messaging channel (no structured "Position" type exists in the real protocol).
@@ -58,8 +62,7 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 > [!CAUTION]
 >###  Confirmed not working / abandoned
 >
->- **Bulk codeplug read or write in a single command** — the radio simply does not respond to this kind of request at all. The real protocol works one channel at a time (confirmed by decompiling the official Windows CPS), which is what this application now uses.
->- **Old channel-selection command** — very likely non-functional for its original purpose; it probably writes the radio's dual-watch channel, not the currently active channel.
+>- **Bulk codeplug read or write in a single command** — the radio simply does not respond to this kind of request at all. The real protocol works one channel at a time (confirmed by decompiling the official Windows CPS), which is what this application now uses. (Side note: this legacy bulk-write path also has the same kind of missing-opcode-byte bug as the ones fixed above — `write_channel_chunk`/`clear_channel`/`query_channel_config` are each missing a leading subtype byte the reference app sends. Left unfixed since the whole path is already abandoned in favor of the CPS dialect below, but noted here for anyone revisiting it.)
 
 > [!CAUTION]
 >###  Not implemented / Roadmap
