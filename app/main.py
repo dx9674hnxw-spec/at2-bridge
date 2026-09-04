@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app import auth, store
 from app.device import device_manager
-from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
+from app.protocol.channel import ChannelConfig, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
 from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
@@ -140,14 +140,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RawFrameDebugRequest(BaseModel):
-    """EXPERIMENTAL / DEBUG ONLY -- see device.py::send_raw_frame_debug.
-    frame_hex must be an already fully-encoded frame (AA55...77EE) as a
-    hex string, e.g. produced by a protocol hypothesis under test."""
-    frame_hex: str
-    listen_seconds: float = 2.0
-
-
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -216,26 +208,6 @@ async def read_channels(_: None = Depends(auth.require_auth)):
     return [c.__dict__ for c in channels]
 
 
-@app.post("/api/channels/import-xml")
-async def import_channels_xml(
-    file: UploadFile = File(...),
-    _: None = Depends(auth.require_auth),
-):
-    """Parses a CPS-format XML export (the official Windows CPS's own
-    config save/export, NOT a live protocol capture) into channel
-    configs for the UI to review. This never writes to the radio by
-    itself -- same as after a live "Read", the person still clicks
-    "Write" to actually commit anything. See channel.py::parse_cps_xml."""
-    raw = await file.read()
-    try:
-        channels = parse_cps_xml(raw)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    if not channels:
-        raise HTTPException(status_code=400, detail="aucun canal configuré trouvé dans ce fichier")
-    return [c.__dict__ for c in channels]
-
-
 @app.put("/api/channels")
 async def write_channels(payload: list[ChannelPayload], _: None = Depends(auth.require_auth)):
     if len(payload) != 30:
@@ -261,16 +233,6 @@ async def clear_channel(channel_number: int, _: None = Depends(auth.require_auth
 async def select_channel(channel_number: int, _: None = Depends(auth.require_auth)):
     await device_manager.select_channel(channel_number)
     return {"ok": True}
-
-
-# ---------------------------------------------------------------------------
-# Debug: raw frame injection (EXPERIMENTAL -- protocol hypothesis testing,
-# see CONSIGNES_PROJET.md "Prochain test matériel prioritaire" 27/08/2026)
-# ---------------------------------------------------------------------------
-
-@app.post("/api/debug/send-raw-frame")
-async def send_raw_frame_debug(req: RawFrameDebugRequest, _: None = Depends(auth.require_auth)):
-    return await device_manager.send_raw_frame_debug(req.frame_hex, req.listen_seconds)
 
 
 # ---------------------------------------------------------------------------
@@ -430,8 +392,14 @@ async def remember_device(req: RememberDeviceRequest, _: None = Depends(auth.req
     return {"ok": True}
 
 
-@app.delete("/api/known-devices/{device_id}")
+@app.delete("/api/known-devices")
 async def forget_device(device_id: str, _: None = Depends(auth.require_auth)):
+    # device_id as a QUERY parameter, not a path segment (29/08/2026 fix):
+    # serial device IDs look like "serial-/dev/ttyACM0" (contain a literal
+    # "/"), which broke path-segment routing even after URL-encoding --
+    # Starlette/uvicorn reject or early-decode %2F in path segments as a
+    # path-traversal precaution, so the route never matched and "Forget"
+    # silently 404'd. Query parameters don't have this restriction.
     store.forget_device(device_id)
     return {"ok": True}
 
