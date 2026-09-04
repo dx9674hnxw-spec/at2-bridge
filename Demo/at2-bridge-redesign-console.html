@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>AT2 Field Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --font-display:'Barlow Semi Condensed','Oswald',sans-serif;
+  --font-body:'IBM Plex Sans','Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+
+  /* -- Day console (light) -- */
+  --bg:#efe6d3;
+  --bg-panel:#fbf6ea;
+  --bg-inset:#e3d6b7;
+  --bg-rail:#e6dabd;
+  --line:rgba(43,35,20,0.14);
+  --line-strong:rgba(43,35,20,0.28);
+  --ink:#241f16;
+  --ink-dim:#5d5340;
+  --ink-faint:#8c8168;
+
+  --amber:#a8641a;
+  --amber-ink:#5c3a0d;
+  --amber-soft:rgba(168,100,26,0.16);
+  --amber-glow:rgba(168,100,26,0.35);
+
+  --signal:#2f7a52;
+  --signal-soft:rgba(47,122,82,0.16);
+
+  --danger:#a83a2a;
+  --danger-soft:rgba(168,58,42,0.16);
+  --danger-glow:rgba(168,58,42,0.4);
+
+  --shadow-panel:0 1px 2px rgba(43,35,20,0.08), 0 10px 24px -18px rgba(43,35,20,0.4);
+  --shadow-inset:inset 0 2px 6px rgba(43,35,20,0.25);
+
+  --radius-panel:14px;
+  --radius-ctrl:8px;
+  --radius-pill:999px;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161209;
+    --bg-panel:#1f1a10;
+    --bg-inset:#0f0c07;
+    --bg-rail:#1a160d;
+    --line:rgba(232,197,140,0.14);
+    --line-strong:rgba(232,197,140,0.26);
+    --ink:#f4ecd9;
+    --ink-dim:#bdb094;
+    --ink-faint:#7e735a;
+
+    --amber:#e8a33d;
+    --amber-ink:#2a1c07;
+    --amber-soft:rgba(232,163,61,0.16);
+    --amber-glow:rgba(232,163,61,0.55);
+
+    --signal:#5fbf85;
+    --signal-soft:rgba(95,191,133,0.16);
+
+    --danger:#e2665a;
+    --danger-soft:rgba(224,102,90,0.18);
+    --danger-glow:rgba(224,102,90,0.55);
+
+    --shadow-panel:0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 32px -20px rgba(0,0,0,0.8);
+    --shadow-inset:inset 0 2px 8px rgba(0,0,0,0.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161209;
+  --bg-panel:#1f1a10;
+  --bg-inset:#0f0c07;
+  --bg-rail:#1a160d;
+  --line:rgba(232,197,140,0.14);
+  --line-strong:rgba(232,197,140,0.26);
+  --ink:#f4ecd9;
+  --ink-dim:#bdb094;
+  --ink-faint:#7e735a;
+
+  --amber:#e8a33d;
+  --amber-ink:#2a1c07;
+  --amber-soft:rgba(232,163,61,0.16);
+  --amber-glow:rgba(232,163,61,0.55);
+
+  --signal:#5fbf85;
+  --signal-soft:rgba(95,191,133,0.16);
+
+  --danger:#e2665a;
+  --danger-soft:rgba(224,102,90,0.18);
+  --danger-glow:rgba(224,102,90,0.55);
+
+  --shadow-panel:0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 32px -20px rgba(0,0,0,0.8);
+  --shadow-inset:inset 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* ============================================================
+   RESET / BASE
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:15px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;font-family:var(--font-display);font-weight:600;text-wrap:balance;}
+p{margin:0;}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit;color:inherit;}
+::selection{background:var(--amber-glow);color:var(--amber-ink);}
+a{color:var(--amber);}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+.eyebrow{
+  font-family:var(--font-display);
+  font-size:11.5px;
+  font-weight:600;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--ink-faint);
+}
+
+.tabular{font-variant-numeric:tabular-nums;}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;}
+}
+
+/* ============================================================
+   SHELL LAYOUT
+   ============================================================ */
+.shell{
+  display:grid;
+  grid-template-columns:76px 1fr;
+  min-height:100vh;
+}
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr;}
+}
+
+/* -- Rail (desktop left nav / mobile bottom nav) -- */
+.rail{
+  background:var(--bg-rail);
+  border-right:1px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:16px 0 14px;
+  gap:6px;
+  position:sticky;
+  top:0;
+  height:100vh;
+}
+.rail-mark{
+  width:42px;height:42px;
+  border-radius:10px;
+  background:linear-gradient(160deg, var(--amber), color-mix(in srgb, var(--amber) 60%, black));
+  color:var(--amber-ink);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:0.02em;
+  box-shadow:0 4px 10px -4px var(--amber-glow);
+  margin-bottom:14px;
+  flex-shrink:0;
+}
+.rail-nav{display:flex;flex-direction:column;gap:4px;width:100%;align-items:center;flex:1;}
+.rail-btn{
+  width:52px;height:52px;
+  border:none;background:transparent;color:var(--ink-faint);
+  border-radius:var(--radius-ctrl);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  cursor:pointer;
+  position:relative;
+  transition:color .15s ease, background .15s ease;
+}
+.rail-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;}
+.rail-btn span{font-family:var(--font-display);font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;}
+.rail-btn:hover{color:var(--ink-dim);background:var(--amber-soft);}
+.rail-btn.active{color:var(--amber-ink, var(--amber));background:var(--amber-soft);}
+.rail-btn.active::before{
+  content:"";position:absolute;left:-16px;top:50%;transform:translateY(-50%);
+  width:3px;height:22px;border-radius:3px;background:var(--amber);
+}
+@media (max-width:860px){
+  .rail-btn.active::before{display:none;}
+}
+.rail-foot{display:flex;flex-direction:column;gap:8px;align-items:center;}
+.rail-alert-dot{
+  width:9px;height:9px;border-radius:50%;background:var(--signal);
+  box-shadow:0 0 0 3px var(--signal-soft);
+}
+
+@media (max-width:860px){
+  .rail{
+    position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;width:100%;
+    flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+    border-right:none;border-top:1px solid var(--line);
+    z-index:40;
+  }
+  .rail-mark{display:none;}
+  .rail-nav{flex-direction:row;justify-content:space-around;}
+  .rail-foot{display:none;}
+  .rail-btn{width:auto;flex:1;height:48px;}
+}
+
+/* -- Main column -- */
+.main{display:flex;flex-direction:column;min-width:0;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 28px;border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.topbar-title{display:flex;flex-direction:column;gap:2px;}
+.topbar-title h1{font-size:22px;letter-spacing:0.01em;}
+.topbar-title .sub{font-size:12.5px;color:var(--ink-faint);}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+.status-chip{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px 6px 8px;border-radius:var(--radius-pill);
+  background:var(--bg-panel);border:1px solid var(--line);
+  font-size:12.5px;color:var(--ink-dim);
+}
+.status-led{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);flex-shrink:0;}
+.status-chip.on .status-led{background:var(--signal);box-shadow:0 0 0 3px var(--signal-soft);animation:ledpulse 2.2s ease-in-out infinite;}
+.status-chip .mode-tag{
+  font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);
+  border-left:1px solid var(--line);padding-left:8px;
+}
+@keyframes ledpulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+
+.icon-btn{
+  width:34px;height:34px;border-radius:var(--radius-ctrl);
+  border:1px solid var(--line);background:var(--bg-panel);color:var(--ink-dim);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:border-color .15s, color .15s;
+}
+.icon-btn:hover{color:var(--amber);border-color:var(--line-strong);}
+.icon-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;}
+
+.pill-toggle{
+  display:flex;border:1px solid var(--line);border-radius:var(--radius-pill);overflow:hidden;background:var(--bg-panel);
+}
+.pill-toggle button{
+  border:none;background:transparent;color:var(--ink-faint);font-size:11px;font-family:var(--font-display);
+  letter-spacing:0.06em;padding:6px 11px;cursor:pointer;
+}
+.pill-toggle button.active{background:var(--amber-soft);color:var(--amber-ink,var(--amber));}
+
+.view{padding:22px 28px 100px;display:none;flex-direction:column;gap:18px;}
+.view.active{display:flex;}
+@media (max-width:860px){
+  .view{padding:16px 16px 90px;}
+  .topbar{padding:14px 16px;}
+}
+
+/* ============================================================
+   PANEL PRIMITIVES
+   ============================================================ */
+.panel{
+  background:var(--bg-panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius-panel);
+  box-shadow:var(--shadow-panel);
+  padding:20px;
+  position:relative;
+}
+.panel-riveted::before,.panel-riveted::after{
+  content:"";position:absolute;top:10px;width:4px;height:4px;border-radius:50%;
+  background:var(--line-strong);
+}
+.panel-riveted::before{left:10px;}
+.panel-riveted::after{right:10px;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.panel-head h2{font-size:16.5px;}
+.panel-head .eyebrow{margin-bottom:2px;display:block;}
+.hint{font-size:12.5px;color:var(--ink-faint);line-height:1.5;}
+
+.btn{
+  font-family:var(--font-display);font-weight:600;font-size:12.5px;letter-spacing:0.03em;
+  border-radius:var(--radius-ctrl);padding:9px 16px;cursor:pointer;border:1px solid transparent;
+  display:inline-flex;align-items:center;gap:7px;transition:filter .15s, background .15s, border-color .15s;
+  text-transform:uppercase;
+}
+.btn:active{filter:brightness(0.92);}
+.btn-amber{background:var(--amber);color:var(--amber-ink);}
+.btn-amber:hover{filter:brightness(1.06);}
+.btn-ghost{background:transparent;color:var(--ink-dim);border-color:var(--line);}
+.btn-ghost:hover{border-color:var(--line-strong);color:var(--ink);}
+.btn-danger{background:var(--danger);color:#fff5f2;}
+.btn-danger:hover{filter:brightness(1.06);}
+.btn[disabled]{opacity:0.45;cursor:not-allowed;}
+
+.switch{position:relative;display:inline-flex;width:38px;height:22px;flex-shrink:0;}
+.switch input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;}
+.switch-track{
+  position:absolute;inset:0;border-radius:99px;background:var(--bg-inset);border:1px solid var(--line-strong);
+  box-shadow:var(--shadow-inset);transition:background .15s;
+}
+.switch-track::after{
+  content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--ink-faint);transition:transform .18s ease, background .15s;
+}
+.switch input:checked + .switch-track{background:var(--amber-soft);border-color:var(--amber);}
+.switch input:checked + .switch-track::after{transform:translateX(16px);background:var(--amber);}
+
+/* ============================================================
+   RAIL ICON HELPERS
+   ============================================================ */
+svg .i-line{stroke-linecap:round;stroke-linejoin:round;}
+
+/* ============================================================
+   RADIO VIEW
+   ============================================================ */
+.connect-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+}
+.connect-bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.device-chip{
+  display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim);
+}
+.device-chip strong{color:var(--ink);font-weight:600;}
+details.connect-details{width:100%;}
+details.connect-details summary{
+  list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;
+  font-family:var(--font-display);font-size:12px;letter-spacing:0.04em;text-transform:uppercase;
+  color:var(--ink-faint);margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
+}
+details.connect-details summary::-webkit-details-marker{display:none;}
+details.connect-details summary .chev{transition:transform .15s;}
+details.connect-details[open] summary .chev{transform:rotate(90deg);}
+.connect-details-body{padding-top:14px;display:flex;flex-direction:column;gap:12px;}
+.field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+select,.text-input{
+  background:var(--bg-inset);border:1px solid var(--line-strong);color:var(--ink);
+  border-radius:var(--radius-ctrl);padding:9px 11px;font-size:13px;box-shadow:var(--shadow-inset);
+}
+select{min-width:170px;}
+.text-input{flex:1;min-width:160px;}
+
+.radio-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start;}
+@media (max-width:960px){.radio-grid{grid-template-columns:1fr;}}
+
+.faceplate{padding:24px;}
+.dial-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:16px;}
+.dial-arrow{
+  width:36px;height:36px;border-radius:50%;border:1px solid var(--line-strong);background:var(--bg-inset);
+  color:var(--ink-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  box-shadow:var(--shadow-inset);
+}
+.dial-arrow:hover{color:var(--amber);border-color:var(--amber);}
+.dial-arrow svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;}
+
+.vfd{
+  flex:1;max-width:420px;background:var(--bg-inset);border:1px solid var(--line-strong);
+  border-radius:10px;box-shadow:var(--shadow-inset);padding:12px 18px;text-align:center;
+}
+.vfd-chan{font-family:var(--font-mono);font-size:11px;letter-spacing:0.18em;color:var(--ink-faint);text-transform:uppercase;}
+.vfd-name{
+  font-family:var(--font-mono);font-weight:600;font-size:20px;color:var(--amber);
+  text-shadow:0 0 14px var(--amber-glow);letter-spacing:0.03em;margin:2px 0 6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.vfd-freqs{display:flex;justify-content:center;gap:22px;font-family:var(--font-mono);}
+.vfd-freqs .f{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.vfd-freqs .f b{font-size:16px;color:var(--ink);}
+.vfd-freqs .f small{font-size:9.5px;color:var(--ink-faint);letter-spacing:0.1em;}
+
+.rf-row{display:flex;align-items:center;justify-content:center;gap:8px;margin:16px 0 4px;}
+.rf-led{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);}
+.rf-row.tx .rf-led{background:var(--danger);box-shadow:0 0 0 4px var(--danger-soft);animation:ledpulse 1s ease-in-out infinite;}
+.rf-row span{font-family:var(--font-display);font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-faint);}
+.rf-row.tx span{color:var(--danger);}
+
+.wave{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:44px;margin:10px auto 0;max-width:260px;}
+.wave i{
+  width:5px;border-radius:3px;background:var(--line-strong);height:6px;flex-shrink:0;
+  transition:background .2s;
+}
+.wave.live i{background:var(--danger);animation:wavebar 0.9s ease-in-out infinite;}
+.wave i:nth-child(1){animation-delay:-0.6s;} .wave i:nth-child(2){animation-delay:-0.3s;}
+.wave i:nth-child(3){animation-delay:-0.8s;} .wave i:nth-child(4){animation-delay:-0.1s;}
+.wave i:nth-child(5){animation-delay:-0.5s;} .wave i:nth-child(6){animation-delay:-0.2s;}
+.wave i:nth-child(7){animation-delay:-0.7s;} .wave i:nth-child(8){animation-delay:-0.4s;}
+.wave i:nth-child(9){animation-delay:-0.15s;} .wave i:nth-child(10){animation-delay:-0.65s;}
+.wave i:nth-child(11){animation-delay:-0.35s;} .wave i:nth-child(12){animation-delay:-0.05s;}
+@keyframes wavebar{0%,100%{height:6px;}50%{height:38px;}}
+
+.ptt-zone{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:22px;}
+.ptt-btn{
+  width:130px;height:130px;border-radius:50%;border:none;cursor:pointer;
+  background:radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--amber) 55%, white 15%), var(--amber) 55%, color-mix(in srgb, var(--amber) 70%, black) 100%);
+  color:var(--amber-ink);font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:0.08em;
+  box-shadow:0 10px 26px -10px var(--amber-glow), inset 0 -6px 10px rgba(0,0,0,0.18), inset 0 3px 4px rgba(255,255,255,0.25);
+  transition:transform .08s ease, box-shadow .15s;
+  -webkit-user-select:none;user-select:none;
+}
+.ptt-btn:active,.ptt-btn.live{
+  transform:scale(0.96);
+  background:radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--danger) 55%, white 15%), var(--danger) 55%, color-mix(in srgb, var(--danger) 70%, black) 100%);
+  color:#fff5f2;
+  box-shadow:0 6px 30px -6px var(--danger-glow), inset 0 -6px 10px rgba(0,0,0,0.25);
+}
+.ptt-timer{font-family:var(--font-mono);font-size:15px;color:var(--ink-dim);}
+.ptt-hint{font-size:12px;color:var(--ink-faint);text-align:center;max-width:260px;}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;}
+@media (max-width:640px){.stat-row{grid-template-columns:repeat(2,1fr);}}
+.stat-tile{
+  background:var(--bg-inset);border:1px solid var(--line);border-radius:var(--radius-ctrl);
+  padding:10px 12px;box-shadow:var(--shadow-inset);
+}
+.stat-tile .eyebrow{margin-bottom:5px;}
+.stat-tile .v{font-family:var(--font-mono);font-weight:600;font-size:15px;}
+.stat-tile .v.good{color:var(--signal);}
+.stat-tile .v.warn{color:var(--amber);}
+
+.meter{display:flex;gap:3px;align-items:flex-end;height:16px;}
+.meter i{width:6px;border-radius:1px;background:var(--line-strong);}
+.meter i.on{background:var(--signal);}
+.meter i:nth-child(1){height:5px;} .meter i:nth-child(2){height:8px;} .meter i:nth-child(3){height:11px;}
+.meter i:nth-child(4){height:14px;} .meter i:nth-child(5){height:16px;}
+
+.connection-list{display:flex;flex-direction:column;gap:8px;}
+.connection-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-ctrl);background:var(--bg-inset);
+}
+.connection-row .name{font-size:13px;font-weight:600;}
+.connection-row .meta{font-size:11.5px;color:var(--ink-faint);font-family:var(--font-mono);}
+
+/* ============================================================
+   CHANNELS VIEW
+   ============================================================ */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.toolbar .search{
+  flex:1;min-width:180px;background:var(--bg-inset);border:1px solid var(--line-strong);border-radius:var(--radius-ctrl);
+  padding:9px 12px;font-size:13px;box-shadow:var(--shadow-inset);
+}
+.chip-filter{
+  display:flex;gap:6px;flex-wrap:wrap;
+}
+.chip-filter button{
+  border:1px solid var(--line);background:var(--bg-panel);color:var(--ink-faint);border-radius:var(--radius-pill);
+  padding:6px 12px;font-size:11.5px;font-family:var(--font-display);letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;
+}
+.chip-filter button.active{background:var(--amber-soft);border-color:var(--amber);color:var(--amber-ink,var(--amber));}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-panel);}
+table{width:100%;border-collapse:collapse;min-width:760px;}
+thead th{
+  position:sticky;top:0;background:var(--bg-inset);
+  font-family:var(--font-display);font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-faint);
+  text-align:left;padding:10px 12px;border-bottom:1px solid var(--line-strong);white-space:nowrap;
+}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--amber-soft);}
+tbody tr.selected{box-shadow:inset 3px 0 0 var(--amber);background:var(--amber-soft);}
+td.mono,th.mono{font-family:var(--font-mono);}
+.tag-dot{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-faint);}
+.tag-dot i{width:7px;height:7px;border-radius:50%;background:var(--line-strong);}
+.tag-dot.on i{background:var(--signal);}
+.tag-dot.on{color:var(--signal);}
+.row-edit{
+  width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--ink-faint);cursor:pointer;
+}
+.row-edit:hover{color:var(--amber);border-color:var(--amber);}
+
+@media (max-width:760px){
+  table,thead,tbody,tr,td{display:block;width:100%;}
+  thead{display:none;}
+  .table-wrap{border:none;}
+  tbody tr{
+    background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius-panel);
+    margin-bottom:10px;padding:6px 4px;box-shadow:var(--shadow-panel);
+  }
+  tbody tr.selected{box-shadow:var(--shadow-panel), inset 3px 0 0 var(--amber);}
+  tbody td{
+    display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:8px 12px;white-space:normal;text-align:right;
+  }
+  tbody td:last-child{border-bottom:none;}
+  tbody td::before{content:attr(data-label);font-family:var(--font-display);font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-faint);text-align:left;}
+}
+
+/* ============================================================
+   SETTINGS VIEW
+   ============================================================ */
+.settings-essentials{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+@media (max-width:860px){.settings-essentials{grid-template-columns:1fr;}}
+.knob-card{
+  background:var(--bg-inset);border:1px solid var(--line);border-radius:var(--radius-ctrl);padding:14px;
+  box-shadow:var(--shadow-inset);display:flex;flex-direction:column;gap:10px;
+}
+.knob-card .row-label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;}
+.knob-card .row-label b{font-family:var(--font-mono);color:var(--amber);font-weight:600;}
+.fader{
+  -webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:99px;
+  background:linear-gradient(to right, var(--amber) 0%, var(--amber) var(--val,50%), var(--line-strong) var(--val,50%), var(--line-strong) 100%);
+  cursor:pointer;
+}
+.fader::-webkit-slider-thumb{
+  -webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--amber);
+  border:2px solid var(--bg-panel);box-shadow:0 0 0 1px var(--line-strong), 0 2px 4px rgba(0,0,0,0.3);cursor:pointer;
+}
+.fader::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--amber);border:2px solid var(--bg-panel);cursor:pointer;}
+.fader::-moz-range-track{height:5px;border-radius:99px;background:var(--line-strong);}
+.knob-card .row-toggle{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;}
+
+.accordion-group{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
+details.acc{border:1px solid var(--line);border-radius:var(--radius-ctrl);background:var(--bg-inset);overflow:hidden;}
+details.acc > summary{
+  list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+  padding:13px 16px;font-family:var(--font-display);font-size:13.5px;letter-spacing:0.02em;
+}
+details.acc > summary::-webkit-details-marker{display:none;}
+details.acc > summary .chev{transition:transform .15s;color:var(--ink-faint);}
+details.acc[open] > summary .chev{transform:rotate(90deg);}
+details.acc[open] > summary{border-bottom:1px solid var(--line);}
+.acc-body{padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+@media (max-width:700px){.acc-body{grid-template-columns:1fr;}}
+.setting-row{display:flex;flex-direction:column;gap:6px;}
+.setting-row label{font-size:12.5px;color:var(--ink-dim);display:flex;justify-content:space-between;}
+.setting-row label b{font-family:var(--font-mono);color:var(--amber);font-weight:600;}
+.setting-row .toggle-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;}
+
+/* ============================================================
+   MESSAGES VIEW
+   ============================================================ */
+.chat-panel{display:flex;flex-direction:column;height:min(64vh,620px);}
+.chat-thread{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px;}
+.msg-group{display:flex;flex-direction:column;gap:4px;max-width:72%;}
+.msg-group.me{align-self:flex-end;align-items:flex-end;}
+.msg-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);display:flex;gap:8px;}
+.bubble{
+  background:var(--bg-inset);border:1px solid var(--line);border-radius:12px 12px 12px 4px;
+  padding:9px 13px;font-size:13.5px;box-shadow:var(--shadow-inset);
+}
+.msg-group.me .bubble{border-radius:12px 12px 4px 12px;background:var(--amber-soft);border-color:var(--amber);}
+.bubble.media{display:flex;align-items:center;gap:10px;}
+.bubble.media svg{width:20px;height:20px;stroke:var(--amber);fill:none;stroke-width:1.6;flex-shrink:0;}
+.bubble.media .meta{font-size:11px;color:var(--ink-faint);}
+.compose{
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;
+}
+.compose textarea{
+  width:100%;resize:vertical;min-height:52px;background:var(--bg-inset);border:1px solid var(--line-strong);
+  border-radius:var(--radius-ctrl);padding:10px 12px;font-size:13.5px;box-shadow:var(--shadow-inset);
+}
+.compose-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.compose-actions .btn-ghost{padding:8px 12px;}
+.compose-actions svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;}
+
+/* ============================================================
+   EMERGENCY VIEW
+   ============================================================ */
+.em-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media (max-width:860px){.em-grid{grid-template-columns:1fr;}}
+.radar{
+  width:150px;height:150px;border-radius:50%;position:relative;margin:0 auto 14px;
+  background:repeating-radial-gradient(circle, transparent 0 24px, var(--line) 24.5px 25px);
+  border:1px solid var(--line-strong);box-shadow:var(--shadow-inset);
+  overflow:hidden;
+}
+.radar::before{
+  content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg, var(--signal-soft), transparent 32%);
+  animation:sweep 3.2s linear infinite;
+}
+.radar-dot{
+  position:absolute;top:38%;left:57%;width:9px;height:9px;border-radius:50%;background:var(--signal);
+  box-shadow:0 0 0 5px var(--signal-soft);animation:ledpulse 2s ease-in-out infinite;
+}
+@keyframes sweep{to{transform:rotate(360deg);}}
+.coords{text-align:center;font-family:var(--font-mono);font-size:19px;font-weight:600;color:var(--ink);}
+.coords-sub{text-align:center;font-size:12px;color:var(--ink-faint);margin-top:2px;}
+
+.sos-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+.sos-btn{
+  width:118px;height:118px;border-radius:50%;border:3px solid color-mix(in srgb, var(--danger) 60%, black 10%);
+  background:radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--danger) 60%, white 20%), var(--danger) 60%, color-mix(in srgb, var(--danger) 75%, black) 100%);
+  color:#fff5f2;font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:0.08em;
+  cursor:pointer;position:relative;box-shadow:0 10px 26px -10px var(--danger-glow);
+  -webkit-user-select:none;user-select:none;
+}
+.sos-btn .ring{
+  position:absolute;inset:-3px;border-radius:50%;
+  background:conic-gradient(var(--amber) calc(var(--armp,0) * 1%), transparent 0);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  pointer-events:none;
+}
+.sos-hint{font-size:12px;color:var(--ink-faint);text-align:center;max-width:230px;}
+
+/* ============================================================
+   LOG VIEW
+   ============================================================ */
+.console{
+  background:var(--bg-inset);border:1px solid var(--line-strong);border-radius:var(--radius-ctrl);
+  box-shadow:var(--shadow-inset);padding:12px 14px;font-family:var(--font-mono);font-size:12px;line-height:1.7;
+  height:340px;overflow-y:auto;
+}
+.console .l{white-space:pre-wrap;word-break:break-word;}
+.console .t{color:var(--ink-faint);}
+.console .tx{color:var(--amber);}
+.console .rx{color:var(--signal);}
+.console .err{color:var(--danger);}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+#toast{
+  position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(14px);
+  opacity:0;visibility:hidden;pointer-events:none;
+  background:var(--bg-panel);border:1px solid var(--line-strong);color:var(--ink);
+  padding:10px 18px;border-radius:var(--radius-pill);box-shadow:var(--shadow-panel);
+  font-size:13px;display:flex;align-items:center;gap:9px;z-index:80;
+  transition:opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+}
+#toast.show{
+  opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%) translateY(0);
+  transition:opacity .2s ease, transform .2s ease;
+}
+#toast .status-led{background:var(--signal);box-shadow:0 0 0 3px var(--signal-soft);}
+@media (max-width:860px){#toast{bottom:74px;}}
+
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <nav class="rail">
+    <div class="rail-mark">AT2</div>
+    <div class="rail-nav">
+      <button class="rail-btn active" data-view="radio">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M12 20v-7"/><circle class="i-line" cx="12" cy="9" r="4"/><path class="i-line" d="M7 5.5C4.5 7.3 3 9.9 3 12.8M17 5.5c2.5 1.8 4 4.4 4 7.3"/></svg>
+        <span data-i18n="nav.radio">Radio</span>
+      </button>
+      <button class="rail-btn" data-view="channels">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M4 6h16M4 12h16M4 18h9"/></svg>
+        <span data-i18n="nav.channels">Canaux</span>
+      </button>
+      <button class="rail-btn" data-view="settings">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M4 7h7M17 7h3M4 17h3M9 17h11"/><circle class="i-line" cx="13.5" cy="7" r="2.2"/><circle class="i-line" cx="7.5" cy="17" r="2.2"/></svg>
+        <span data-i18n="nav.settings">Réglages</span>
+      </button>
+      <button class="rail-btn" data-view="messages">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M4 5h16v11H8l-4 4V5Z"/></svg>
+        <span data-i18n="nav.messages">Messages</span>
+      </button>
+      <button class="rail-btn" data-view="emergency">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M12 3 2 20h20L12 3Z"/><path class="i-line" d="M12 9.5v4.2"/><circle cx="12" cy="16.6" r="0.9" fill="currentColor" stroke="none"/></svg>
+        <span data-i18n="nav.emergency">Urgence</span>
+      </button>
+      <button class="rail-btn" data-view="log">
+        <svg viewBox="0 0 24 24"><path class="i-line" d="M4 4h16v16H4z"/><path class="i-line" d="M7.5 9.5 10 12l-2.5 2.5M12.5 14.5h4"/></svg>
+        <span data-i18n="nav.log">Journal</span>
+      </button>
+    </div>
+    <div class="rail-foot">
+      <span class="rail-alert-dot" title="Aucune alerte active"></span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title">
+        <h1 data-i18n-title="radio">Poste radio</h1>
+        <span class="sub" data-i18n-sub="radio">Canal actif, PTT et liaison avec le boîtier AT2</span>
+      </div>
+      <div class="topbar-right">
+        <span class="status-chip on" id="statusChip">
+          <span class="status-led"></span>
+          <span data-i18n="status.connected">Connecté</span>
+          <span class="mono mode-tag">SERVEUR · USB</span>
+        </span>
+        <div class="pill-toggle" id="langToggle">
+          <button class="active" data-lang="fr">FR</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <button class="icon-btn" id="themeToggle" title="Basculer jour/nuit">
+          <svg id="themeIcon" viewBox="0 0 24 24"><circle class="i-line" cx="12" cy="12" r="4.2"/><path class="i-line" d="M12 2.5v2.4M12 19v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ RADIO VIEW ============ -->
+    <section class="view active" id="view-radio">
+
+      <div class="panel">
+        <div class="connect-bar">
+          <div class="connect-bar-left">
+            <span class="eyebrow" data-i18n="connect.eyebrow">Liaison active</span>
+          </div>
+          <div class="device-chip">
+            <svg width="14" height="14" viewBox="0 0 24 24" style="stroke:var(--signal);fill:none;stroke-width:1.8;"><path class="i-line" d="M6.5 6.5v11l5-3.7V6.5l5 3.7v-3.7M11.5 13.8l5 3.7"/></svg>
+            <span data-i18n="connect.chip">Connecté à <strong>AT2_01A</strong> — /dev/ttyACM0</span>
+          </div>
+        </div>
+
+        <details class="connect-details">
+          <summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;"><path d="m9 6 6 6-6 6"/></svg><span data-i18n="connect.manage">Gérer la connexion</span></summary>
+          <div class="connect-details-body">
+            <div class="field-row">
+              <div class="pill-toggle">
+                <button class="active" data-i18n="mode.server">Serveur</button>
+                <button data-i18n="mode.local">BLE local</button>
+              </div>
+              <div class="pill-toggle">
+                <button class="active" data-i18n="transport.serial">USB série</button>
+                <button data-i18n="transport.ble">Bluetooth</button>
+              </div>
+            </div>
+            <div class="field-row">
+              <select><option>/dev/ttyACM0</option><option>/dev/ttyUSB0</option></select>
+              <button class="btn btn-ghost" data-i18n="btn.refresh">↻ Rafraîchir</button>
+              <button class="btn btn-danger" data-i18n="btn.disconnect">Déconnecter</button>
+            </div>
+            <div class="hint" data-i18n="connect.hint">Appareils enregistrés : <strong style="color:var(--ink);">AT2_01A</strong>, <strong style="color:var(--ink);">AT2_07F</strong> (BLE local, dernière connexion il y a 3 j).</div>
+          </div>
+        </details>
+      </div>
+
+      <div class="radio-grid">
+        <div class="panel panel-riveted faceplate">
+          <div class="dial-row">
+            <button class="dial-arrow" id="chanPrev" aria-label="Canal précédent">
+              <svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>
+            </button>
+            <div class="vfd">
+              <div class="vfd-chan" data-i18n="vfd.channel">CANAL</div>
+              <div class="vfd-name" id="vfdName">RELAIS COL VERT</div>
+              <div class="vfd-freqs">
+                <div class="f"><b id="vfdRx">145.6875</b><small data-i18n="vfd.rx">RX MHZ</small></div>
+                <div class="f"><b id="vfdTx">145.0875</b><small data-i18n="vfd.tx">TX MHZ</small></div>
+              </div>
+            </div>
+            <button class="dial-arrow" id="chanNext" aria-label="Canal suivant">
+              <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+          </div>
+
+          <div class="rf-row" id="rfRow">
+            <span class="rf-led"></span>
+            <span id="rfLabel" data-i18n="rf.standby">Standby</span>
+          </div>
+
+          <div class="wave" id="wave">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+
+          <div class="ptt-zone">
+            <button class="ptt-btn" id="pttBtn" data-i18n="ptt.button">PTT</button>
+            <div class="ptt-timer tabular" id="pttTimer">00:00</div>
+            <div class="ptt-hint" data-i18n="ptt.hint">Maintenir pour émettre — le relâchement coupe la porteuse.</div>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat-tile">
+              <span class="eyebrow" data-i18n="stat.channel">Canal</span>
+              <div class="v tabular" id="statChan">08 / 30</div>
+            </div>
+            <div class="stat-tile">
+              <span class="eyebrow" data-i18n="stat.power">Puissance</span>
+              <div class="v good" data-i18n="stat.powerHigh">Haute</div>
+            </div>
+            <div class="stat-tile">
+              <span class="eyebrow" data-i18n="stat.link">Niveau liaison</span>
+              <div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+            </div>
+            <div class="stat-tile">
+              <span class="eyebrow" data-i18n="stat.lastFrame">Dernière trame</span>
+              <div class="v tabular" style="font-size:12px;" id="statFrame">il y a 4 s</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow" data-i18n="devices.eyebrow">Appareils</span>
+              <h2 data-i18n="devices.title">Enregistrés</h2>
+            </div>
+          </div>
+          <div class="connection-list">
+            <div class="connection-row">
+              <div>
+                <div class="name">AT2_01A</div>
+                <div class="meta">USB · /dev/ttyACM0</div>
+              </div>
+              <span class="tag-dot on"><i></i><span data-i18n="devices.active">actif</span></span>
+            </div>
+            <div class="connection-row">
+              <div>
+                <div class="name">AT2_07F</div>
+                <div class="meta">BLE local · il y a 3 j</div>
+              </div>
+              <button class="btn btn-ghost" style="padding:6px 10px;" data-i18n="btn.connect">Connecter</button>
+            </div>
+            <div class="connection-row">
+              <div>
+                <div class="name">AT2_2C1</div>
+                <div class="meta">BLE local · il y a 12 j</div>
+              </div>
+              <button class="btn btn-ghost" style="padding:6px 10px;" data-i18n="btn.connect">Connecter</button>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:14px;" data-i18n="devices.hint">Le mode BLE local relie le navigateur directement au boîtier, sans passer par le serveur.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CHANNELS VIEW ============ -->
+    <section class="view" id="view-channels">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow" data-i18n="channels.eyebrow">Codeplug</span>
+            <h2 data-i18n="channels.title">30 canaux</h2>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" data-i18n="channels.import">Importer XML</button>
+            <button class="btn btn-ghost" data-i18n="channels.read">Lire depuis la radio</button>
+            <button class="btn btn-amber" data-i18n="channels.write">Écrire vers la radio</button>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px;">
+          <input class="search" placeholder="Rechercher un nom, une fréquence…" data-i18n-ph="channels.search" />
+          <div class="chip-filter">
+            <button class="active" data-i18n="channels.filterAll">Tous</button>
+            <button data-i18n="channels.filterScan">Scan</button>
+            <button data-i18n="channels.filterDigital">Numérique</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-bottom:12px;" data-i18n="channels.hint">La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire vers la radio.</div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="col.ch">Ch</th>
+                <th data-i18n="col.name">Nom</th>
+                <th class="mono" data-i18n="col.rx">RX MHz</th>
+                <th class="mono" data-i18n="col.tx">TX MHz</th>
+                <th class="mono" data-i18n="col.toneRx">Ton RX</th>
+                <th class="mono" data-i18n="col.toneTx">Ton TX</th>
+                <th data-i18n="col.bw">BW</th>
+                <th data-i18n="col.power">Puiss.</th>
+                <th data-i18n="col.scan">Scan</th>
+                <th data-i18n="col.digital">Num.</th>
+                <th data-i18n="col.lock">Verrou</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="chanBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS VIEW ============ -->
+    <section class="view" id="view-settings">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow" data-i18n="settings.eyebrow">AT2_01A</span>
+            <h2 data-i18n="settings.essentials">Réglages essentiels</h2>
+          </div>
+        </div>
+        <div class="settings-essentials">
+          <div class="knob-card">
+            <div class="row-label"><span data-i18n="settings.volume">Volume</span><b id="volVal">4 / 8</b></div>
+            <input type="range" class="fader" min="1" max="8" value="4" oninput="updateFader(this,'volVal',' / 8')" />
+            <button class="btn btn-amber" style="align-self:flex-start;" data-i18n="btn.apply">Appliquer</button>
+          </div>
+          <div class="knob-card">
+            <div class="row-label"><span data-i18n="settings.squelch">Squelch</span><b id="sqVal">3 / 9</b></div>
+            <input type="range" class="fader" min="0" max="9" value="3" oninput="updateFader(this,'sqVal',' / 9')" />
+            <button class="btn btn-amber" style="align-self:flex-start;" data-i18n="btn.apply">Appliquer</button>
+          </div>
+          <div class="knob-card">
+            <div class="row-toggle">
+              <span data-i18n="settings.vox">VOX activé</span>
+              <label class="switch"><input type="checkbox" checked /><span class="switch-track"></span></label>
+            </div>
+            <button class="btn btn-amber" style="align-self:flex-start;" data-i18n="btn.apply">Appliquer</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:12px;" data-i18n="settings.essentialsHint">Ces trois réglages sont confirmés en communication réelle avec le boîtier.</div>
+
+        <div class="accordion-group">
+          <details class="acc" open>
+            <summary><span data-i18n="settings.groupAudio">Audio &amp; RF</span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;"><path d="m9 6 6 6-6 6"/></svg></summary>
+            <div class="acc-body">
+              <div class="setting-row"><label data-i18n="settings.voxSens">Sensibilité VOX <b>3/5</b></label><input type="range" class="fader" min="1" max="5" value="3" /></div>
+              <div class="setting-row"><label data-i18n="settings.tot">Temporisation TX <b>120 s</b></label><input type="range" class="fader" min="0" max="240" step="10" value="120" /></div>
+              <div class="setting-row"><label data-i18n="settings.txInterval">Intervalle TX (hop) <b>0 s</b></label><input type="range" class="fader" min="0" max="240" step="10" value="0" /></div>
+              <div class="setting-row toggle-row"><span data-i18n="settings.noiseReduction">Réduction de bruit</span><label class="switch"><input type="checkbox" checked /><span class="switch-track"></span></label></div>
+              <div class="setting-row toggle-row"><span data-i18n="settings.txInhibit">Inhibition TX</span><label class="switch"><input type="checkbox" /><span class="switch-track"></span></label></div>
+            </div>
+          </details>
+          <details class="acc">
+            <summary><span data-i18n="settings.groupId">Identification</span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;"><path d="m9 6 6 6-6 6"/></svg></summary>
+            <div class="acc-body">
+              <div class="setting-row"><label data-i18n="settings.deviceName">Nom de l'appareil</label><input class="text-input" value="AT2_01A" /></div>
+              <div class="setting-row toggle-row"><span data-i18n="settings.promptTone">Tonalité de confirmation</span><label class="switch"><input type="checkbox" checked /><span class="switch-track"></span></label></div>
+              <div class="setting-row toggle-row"><span data-i18n="settings.promptLanguage">Annonces en anglais</span><label class="switch"><input type="checkbox" /><span class="switch-track"></span></label></div>
+              <div class="setting-row toggle-row"><span data-i18n="settings.smartLink">Smart Link</span><label class="switch"><input type="checkbox" /><span class="switch-track"></span></label></div>
+            </div>
+          </details>
+          <details class="acc">
+            <summary><span data-i18n="settings.groupDual">Dual Watch</span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;"><path d="m9 6 6 6-6 6"/></svg></summary>
+            <div class="acc-body">
+              <div class="setting-row toggle-row"><span data-i18n="settings.dualWatch">Activer Dual Watch</span><label class="switch"><input type="checkbox" /><span class="switch-track"></span></label></div>
+              <div class="setting-row"><label data-i18n="settings.dualA">Canal A</label><input class="text-input" type="number" min="1" max="30" value="8" /></div>
+              <div class="setting-row"><label data-i18n="settings.dualB">Canal B</label><input class="text-input" type="number" min="1" max="30" value="1" /></div>
+              <div class="setting-row">
+                <label data-i18n="settings.dualFocus">Canal actif pour le PTT</label>
+                <div style="display:flex;gap:8px;"><button class="btn btn-ghost" style="flex:1;">A</button><button class="btn btn-amber" style="flex:1;">B</button></div>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div class="hint" style="margin-top:12px;" data-i18n="settings.advancedHint">Réglages avancés câblés au protocole réel, jamais vérifiés par lecture indépendante — voir le README.</div>
+      </div>
+    </section>
+
+    <!-- ============ MESSAGES VIEW ============ -->
+    <section class="view" id="view-messages">
+      <div class="panel chat-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow" data-i18n="msg.eyebrow">Canal 08 · RELAIS COL VERT</span>
+            <h2 data-i18n="msg.title">Messagerie hors-réseau</h2>
+          </div>
+        </div>
+        <div class="chat-thread" id="chatThread">
+          <div class="msg-group">
+            <div class="msg-meta"><span>raid_kilo</span><span>14:05</span></div>
+            <div class="bubble">Reçu. On a un ravitaillement au carrefour du GR5.</div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-meta"><span>raid_kilo</span><span>14:06</span></div>
+            <div class="bubble media">
+              <svg viewBox="0 0 24 24"><rect class="i-line" x="3" y="4" width="18" height="15" rx="2"/><path class="i-line" d="m3 16 5-5 4 4 3-3 6 6"/></svg>
+              <div><div>photo_sentier.jpg</div><div class="meta">214 Ko · transmis en 6 blocs</div></div>
+            </div>
+          </div>
+          <div class="msg-group me">
+            <div class="msg-meta"><span>elyha (moi)</span><span>14:08</span></div>
+            <div class="bubble">Position mise à jour, RDV au refuge à 14h.</div>
+          </div>
+          <div class="msg-group me">
+            <div class="msg-meta"><span>elyha (moi)</span><span>14:09</span></div>
+            <div class="bubble media">
+              <svg viewBox="0 0 24 24"><path class="i-line" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path class="i-line" d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg>
+              <div><div>Message vocal</div><div class="meta">0:42 · AMR-NB</div></div>
+            </div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-meta"><span>raid_kilo</span><span>14:31</span></div>
+            <div class="bubble">Vent fort au col, prudence sur la crête.</div>
+          </div>
+        </div>
+        <div class="compose">
+          <textarea placeholder="Message hors-réseau à envoyer sur le canal actif…" data-i18n-ph="msg.placeholder"></textarea>
+          <div class="compose-actions">
+            <button class="btn btn-ghost"><svg viewBox="0 0 24 24"><rect class="i-line" x="3" y="4" width="18" height="15" rx="2"/><path class="i-line" d="m3 16 5-5 4 4 3-3 6 6"/></svg> <span data-i18n="msg.image">Image</span></button>
+            <button class="btn btn-ghost"><svg viewBox="0 0 24 24"><path class="i-line" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path class="i-line" d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg> <span data-i18n="msg.voice">Vocal</span></button>
+            <button class="btn btn-amber" style="margin-left:auto;" data-i18n="btn.send">Envoyer</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ EMERGENCY VIEW ============ -->
+    <section class="view" id="view-emergency">
+      <div class="em-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow" data-i18n="em.eyebrow">GPS navigateur</span>
+              <h2 data-i18n="em.position">Position</h2>
+            </div>
+            <span class="status-chip on"><span class="status-led"></span><span data-i18n="em.fix">Position acquise</span></span>
+          </div>
+          <div class="radar"><div class="radar-dot"></div></div>
+          <div class="coords tabular">45.9237° N, 6.8694° E</div>
+          <div class="coords-sub" data-i18n="em.accuracy">précision ± 6 m</div>
+
+          <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px;">
+            <div class="row-toggle" style="display:flex;justify-content:space-between;align-items:center;">
+              <span data-i18n="em.beacon">Balise position automatique</span>
+              <label class="switch"><input type="checkbox" checked /><span class="switch-track"></span></label>
+            </div>
+            <div class="field-row">
+              <select>
+                <option value="30" data-i18n="em.every30">Toutes les 30 s</option>
+                <option value="60" selected data-i18n="em.every60">Toutes les minutes</option>
+                <option value="300" data-i18n="em.every300">Toutes les 5 min</option>
+                <option value="900" data-i18n="em.every900">Toutes les 15 min</option>
+              </select>
+            </div>
+            <div class="hint" data-i18n="em.beaconStatus">Prochaine balise dans 00:38.</div>
+            <button class="btn btn-ghost" data-i18n="em.sendNow">Envoyer ma position maintenant</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow" data-i18n="em.sosEyebrow">Détresse</span>
+              <h2 data-i18n="em.sosTitle">Signal SOS</h2>
+            </div>
+          </div>
+          <div class="sos-wrap">
+            <button class="sos-btn" id="sosBtn"><span class="ring" id="sosRing"></span>SOS</button>
+            <div class="sos-hint" id="sosHint" data-i18n="em.sosHint">Maintenir 1,5 s pour armer et envoyer l'alerte.</div>
+            <div class="field-row" style="width:100%;">
+              <select style="flex:1;">
+                <option data-i18n="em.presetLost">Perdu, besoin d'un itinéraire</option>
+                <option data-i18n="em.presetInjured">Blessé, besoin de secours médical</option>
+                <option data-i18n="em.presetStuck">Bloqué, besoin d'une évacuation</option>
+              </select>
+            </div>
+            <div class="hint" data-i18n="em.lastSos">Dernier SOS envoyé : aucun depuis la connexion.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LOG VIEW ============ -->
+    <section class="view" id="view-log">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow" data-i18n="log.eyebrow">Debug</span>
+            <h2 data-i18n="log.rawTitle">Trame brute</h2>
+          </div>
+        </div>
+        <div class="hint" style="margin-bottom:10px;" data-i18n="log.rawHint">Contourne toute la couche protocole — réservé aux tests de rétro-ingénierie.</div>
+        <div class="field-row">
+          <input class="text-input" style="font-family:var(--font-mono);" placeholder="aa55...77ee" />
+          <button class="btn btn-amber" data-i18n="btn.send">Envoyer</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow" data-i18n="log.eyebrow2">Trafic</span>
+            <h2 data-i18n="log.consoleTitle">Journal des trames</h2>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" data-i18n="log.copyAll">Copier tout</button>
+            <button class="btn btn-ghost" data-i18n="log.copyLast">Copier le dernier échange</button>
+            <button class="btn btn-ghost" data-i18n="log.export">Exporter .txt</button>
+          </div>
+        </div>
+        <div class="console" id="consoleBox">
+<div class="l"><span class="t">14:02:11.204</span> <span class="tx">TX</span>  AA 55 02 01 04 00 01 6F 3A 77 EE   set_volume(4)</div>
+<div class="l"><span class="t">14:02:11.231</span> <span class="rx">RX</span>  AA 55 82 01 04 00 01 6F 3A 77 EE   ACK</div>
+<div class="l"><span class="t">14:03:47.980</span> <span class="tx">TX</span>  AA 55 01 02 0E 00 07 4B 91 77 EE   select_channel(8)</div>
+<div class="l"><span class="t">14:03:48.012</span> <span class="rx">RX</span>  AA 55 81 02 0E 00 07 4B 91 77 EE   ACK</div>
+<div class="l"><span class="t">14:05:02.113</span> <span class="rx">RX</span>  AA 55 02 04 00 07 74 65 78 74 …    incoming_message("Reçu. On a un ravitaillement…")</div>
+<div class="l"><span class="t">14:08:56.442</span> <span class="tx">TX</span>  AA 55 02 04 00 08 50 6F 73 69 …    send_message("Position mise à jour…")</div>
+<div class="l"><span class="t">14:11:09.500</span> <span class="err">ERR</span> —   timeout en attente d'ACK (query_channel_config)</div>
+</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast"><span class="status-led"></span><span id="toastText">Réglage appliqué</span></div>
+
+<script>
+/* ---------- View / rail navigation ---------- */
+document.querySelectorAll('.rail-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.rail-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var target = btn.getAttribute('data-view');
+    document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+    document.getElementById('view-' + target).classList.add('active');
+    var titleEl = document.querySelector('.topbar-title h1');
+    var subEl = document.querySelector('.topbar-title .sub');
+    if (titleEl.dataset.i18nTitle) applyTopbar(target);
+  });
+});
+
+var topbarDict = {
+  fr: {
+    radio:{t:'Poste radio', s:'Canal actif, PTT et liaison avec le boîtier AT2'},
+    channels:{t:'Canaux', s:'Table des 30 canaux — lecture, écriture, import CPS'},
+    settings:{t:'Réglages', s:'Paramètres du boîtier connecté'},
+    messages:{t:'Messagerie', s:'Textes, images et vocaux hors-réseau'},
+    emergency:{t:'Urgence', s:'Position, balise automatique et signal SOS'},
+    log:{t:'Journal', s:'Trames échangées avec le boîtier'}
+  },
+  en: {
+    radio:{t:'Radio console', s:'Active channel, PTT and link to the AT2 unit'},
+    channels:{t:'Channels', s:'30-channel table — read, write, CPS import'},
+    settings:{t:'Settings', s:'Parameters of the connected unit'},
+    messages:{t:'Messaging', s:'Offline text, image and voice messages'},
+    emergency:{t:'Emergency', s:'Position, auto beacon and SOS signal'},
+    log:{t:'Log', s:'Frames exchanged with the unit'}
+  }
+};
+function applyTopbar(view){
+  var d = topbarDict[currentLang][view];
+  document.querySelector('.topbar-title h1').textContent = d.t;
+  document.querySelector('.topbar-title .sub').textContent = d.s;
+}
+
+/* ---------- Language toggle (scoped i18n demo) ---------- */
+var dict = {
+  fr: {
+    'nav.radio':'Radio','nav.channels':'Canaux','nav.settings':'Réglages','nav.messages':'Messages','nav.emergency':'Urgence','nav.log':'Journal',
+    'status.connected':'Connecté',
+    'connect.eyebrow':'Liaison active','connect.chip':"Connecté à AT2_01A — /dev/ttyACM0",'connect.manage':'Gérer la connexion',
+    'mode.server':'Serveur','mode.local':'BLE local','transport.serial':'USB série','transport.ble':'Bluetooth',
+    'btn.refresh':'↻ Rafraîchir','btn.disconnect':'Déconnecter','btn.connect':'Connecter','btn.apply':'Appliquer','btn.send':'Envoyer',
+    'connect.hint':'Appareils enregistrés : AT2_01A, AT2_07F (BLE local, dernière connexion il y a 3 j).',
+    'vfd.channel':'CANAL','vfd.rx':'RX MHZ','vfd.tx':'TX MHZ','rf.standby':'Standby','rf.tx':'Émission','ptt.button':'PTT',
+    'ptt.hint':'Maintenir pour émettre — le relâchement coupe la porteuse.',
+    'stat.channel':'Canal','stat.power':'Puissance','stat.powerHigh':'Haute','stat.link':'Niveau liaison','stat.lastFrame':'Dernière trame',
+    'devices.eyebrow':'Appareils','devices.title':'Enregistrés','devices.active':'actif','devices.hint':'Le mode BLE local relie le navigateur directement au boîtier, sans passer par le serveur.',
+    'channels.eyebrow':'Codeplug','channels.title':'30 canaux','channels.import':'Importer XML','channels.read':'Lire depuis la radio','channels.write':'Écrire vers la radio',
+    'channels.search':'Rechercher un nom, une fréquence…','channels.filterAll':'Tous','channels.filterScan':'Scan','channels.filterDigital':'Numérique',
+    'channels.hint':"La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire vers la radio.",
+    'col.ch':'Ch','col.name':'Nom','col.rx':'RX MHz','col.tx':'TX MHz','col.toneRx':'Ton RX','col.toneTx':'Ton TX','col.bw':'BW','col.power':'Puiss.','col.scan':'Scan','col.digital':'Num.','col.lock':'Verrou',
+    'settings.eyebrow':'AT2_01A','settings.essentials':'Réglages essentiels','settings.volume':'Volume','settings.squelch':'Squelch','settings.vox':'VOX activé',
+    'settings.essentialsHint':'Ces trois réglages sont confirmés en communication réelle avec le boîtier.',
+    'settings.groupAudio':'Audio & RF','settings.groupId':'Identification','settings.groupDual':'Dual Watch',
+    'settings.voxSens':'Sensibilité VOX','settings.tot':'Temporisation TX','settings.txInterval':'Intervalle TX (hop)','settings.noiseReduction':'Réduction de bruit','settings.txInhibit':'Inhibition TX',
+    'settings.deviceName':"Nom de l'appareil",'settings.promptTone':'Tonalité de confirmation','settings.promptLanguage':'Annonces en anglais','settings.smartLink':'Smart Link',
+    'settings.dualWatch':'Activer Dual Watch','settings.dualA':'Canal A','settings.dualB':'Canal B','settings.dualFocus':'Canal actif pour le PTT',
+    'settings.advancedHint':'Réglages avancés câblés au protocole réel, jamais vérifiés par lecture indépendante — voir le README.',
+    'msg.eyebrow':'Canal 08 · RELAIS COL VERT','msg.title':'Messagerie hors-réseau','msg.image':'Image','msg.voice':'Vocal','msg.placeholder':'Message hors-réseau à envoyer sur le canal actif…',
+    'em.eyebrow':'GPS navigateur','em.position':'Position','em.fix':'Position acquise','em.accuracy':'précision ± 6 m','em.beacon':'Balise position automatique',
+    'em.every30':'Toutes les 30 s','em.every60':'Toutes les minutes','em.every300':'Toutes les 5 min','em.every900':'Toutes les 15 min',
+    'em.beaconStatus':'Prochaine balise dans 00:38.','em.sendNow':'Envoyer ma position maintenant',
+    'em.sosEyebrow':'Détresse','em.sosTitle':'Signal SOS','em.sosHint':"Maintenir 1,5 s pour armer et envoyer l'alerte.",
+    'em.presetLost':"Perdu, besoin d'un itinéraire",'em.presetInjured':'Blessé, besoin de secours médical','em.presetStuck':"Bloqué, besoin d'une évacuation",
+    'em.lastSos':'Dernier SOS envoyé : aucun depuis la connexion.',
+    'log.eyebrow':'Debug','log.rawTitle':'Trame brute','log.rawHint':'Contourne toute la couche protocole — réservé aux tests de rétro-ingénierie.',
+    'log.eyebrow2':'Trafic','log.consoleTitle':'Journal des trames','log.copyAll':'Copier tout','log.copyLast':'Copier le dernier échange','log.export':'Exporter .txt'
+  },
+  en: {
+    'nav.radio':'Radio','nav.channels':'Channels','nav.settings':'Settings','nav.messages':'Messages','nav.emergency':'Emergency','nav.log':'Log',
+    'status.connected':'Connected',
+    'connect.eyebrow':'Active link','connect.chip':'Connected to AT2_01A — /dev/ttyACM0','connect.manage':'Manage connection',
+    'mode.server':'Server','mode.local':'Local BLE','transport.serial':'USB serial','transport.ble':'Bluetooth',
+    'btn.refresh':'↻ Refresh','btn.disconnect':'Disconnect','btn.connect':'Connect','btn.apply':'Apply','btn.send':'Send',
+    'connect.hint':'Registered units: AT2_01A, AT2_07F (local BLE, last seen 3 days ago).',
+    'vfd.channel':'CHANNEL','vfd.rx':'RX MHZ','vfd.tx':'TX MHZ','rf.standby':'Standby','rf.tx':'Transmitting','ptt.button':'PTT',
+    'ptt.hint':'Hold to transmit — releasing drops the carrier.',
+    'stat.channel':'Channel','stat.power':'Power','stat.powerHigh':'High','stat.link':'Link level','stat.lastFrame':'Last frame',
+    'devices.eyebrow':'Devices','devices.title':'Registered','devices.active':'active','devices.hint':'Local BLE links the browser straight to the unit, no server in the path.',
+    'channels.eyebrow':'Codeplug','channels.title':'30 channels','channels.import':'Import XML','channels.read':'Read from radio','channels.write':'Write to radio',
+    'channels.search':'Search a name, a frequency…','channels.filterAll':'All','channels.filterScan':'Scan','channels.filterDigital':'Digital',
+    'channels.hint':'Bulk read is reconstructed by protocol symmetry — check before writing to the radio.',
+    'col.ch':'Ch','col.name':'Name','col.rx':'RX MHz','col.tx':'TX MHz','col.toneRx':'RX tone','col.toneTx':'TX tone','col.bw':'BW','col.power':'Power','col.scan':'Scan','col.digital':'Digital','col.lock':'Lock',
+    'settings.eyebrow':'AT2_01A','settings.essentials':'Essential settings','settings.volume':'Volume','settings.squelch':'Squelch','settings.vox':'VOX enabled',
+    'settings.essentialsHint':'These three settings are confirmed in live communication with the unit.',
+    'settings.groupAudio':'Audio & RF','settings.groupId':'Identification','settings.groupDual':'Dual Watch',
+    'settings.voxSens':'VOX sensitivity','settings.tot':'TX timeout','settings.txInterval':'TX interval (hop)','settings.noiseReduction':'Noise reduction','settings.txInhibit':'TX inhibit',
+    'settings.deviceName':'Device name','settings.promptTone':'Confirmation tone','settings.promptLanguage':'English announcements','settings.smartLink':'Smart Link',
+    'settings.dualWatch':'Enable Dual Watch','settings.dualA':'Channel A','settings.dualB':'Channel B','settings.dualFocus':'Active channel for PTT',
+    'settings.advancedHint':'Advanced settings wired to the real protocol, never confirmed by independent read-back — see the README.',
+    'msg.eyebrow':'Channel 08 · GREEN PASS REPEATER','msg.title':'Offline messaging','msg.image':'Image','msg.voice':'Voice','msg.placeholder':'Offline message to send on the active channel…',
+    'em.eyebrow':'Browser GPS','em.position':'Position','em.fix':'Fix acquired','em.accuracy':'accuracy ± 6 m','em.beacon':'Automatic position beacon',
+    'em.every30':'Every 30 s','em.every60':'Every minute','em.every300':'Every 5 min','em.every900':'Every 15 min',
+    'em.beaconStatus':'Next beacon in 00:38.','em.sendNow':'Send my position now',
+    'em.sosEyebrow':'Distress','em.sosTitle':'SOS signal','em.sosHint':'Hold 1.5 s to arm and send the alert.',
+    'em.presetLost':'Lost, need a route',"em.presetInjured":'Injured, need medical help','em.presetStuck':'Stuck, need evacuation',
+    'em.lastSos':'Last SOS sent: none since connecting.',
+    'log.eyebrow':'Debug','log.rawTitle':'Raw frame','log.rawHint':'Bypasses the whole protocol layer — reserved for reverse-engineering tests.',
+    'log.eyebrow2':'Traffic','log.consoleTitle':'Frame log','log.copyAll':'Copy all','log.copyLast':'Copy last exchange','log.export':'Export .txt'
+  }
+};
+var currentLang = 'fr';
+function applyLang(lang){
+  currentLang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var key = el.getAttribute('data-i18n');
+    if (dict[lang][key]) el.textContent = dict[lang][key];
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el){
+    var key = el.getAttribute('data-i18n-ph');
+    if (dict[lang][key]) el.setAttribute('placeholder', dict[lang][key]);
+  });
+  var activeViewBtn = document.querySelector('.rail-btn.active');
+  applyTopbar(activeViewBtn.getAttribute('data-view'));
+}
+document.querySelectorAll('#langToggle button').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('#langToggle button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    applyLang(btn.getAttribute('data-lang'));
+  });
+});
+
+/* ---------- Theme toggle ---------- */
+var root = document.documentElement;
+document.getElementById('themeToggle').addEventListener('click', function(){
+  var cur = root.getAttribute('data-theme');
+  var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var effectiveDark = cur ? cur === 'dark' : prefersDark;
+  root.setAttribute('data-theme', effectiveDark ? 'light' : 'dark');
+});
+
+/* ---------- Toast ---------- */
+var toastTimer;
+function showToast(text){
+  var t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+/* ---------- Channel data + table ---------- */
+var channels = [
+  {ch:1, name:'APPEL GÉNÉRAL', rx:'146.5200', tx:'146.5200', trx:'—', ttx:'—', bw:'Large', pw:true, scan:true, dig:false, lock:false},
+  {ch:2, name:'RELAIS F5ZZZ', rx:'145.6125', tx:'145.0125', trx:'88.5', ttx:'88.5', bw:'Large', pw:true, scan:true, dig:false, lock:true},
+  {ch:3, name:'SIMPLEX RANDO', rx:'145.5000', tx:'145.5000', trx:'100.0', ttx:'100.0', bw:'Étroite', pw:false, scan:true, dig:false, lock:false},
+  {ch:4, name:'BASE CAMP', rx:'446.0060', tx:'446.0060', trx:'67.0', ttx:'67.0', bw:'Étroite', pw:false, scan:true, dig:false, lock:false},
+  {ch:5, name:'DMR TG9', rx:'439.4125', tx:'434.4125', trx:'—', ttx:'—', bw:'Étroite', pw:true, scan:false, dig:true, lock:false},
+  {ch:6, name:'SÉCURITÉ ÉQUIPE', rx:'145.7750', tx:'145.1750', trx:'131.8', ttx:'131.8', bw:'Large', pw:true, scan:true, dig:false, lock:true},
+  {ch:7, name:'URGENCE SAR', rx:'156.8000', tx:'156.8000', trx:'—', ttx:'—', bw:'Large', pw:true, scan:true, dig:false, lock:false},
+  {ch:8, name:'RELAIS COL VERT', rx:'145.6875', tx:'145.0875', trx:'94.8', ttx:'94.8', bw:'Large', pw:true, scan:true, dig:false, lock:false},
+  {ch:9, name:'CHASSE PMR 8', rx:'446.0937', tx:'446.0937', trx:'DCS023', ttx:'DCS023', bw:'Étroite', pw:false, scan:false, dig:false, lock:false},
+  {ch:10, name:'BIVOUAC NUIT', rx:'433.5000', tx:'433.5000', trx:'—', ttx:'—', bw:'Étroite', pw:false, scan:false, dig:false, lock:true}
+];
+var activeChannel = 8;
+var tbody = document.getElementById('chanBody');
+function renderChannels(){
+  tbody.innerHTML = channels.map(function(c){
+    return '<tr class="'+(c.ch===activeChannel?'selected':'')+'" data-ch="'+c.ch+'">'
+      + '<td class="mono" data-label="Ch">'+String(c.ch).padStart(2,'0')+'</td>'
+      + '<td data-label="Nom">'+c.name+'</td>'
+      + '<td class="mono" data-label="RX MHz">'+c.rx+'</td>'
+      + '<td class="mono" data-label="TX MHz">'+c.tx+'</td>'
+      + '<td class="mono" data-label="Ton RX">'+c.trx+'</td>'
+      + '<td class="mono" data-label="Ton TX">'+c.ttx+'</td>'
+      + '<td data-label="BW">'+c.bw+'</td>'
+      + '<td data-label="Puiss."><span class="tag-dot '+(c.pw?'on':'')+'"><i></i>'+(c.pw?'Haute':'Basse')+'</span></td>'
+      + '<td data-label="Scan"><span class="tag-dot '+(c.scan?'on':'')+'"><i></i>'+(c.scan?'ON':'—')+'</span></td>'
+      + '<td data-label="Num."><span class="tag-dot '+(c.dig?'on':'')+'"><i></i>'+(c.dig?'ON':'—')+'</span></td>'
+      + '<td data-label="Verrou"><span class="tag-dot '+(c.lock?'on':'')+'"><i></i>'+(c.lock?'ON':'—')+'</span></td>'
+      + '<td><button class="row-edit" title="Renommer">✎</button></td>'
+      + '</tr>';
+  }).join('');
+}
+renderChannels();
+tbody.addEventListener('click', function(e){
+  var row = e.target.closest('tr');
+  if (!row) return;
+  setActiveChannel(parseInt(row.getAttribute('data-ch'), 10));
+});
+document.querySelectorAll('.chip-filter button').forEach(function(btn, idx){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.chip-filter button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var filtered = channels;
+    if (idx === 1) filtered = channels.filter(function(c){ return c.scan; });
+    if (idx === 2) filtered = channels.filter(function(c){ return c.dig; });
+    var saved = channels; channels = filtered; renderChannels(); channels = saved;
+  });
+});
+
+/* ---------- VFD / channel selector ---------- */
+function setActiveChannel(chNum){
+  var c = channels.find(function(x){ return x.ch === chNum; });
+  if (!c) return;
+  activeChannel = chNum;
+  document.getElementById('vfdName').textContent = c.name;
+  document.getElementById('vfdRx').textContent = c.rx;
+  document.getElementById('vfdTx').textContent = c.tx;
+  document.getElementById('statChan').textContent = String(chNum).padStart(2,'0') + ' / 30';
+  renderChannels();
+}
+document.getElementById('chanNext').addEventListener('click', function(){
+  var idx = channels.findIndex(function(c){ return c.ch === activeChannel; });
+  var next = channels[(idx + 1) % channels.length];
+  setActiveChannel(next.ch);
+});
+document.getElementById('chanPrev').addEventListener('click', function(){
+  var idx = channels.findIndex(function(c){ return c.ch === activeChannel; });
+  var prev = channels[(idx - 1 + channels.length) % channels.length];
+  setActiveChannel(prev.ch);
+});
+
+/* ---------- PTT ---------- */
+var pttBtn = document.getElementById('pttBtn');
+var wave = document.getElementById('wave');
+var rfRow = document.getElementById('rfRow');
+var rfLabel = document.getElementById('rfLabel');
+var pttTimer = document.getElementById('pttTimer');
+var pttInterval = null, pttSeconds = 0;
+function pttStart(e){
+  e.preventDefault();
+  pttBtn.classList.add('live');
+  wave.classList.add('live');
+  rfRow.classList.add('tx');
+  rfLabel.textContent = (currentLang==='en') ? 'Transmitting' : 'Émission';
+  pttSeconds = 0;
+  pttTimer.textContent = '00:00';
+  pttInterval = setInterval(function(){
+    pttSeconds++;
+    var m = String(Math.floor(pttSeconds/60)).padStart(2,'0');
+    var s = String(pttSeconds%60).padStart(2,'0');
+    pttTimer.textContent = m+':'+s;
+  }, 1000);
+}
+function pttStop(){
+  if (!pttBtn.classList.contains('live')) return;
+  pttBtn.classList.remove('live');
+  wave.classList.remove('live');
+  rfRow.classList.remove('tx');
+  rfLabel.textContent = (currentLang==='en') ? 'Standby' : 'Standby';
+  clearInterval(pttInterval);
+  document.getElementById('statFrame').textContent = (currentLang==='en') ? 'just now' : "à l'instant";
+}
+pttBtn.addEventListener('mousedown', pttStart);
+pttBtn.addEventListener('touchstart', pttStart, {passive:false});
+['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){
+  pttBtn.addEventListener(ev, pttStop);
+});
+
+/* ---------- Sliders live readout ---------- */
+window.updateFader = function(input, outId, suffix){
+  var min = parseFloat(input.min), max = parseFloat(input.max), val = parseFloat(input.value);
+  input.style.setProperty('--val', ((val-min)/(max-min)*100)+'%');
+  document.getElementById(outId).textContent = input.value + suffix;
+};
+document.querySelectorAll('.fader').forEach(function(f){
+  var min = parseFloat(f.min)||0, max = parseFloat(f.max)||100, val = parseFloat(f.value)||0;
+  f.style.setProperty('--val', ((val-min)/(max-min)*100)+'%');
+  f.addEventListener('input', function(){
+    var mn=parseFloat(f.min), mx=parseFloat(f.max), v=parseFloat(f.value);
+    f.style.setProperty('--val', ((v-mn)/(mx-mn)*100)+'%');
+  });
+});
+document.querySelectorAll('.btn-amber[data-i18n="btn.apply"]').forEach(function(btn){
+  btn.addEventListener('click', function(){ showToast(currentLang==='en' ? 'Setting applied' : 'Réglage appliqué'); });
+});
+
+/* ---------- SOS press-and-hold arming ---------- */
+var sosBtn = document.getElementById('sosBtn');
+var sosRing = document.getElementById('sosRing');
+var sosHint = document.getElementById('sosHint');
+var sosRaf = null, sosStart = null;
+var ARM_MS = 1500;
+function sosFrame(ts){
+  if (sosStart === null) sosStart = ts;
+  var pct = Math.min(100, ((ts - sosStart) / ARM_MS) * 100);
+  sosRing.style.setProperty('--armp', pct);
+  if (pct >= 100){
+    sosBtn.style.filter = 'brightness(1.3)';
+    sosHint.textContent = (currentLang==='en') ? 'SOS alert sent with position.' : 'Alerte SOS envoyée avec la position.';
+    showToast(currentLang==='en' ? 'SOS sent' : 'SOS envoyé');
+    setTimeout(function(){ sosBtn.style.filter=''; }, 900);
+    cancelSos();
+    return;
+  }
+  sosRaf = requestAnimationFrame(sosFrame);
+}
+function armSos(e){
+  e.preventDefault();
+  sosStart = null;
+  sosRaf = requestAnimationFrame(sosFrame);
+}
+function cancelSos(){
+  if (sosRaf) cancelAnimationFrame(sosRaf);
+  sosRaf = null; sosStart = null;
+  sosRing.style.setProperty('--armp', 0);
+}
+sosBtn.addEventListener('mousedown', armSos);
+sosBtn.addEventListener('touchstart', armSos, {passive:false});
+['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){ sosBtn.addEventListener(ev, function(){
+  if (sosRing.style.getPropertyValue('--armp') !== '100') cancelSos();
+}); });
+
+/* ---------- Live-ish frame timestamp for realism ---------- */
+setInterval(function(){
+  var el = document.getElementById('statFrame');
+  if (el && el.textContent.indexOf('s') !== -1 && el.textContent.match(/^\d+/)) {
+    var n = parseInt(el.textContent, 10) + 4;
+    if (!isNaN(n)) el.textContent = (currentLang==='en' ? n+' s ago' : 'il y a '+n+' s');
+  }
+}, 4000);
+</script>
+</body>
+</html>
