@@ -14,7 +14,7 @@
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
   
   <!-- Tests -->
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-33_passed-success.svg?logo=pytest" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-39_passed-success.svg?logo=pytest" />
   
   <!-- Matériel -->
   <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
@@ -41,53 +41,64 @@
  
 </p>
 
-
-
-Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux, réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
+Application web auto-hébergée (Docker) pour piloter une radio bidirectionnelle **Alervites/Baofeng AT2** depuis un serveur Linux, ou directement depuis le navigateur en BLE local — canaux (lecture/écriture confirmées fonctionnelles), réglages appareil, messagerie hors-réseau (texte/image/voix), PTT temps réel, position/SOS, authentification.
 
 > [!WARNING]
 > **Projet communautaire non affilié à Baofeng/Alervites.** Protocole reconstitué par rétro-ingénierie. Aucune garantie de compatibilité totale — teste prudemment.
 
+> [!IMPORTANT]
+> **Sur la distinction "accusé de réception" vs "fonctionnement confirmé" :** la radio répond à de nombreuses commandes avec un accusé de réception au niveau trame (`family | 0x80`, CRC valide). **Ceci ne prouve pas, à lui seul, que l'action a réellement eu lieu** — un exemple concret l'illustre dans ce projet : l'ancienne commande de sélection de canal obtenait un accusé cohérent, mais écrivait très probablement un tout autre paramètre (le canal de double-veille), pas le canal actif. Une fonctionnalité n'est marquée ✅ dans ce document que lorsqu'elle a été vérifiée par un moyen indépendant du protocole lui-même (relecture qui montre le changement, réception sur un second poste, comportement radio observable — l'AT2 n'a pas d'écran).
+
 ## Fonctionnalités
 
 > [!TIP]
->###  Implémenté et testé (sans radio)
+>###  Confirmé fonctionnel sur radio réelle
 >
->- **Codec de trame** — Encodage/décodage `AA55 [LEN] [PAYLOAD] [CRC16] 77EE`, CRC16-CCITT (init `0x1234`, poly `0x1021`).
->- **Codec de canal** — Enregistrements 24 octets (fréquences, tons CTCSS/DCS, bande passante, puissance), round-trip testé.
->- **Codec AMR-NB (voix)** — Binding ctypes vers `libopencore-amrnb` réel, round-trip encode/decode validé.
->- **Chunking PTT temps réel** — Paquets vocaux (5 trames AMR/paquet, cadencement 100ms), format confirmé par le code source de référence.
->- **Messagerie texte/voix/image (construction + décodage + réassemblage)** — Les trois formats hors-réseau portés depuis `At2OfflineMessageCodec.kt` ; round-trip testé pour les trois types, y compris messages concurrents entrelacés et chunks orphelins.
->- **Backend FastAPI** — 32 routes HTTP + 4 WebSocket, toutes s'importent et répondent.
->- **Authentification** — Token HMAC signé, activable/désactivable via variable d'environnement, testée (émission, vérification, expiration, altération de signature).
->- **Gestion d'erreurs propre** — `RuntimeError` (ex: pas de connexion active) renvoyées en HTTP 409 clair ; toute autre erreur inattendue loggée en entier côté serveur mais sans traceback exposé au client.
->- **Stockage local** (noms de canaux, appareils connus) — Persistance JSON testée, y compris l'enregistrement automatique d'un appareil à la connexion série.
->- **33 tests unitaires** — `app/tests/test_protocol.py`.
+>- **Lecture et écriture des canaux** — canal par canal, via le dialecte de protocole retrouvé dans le CPS Windows officiel (voir "Origine du protocole" ci-dessous). Fréquences, tons CTCSS/DCS, bande passante, puissance, scan, mode analogique/digital, clé de chiffrement, busy lock, saut de fréquence : tous les champs confirmés par recoupement avec un export de configuration de la CPS officielle.
+>- **Import d'un export XML de la CPS officielle** dans le tableau de canaux de l'interface (ne remplit que l'écran, n'écrit jamais automatiquement sur la radio).
+>- **Messagerie texte/voix/image hors-réseau** (mode serveur) — construction, décodage et réassemblage des trois formats.
+>- **Mode BLE local (Web Bluetooth)** — connexion directe navigateur↔radio sans serveur intermédiaire : sélection de canal, volume, messagerie texte, lecture/écriture de canaux.
+>- **Codec de trame** (les deux dialectes du protocole, voir plus bas), codec AMR-NB (binding natif côté serveur, portage JS/WebAssembly côté navigateur), authentification par token HMAC, stockage local (noms de canaux, appareils connus), gestion d'erreurs propre (pas de traceback exposé au client).
+>- **39 tests unitaires** — `app/tests/test_protocol.py`, incluant des tests dédiés utilisant les séquences d'octets réellement échangées avec le matériel comme référence.
 
-  
 > [!WARNING]
->###  Implémenté mais non testé (nécessite la radio)
+>###  Implémenté, en attente de confirmation matérielle
 >
->- **Lecture/écriture des canaux** (USB série et BLE) — jamais envoyé à une radio réelle.
->- **Lecture groupée des 30 canaux (codeplug)** — commande déduite par symétrie, non observée sur trafic réel.
->- **Réglages appareil** (volume/squelch/VOX) — seuls réglages câblés à ce jour ; jamais vérifiés sur radio.
->- **Envoi de messages texte/voix/image hors-réseau** — format testé unitairement, jamais émis vers une radio.
->- **Réception de messages hors-réseau** — décodage + WebSocket (`/ws/messages`) + affichage dans le fil de discussion entièrement câblés côté client, jamais reçu de vraie trame radio ; lecture audio des messages vocaux reçus non implémentée (affichage texte uniquement pour l'instant).
->- **PTT temps réel (voix)** — capture micro → 8kHz mono → AMR-NB → trames radio, chaîne complète jamais testée avec une radio en face.
->- **Position/SOS** — repose sur le canal de messagerie texte (pas de type structuré dédié), jamais émis en conditions réelles.
->- **Mode BLE local (Web Bluetooth)** — port JS minimal (canal, texte), jamais connecté à une radio réelle.
->- **Reconnexion aux appareils connus** — persistance fonctionnelle, reconnexion réelle non testée.
->- **Formulaire de connexion (auth frontend)** — flux complet testé côté API (login, token, 401, session expirée), jamais utilisé via l'interface réelle en conditions de terrain.
+>- **PTT temps réel en BLE local** — encodage et décodage AMR-NB entièrement dans le navigateur (voir section dédiée plus bas). Le pipeline complet a été vérifié par un test d'intégration simulant l'API Web Bluetooth, avec le code réel du projet : trames PTT correctement construites, cadencées et transmises. **N'a cependant pas encore été confirmé sur la radio physique.**
+>- **Réglages appareil autres que le volume** (squelch, VOX, temporisation TX, inhibition TX, réduction de bruit, tonalité de confirmation, nom d'appareil, Smart Link) — une commande part et un accusé revient, mais aucun n'a été vérifié par relecture indépendante.
+>- **PTT temps réel en mode serveur** — jamais vérifié de bout en bout sur matériel.
+>- **Réception de messages hors-réseau** — le pipeline de réception (décodage + WebSocket + affichage) est câblé côté client, mais aucune vraie trame entrante n'a encore été reçue en test.
+>- **Position/SOS** — repose sur le canal de messagerie texte (aucun type "Position" structuré n'existe dans le protocole réel).
+>- **Reconnexion aux appareils connus.**
+
+> [!CAUTION]
+>###  Confirmé non fonctionnel / abandonné
+>
+>- **Lecture ou écriture groupée du codeplug en une seule commande** — la radio ne répond strictement rien à ce type de requête. Le protocole réel fonctionne canal par canal (confirmé en décompilant le CPS Windows officiel), c'est ce que cette application utilise désormais.
+>- **Ancienne commande de sélection de canal** — très probablement inopérante pour son objectif d'origine ; elle écrit vraisemblablement le canal de double-veille de la radio, pas le canal actuellement actif.
 
 > [!CAUTION]
 >###  Non implémenté / Roadmap
 >
->- **Réglages avancés** (sensibilité VOX, temporisation TX, inhibition TX, réduction de bruit, tonalité de confirmation, nom d'appareil, Smart Link) — commandes déjà présentes dans `app/protocol/commands.py` (portées du protocole réel) mais volontairement non exposées à l'UI pour l'instant.
 >- **Lecture audio des messages vocaux reçus** — le message arrive et s'affiche, mais aucun lecteur audio n'est encore branché côté navigateur.
->- **Type de message structuré "Position"** — actuellement du texte formaté, pas le format natif observé dans l'app Ola Radio.
+>- **Type de message structuré "Position"** — actuellement du texte formaté.
 >- **Gestion simultanée de plusieurs radios** — une seule connexion active à la fois côté serveur.
 >- **Flux vidéo / photos périodiques** — non implémenté ; débit du protocole (≈330 o/s messagerie, 4,8 kbps PTT) rend une vraie vidéo irréaliste.
->- **Nettoyage des messages partiels abandonnés** — l'assembleur de messages entrants n'a pas de timeout si une transmission est interrompue en cours de route.
+>- **Nettoyage des messages partiels abandonnés.**
+>- **Import/export de profils de configuration multiples, groupes de messagerie** — en réflexion, rien de commencé.
+
+## Le protocole : deux dialectes de trame
+
+L'enveloppe générale (`AA55 ... 77EE`, CRC16-CCITT init `0x1234` poly `0x1021`) est commune, mais deux structures internes distinctes coexistent réellement sur le fil, selon la fonctionnalité :
+
+- **Dialecte "legacy"** (porté du protocole BLE de l'app Android de référence) : longueur sur 1 octet, corps préfixé d'un octet `0x00`. Utilisé pour la messagerie hors-réseau, le PTT temps réel, et les réglages appareil.
+- **Dialecte "CPS"** (retrouvé en décompilant le CPS Windows officiel) : longueur sur 2 octets, pas d'octet de tête. Utilisé pour la lecture/écriture de canal individuel.
+
+Ce n'était pas évident au départ — les deux dialectes ont été pris l'un pour l'autre à plusieurs reprises pendant la phase de rétro-ingénierie avant d'être clairement distingués et confirmés séparément sur matériel réel.
+
+## PTT en BLE local
+
+Le PTT s'est révélé être une fonctionnalité **exclusivement BLE** : le CPS Windows officiel, qui ne gère que la programmation de codeplug, ne contient aucun code de pilotage audio en temps réel. Sans module Bluetooth sur le serveur, le PTT en mode BLE local doit donc encoder/décoder l'audio (AMR-NB) directement dans le navigateur — ce que fait ce projet via [`opencore-amr-js`](https://github.com/yxl/opencore-amr-js) (Apache 2.0), un portage WebAssembly du même codec natif déjà utilisé côté serveur.
 
 ## Architecture
 
@@ -97,6 +108,7 @@ graph TD
     Server <-->|USB / BLE| Radio[Radio AT2]
     Browser <-->|Web Bluetooth| Radio
 ```
+
 ## Web Bluetooth
 
 Le mode BLE local est exécuté par le navigateur de l'utilisateur. Le serveur Linux n'est pas dans le chemin Bluetooth dans ce mode : la radio doit donc être à portée Bluetooth de l'ordinateur ou du téléphone qui affiche l'interface web.
@@ -110,7 +122,7 @@ Le mode BLE local est exécuté par le navigateur de l'utilisateur. Le serveur L
 
 ### HTTPS requis
 
-L'API Web Bluetooth exige un contexte sécurisé : HTTPS ou `localhost`.
+L'API Web Bluetooth exige un contexte sécurisé : HTTPS ou `localhost`. **Le PTT en BLE local a la même exigence** pour la capture micro (`getUserMedia`), pour la même raison.
 
 Pour un test de développement sur un réseau local en HTTP, par exemple `http://<ip-du-serveur>:2910`, Chrome peut recevoir une exception locale :
 
@@ -136,9 +148,6 @@ Pour un test de développement sur un réseau local en HTTP, par exemple `http:/
 5. Lancer la connexion BLE locale.
 6. Sélectionner un appareil de type `AT2_...`, par exemple `AT2_01A`.
 
-
-
-
 ## Déploiement
 
 ```bash
@@ -147,7 +156,7 @@ cd at2-bridge
 docker compose up -d --build
 ```
 
-Interface servie sur `http://<ip-du-serveur>:8000` (conteneur en `network_mode: host`).
+Interface servie sur `http://<ip-du-serveur>:<port>` (conteneur en `network_mode: host` ; port configurable dans `docker-compose.yml`, 8000 par défaut).
 
 Pour activer l'authentification, définis `AT2_BRIDGE_PASSWORD` dans l'environnement du conteneur — le frontend affiche alors un écran de connexion au premier accès. Sans cette variable, l'interface reste ouverte à quiconque atteint le serveur (à réserver à un réseau de confiance type Tailscale dans ce cas).
 
@@ -155,7 +164,7 @@ Pour activer l'authentification, définis `AT2_BRIDGE_PASSWORD` dans l'environne
 
 - **USB série** : port typiquement `/dev/ttyACM0` ou `/dev/ttyUSB0`, sélectionnable dans l'interface.
 - **BLE (mode serveur)** : adaptateur Bluetooth sur le serveur, accès à BlueZ via D-Bus (déjà configuré dans `docker-compose.yml`).
-- **BLE (mode local)** : aucun matériel serveur requis — utilise le Bluetooth de l'appareil affichant la page web.
+- **BLE (mode local)** : aucun matériel serveur requis — utilise le Bluetooth de l'appareil affichant la page web (voir section "Web Bluetooth" ci-dessus).
 
 ### Développement local (sans Docker)
 
@@ -173,22 +182,27 @@ python -m pytest app/tests -v
 
 ## Limitations connues
 
-- Le PTT temps réel et la messagerie voix/image n'ont jamais été exercés de bout en bout avec du matériel.
-- Le mode BLE local n'implémente qu'un sous-ensemble du protocole (canal, texte) ; codeplug complet et PTT restent serveur uniquement.
-- Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit).
+- **Un accusé de réception au niveau trame ne prouve pas qu'une action a réellement eu lieu côté radio** — voir l'encart en haut de ce document.
+- Le PTT temps réel (serveur et BLE) n'a jamais été confirmé fonctionnel de bout en bout sur matériel réel, malgré une implémentation complète et testée par ailleurs.
+- Les réglages appareil autres que le volume n'ont jamais été vérifiés par relecture indépendante.
+- Web Bluetooth indisponible sur tous les navigateurs iOS (restriction Apple/WebKit) et sur Firefox.
 - Une seule connexion radio active à la fois côté serveur.
-- L'authentification protège l'API et les WebSocket par token, mais reste un mot de passe partagé unique (pas de comptes multiples) ; le flux n'a été validé qu'en tests automatisés, pas en usage réel via l'interface.
-- Les 7 réglages avancés du protocole (VOX sensibilité, TOT, inhibition TX, réduction de bruit, tonalité, nom d'appareil, Smart Link) existent dans le code protocole mais ne sont pas exposés à l'UI.
+- L'authentification protège l'API et les WebSocket par token, mais reste un mot de passe partagé unique (pas de comptes multiples).
 
 ## Origine du protocole
 
-Deux sources croisées, confirmant un protocole **identique** entre USB série et BLE :
+Trois sources croisées :
 
-1. Décompilation du CPS officiel Windows (Electron) — structure de trame et layout des canaux.
-2. Code source [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — CRC16 exact, UUID BLE réels, formats de messagerie hors-réseau (texte/voix/image) et protocole PTT temps réel.
+1. Décompilation du CPS officiel Windows (Electron) — a révélé le vrai format de lecture/écriture de canal individuel (le "dialecte CPS").
+2. Code source [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android) (Apache-2.0) — CRC16 exact, UUID BLE réels, formats de messagerie hors-réseau et protocole PTT temps réel (le "dialecte legacy").
+3. Validation directe sur radio physique — lecture/écriture de canaux confirmées fonctionnelles ; export de configuration de la CPS officielle utilisé pour valider indépendamment chaque champ décodé.
 
 ## Licences tierces
 
-Code porté (Kotlin → Python/JS) depuis [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0 — voir [`NOTICE`](./NOTICE) et [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md), y compris pour `libopencore-amrnb` (Apache 2.0).
+Code porté (Kotlin → Python/JS) depuis [`Baofeng-ALERVITES-AT2-Android`](https://github.com/byf3332/Baofeng-ALERVITES-AT2-Android), Apache 2.0.
+
+Codec AMR-NB : `libopencore-amrnb` côté serveur, et [`opencore-amr-js`](https://github.com/yxl/opencore-amr-js) (portage WebAssembly du même codec) côté navigateur pour le PTT en BLE local — tous deux Apache 2.0.
+
+Voir [`NOTICE`](./NOTICE) et [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) pour le détail complet des attributions.
 
 Code propre à ce projet sous licence MIT — voir [`LICENSE`](./LICENSE).
