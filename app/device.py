@@ -61,6 +61,10 @@ class DeviceManager:
     def on_log(self, cb) -> None:
         self._log_listeners.append(cb)
 
+    def off_log(self, cb) -> None:
+        if cb in self._log_listeners:
+            self._log_listeners.remove(cb)
+
     async def connect_serial(self, port: str, baud_rate: int = 115200) -> None:
         await self.disconnect()
         t = SerialTransport()
@@ -118,6 +122,26 @@ class DeviceManager:
         t = self._require_transport()
         await t.send_payload(commands.clear_channel(channel_number))
         self._log_line(f"Canal {channel_number} effacé")
+
+    # -- debug --------------------------------------------------------------
+
+    async def send_debug_raw_frame(self, frame_hex: str, listen_seconds: float = 2.0) -> None:
+        """EXPERIMENTAL / DEBUG ONLY. Sends an ALREADY fully-encoded frame
+        (AA55...77EE, hex string) as-is -- no envelope/CRC is built here,
+        unlike write_channel/send_payload -- so arbitrary protocol
+        hypotheses can be tested directly, including intentionally
+        malformed ones. TX/RX logging is automatic via the existing
+        Journal wiring (on_log/on_packet), so this just sends and waits;
+        it does not itself interpret or return the response."""
+        t = self._require_transport()
+        try:
+            frame = bytes.fromhex(frame_hex.strip().replace(" ", ""))
+        except ValueError as e:
+            raise ValueError(f"hex invalide: {e}") from e
+        await t.send_raw_frame(frame)
+        listen_seconds = max(0.0, min(listen_seconds, 10.0))  # hard cap, this is a debug tool not a client-controlled sleep
+        if listen_seconds:
+            await asyncio.sleep(listen_seconds)
 
     async def read_all_channels(self, timeout: float = 8.0) -> list[chan.ChannelConfig]:
         """Request the codeplug and reassemble channel records from the
@@ -271,6 +295,10 @@ class DeviceManager:
         offline message has been reassembled from incoming packets."""
         self._message_rx_listeners.append(callback)
 
+    def off_message_received(self, callback) -> None:
+        if callback in self._message_rx_listeners:
+            self._message_rx_listeners.remove(callback)
+
     def _install_message_rx_listener(self, transport: Transport) -> None:
         assembler = messages.MessageAssembler()
 
@@ -301,6 +329,10 @@ class DeviceManager:
         """`callback(pcm_bytes)` is invoked (sync) with 320 bytes of decoded
         PCM for every incoming voice packet on the active transport."""
         self._ptt_rx_listeners.append(callback)
+
+    def off_ptt_voice_packet(self, callback) -> None:
+        if callback in self._ptt_rx_listeners:
+            self._ptt_rx_listeners.remove(callback)
 
     def _install_ptt_rx_listener(self, transport: Transport) -> None:
         from app.protocol.amr_codec import AmrNbCodec

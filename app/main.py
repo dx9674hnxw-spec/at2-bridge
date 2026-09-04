@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app import auth, store
 from app.device import device_manager
-from app.protocol.channel import ChannelConfig, tone_options
+from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
 from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
@@ -140,6 +140,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RawFrameDebugRequest(BaseModel):
+    """EXPERIMENTAL / DEBUG ONLY -- see device.py::send_debug_raw_frame.
+    frame_hex must be an already fully-encoded frame (AA55...77EE) as a
+    hex string, e.g. produced by a protocol hypothesis under test."""
+    frame_hex: str
+    listen_seconds: float = 2.0
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -205,6 +213,37 @@ async def get_tone_options(_: None = Depends(auth.require_auth)):
 @app.get("/api/channels")
 async def read_channels(_: None = Depends(auth.require_auth)):
     channels = await device_manager.read_all_channels()
+    return [c.__dict__ for c in channels]
+
+
+_MAX_XML_UPLOAD_BYTES = 5 * 1024 * 1024  # a real CPS export is a few KB; 5MB is generous headroom
+
+
+@app.post("/api/channels/import-xml")
+async def import_channels_xml(file: UploadFile = File(...), _: None = Depends(auth.require_auth)):
+    """Parses a CPS-format XML export (the official Windows CPS's own
+    config save/export, NOT a live protocol capture) into channel
+    configs for the UI to review. This never writes to the radio by
+    itself -- same as after a live "Read", the person still clicks
+    "Write" to actually commit anything. See channel.py::parse_cps_xml.
+
+    Size cap + DOCTYPE/ENTITY rejection: this is now a file-upload
+    endpoint accepting untrusted input, so a cheap, dependency-free
+    guard against XML entity-expansion ("billion laughs") DoS on
+    xml.etree.ElementTree is worth the two extra checks.
+    """
+    raw = await file.read()
+    if len(raw) > _MAX_XML_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="fichier XML trop volumineux")
+    upper = raw.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        raise HTTPException(status_code=400, detail="XML avec DOCTYPE/ENTITY non autorisé")
+    try:
+        channels = parse_cps_xml(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not channels:
+        raise HTTPException(status_code=400, detail="aucun canal configuré trouvé dans ce fichier")
     return [c.__dict__ for c in channels]
 
 
@@ -421,6 +460,21 @@ async def send_sos(req: PositionRequest, _: None = Depends(auth.require_auth)):
 
 
 # ---------------------------------------------------------------------------
+# Debug: raw frame injection (experimental, for protocol reverse-engineering)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/debug/send-raw-frame")
+async def debug_send_raw_frame(req: RawFrameDebugRequest, _: None = Depends(auth.require_auth)):
+    try:
+        await device_manager.send_debug_raw_frame(req.frame_hex, req.listen_seconds)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Live log over WebSocket
 # ---------------------------------------------------------------------------
 
@@ -442,6 +496,12 @@ async def ws_log(websocket: WebSocket):
             await websocket.send_text(line)
     except WebSocketDisconnect:
         pass
+    finally:
+        # Sans ce nettoyage, chaque reconnexion (app.js relance /ws/log
+        # toutes les 2s après une coupure) ajoutait un nouveau listener
+        # jamais retiré -- fuite mémoire non bornée sur une instance de
+        # longue durée. Voir CONSIGNES_PROJET.md.
+        device_manager.off_log(_on_log)
 
 
 @app.websocket("/ws/ptt")
@@ -488,6 +548,7 @@ async def ws_ptt(websocket: WebSocket):
     finally:
         forward_task.cancel()
         await session.close()
+        device_manager.off_ptt_voice_packet(_on_rx_pcm)
 
 
 @app.websocket("/ws/messages")
@@ -521,6 +582,8 @@ async def ws_messages(websocket: WebSocket):
             await websocket.send_json(payload)
     except WebSocketDisconnect:
         pass
+    finally:
+        device_manager.off_message_received(_on_message)
 
 
 # ---------------------------------------------------------------------------
