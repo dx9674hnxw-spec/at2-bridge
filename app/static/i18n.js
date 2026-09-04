@@ -128,6 +128,9 @@ const I18N_DICT = {
     "channels.colPower": "Puissance haute",
     "channels.colScan": "Scan",
     "channels.colDigital": "Numérique",
+    "channels.colBusyLock": "Busy lock",
+    "channels.colHop": "Saut de fréq.",
+    "channels.colEncKey": "Clé chiffr.",
 
     // Settings tab
     "settings.title": "Réglages appareil",
@@ -286,6 +289,9 @@ const I18N_DICT = {
     "channels.colPower": "High power",
     "channels.colScan": "Scan",
     "channels.colDigital": "Digital",
+    "channels.colBusyLock": "Busy lock",
+    "channels.colHop": "Freq. hop",
+    "channels.colEncKey": "Enc. key",
 
     "settings.title": "Device settings",
     "settings.noConnection": "No active connection",

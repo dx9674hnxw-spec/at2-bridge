@@ -268,7 +268,14 @@ $("#btn-connect-serial").addEventListener("click", async () => {
   if (!port) return showToast(t("devices.selectPortFirst"), "info");
   try {
     await api("POST", "/api/connection/serial/connect", { port, baud_rate: 115200 });
+    // Mémorisation explicite (29/08/2026) -- ce n'est plus un effet de bord
+    // automatique de connect_serial côté serveur, qui annulait "Oublier"
+    // dès qu'on se reconnectait au même port. Voir CONSIGNES_PROJET.md.
+    await api("POST", "/api/known-devices", {
+      id: `serial-${port}`, name: port, transport: "serial", target: port,
+    });
     await refreshStatus();
+    await loadDeviceList();
   } catch (e) { showToast(e.message, "error"); }
 });
 
@@ -619,12 +626,18 @@ function channelRowHtml(ch) {
       <td><input type="checkbox" class="ch-power" ${ch.high_power ? "checked" : ""} /></td>
       <td><input type="checkbox" class="ch-scan" ${ch.scan_add !== false ? "checked" : ""} /></td>
       <td><input type="checkbox" class="ch-digital" ${ch.mode_digital ? "checked" : ""} /></td>
+      <td><input type="checkbox" class="ch-busylock" ${ch.busy_lock ? "checked" : ""} /></td>
+      <td><input type="checkbox" class="ch-hop" ${ch.hop_on ? "checked" : ""} /></td>
+      <td><input type="number" min="0" max="255" step="1" class="ch-enckey" value="${ch.encrypt_key ?? 0}" /></td>
       <td><button class="btn-ghost btn-write-one">${t("channels.write")}</button></td>
     </tr>`;
 }
 
 function emptyChannels() {
-  return Array.from({ length: 30 }, (_, i) => ({ channel: i + 1, rx_tone: "OFF", tx_tone: "OFF", bandwidth_narrow: true, high_power: true, scan_add: true }));
+  return Array.from({ length: 30 }, (_, i) => ({
+    channel: i + 1, rx_tone: "OFF", tx_tone: "OFF", bandwidth_narrow: true, high_power: true, scan_add: true,
+    busy_lock: false, hop_on: false, encrypt_key: 0,
+  }));
 }
 
 function renderChannelTable(channels) {
@@ -645,7 +658,9 @@ function readChannelRow(row) {
     high_power: row.querySelector(".ch-power").checked,
     scan_add: row.querySelector(".ch-scan").checked,
     mode_digital: row.querySelector(".ch-digital").checked,
-    busy_lock: false, hop_on: false, encrypt_key: 0,
+    busy_lock: row.querySelector(".ch-busylock").checked,
+    hop_on: row.querySelector(".ch-hop").checked,
+    encrypt_key: parseInt(row.querySelector(".ch-enckey").value, 10) || 0,
   };
 }
 
