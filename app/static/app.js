@@ -430,7 +430,7 @@ async function loadDeviceList() {
     }
     list.innerHTML = known.map((d) => `
       <div class="card device-card">
-        <div class="device-thumb">📻</div>
+        <img class="device-thumb" src="/static/at2-icon.png" alt="AT2" />
         <div class="device-card-info">
           <div class="device-card-name">${d.name}</div>
           <div class="device-card-model">${d.transport.toUpperCase()} · ${d.target}</div>

@@ -116,10 +116,10 @@
           </div>
           <div class="hint" id="beacon-status" data-i18n="gps.beaconOff">Balise désactivée</div>
 
-          <button class="btn-ghost gps-send-btn" id="gps-send-now" data-i18n="gps.sendNow">📍 Envoyer ma position maintenant</button>
+          <button class="btn-ghost gps-send-btn" id="gps-send-now" data-i18n="gps.sendNow">Envoyer ma position maintenant</button>
 
           <div class="sos-row">
-            <button class="sos-btn" id="sos-btn" data-i18n="gps.sos">🆘 SOS</button>
+            <button class="sos-btn" id="sos-btn" data-i18n="gps.sos">SOS</button>
             <select id="sos-preset" class="sos-preset">
               <option value="Perdu, besoin d'un itinéraire" data-i18n="gps.sosPresetLost">Perdu, besoin d'un itinéraire</option>
               <option value="Blessé, besoin de secours médical" data-i18n="gps.sosPresetInjured">Blessé, besoin de secours médical</option>
@@ -134,7 +134,7 @@
       <div class="panel-toolbar">
         <button id="btn-read-channels" class="btn-primary" data-i18n="channels.readAll">Lire les 30 canaux</button>
         <button id="btn-write-channels" class="btn-primary" data-i18n="channels.writeAll">Écrire les 30 canaux</button>
-        <button id="btn-import-xml" class="btn-ghost" data-i18n="channels.importXml">📄 Importer XML</button>
+        <button id="btn-import-xml" class="btn-ghost" data-i18n="channels.importXml">Importer XML</button>
         <input type="file" id="xml-file-input" accept=".xml" hidden />
         <span class="hint" data-i18n="channels.readHint">La lecture groupée est reconstituée par symétrie du protocole — vérifie avant d'écrire.</span>
       </div>
@@ -224,9 +224,9 @@
         <input id="msg-username" type="text" data-i18n-placeholder="msg.usernamePlaceholder" placeholder="Pseudo" value="elyha" />
         <textarea id="msg-text" rows="3" data-i18n-placeholder="msg.textPlaceholder" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn-ghost" id="btn-attach-image" data-i18n-title="msg.attachImage" title="Joindre une image" data-i18n="msg.attachImageBtn">🖼️ Image</button>
+          <button class="btn-ghost" id="btn-attach-image" data-i18n-title="msg.attachImage" title="Joindre une image" data-i18n="msg.attachImageBtn">Image</button>
           <input type="file" id="image-file-input" accept="image/*" hidden />
-          <button class="btn-ghost" id="btn-record-voice" data-i18n-title="msg.recordVoice" title="Message vocal" data-i18n="msg.recordVoiceBtn">🎙️ Vocal</button>
+          <button class="btn-ghost" id="btn-record-voice" data-i18n-title="msg.recordVoice" title="Message vocal" data-i18n="msg.recordVoiceBtn">Vocal</button>
           <button id="btn-send-message" class="btn-primary" data-i18n="msg.send">Envoyer</button>
         </div>
         <span class="hint" id="voice-record-status"></span>
@@ -247,9 +247,9 @@
         </div>
       </div>
       <div class="panel-toolbar" style="margin-bottom:10px;">
-        <button class="btn-ghost" id="btn-log-copy-all" data-i18n="log.copyAll">📋 Copier tout</button>
-        <button class="btn-ghost" id="btn-log-copy-last" data-i18n="log.copyLast">📋 Copier le dernier échange</button>
-        <button class="btn-ghost" id="btn-log-export" data-i18n="log.export">💾 Exporter (.txt)</button>
+        <button class="btn-ghost" id="btn-log-copy-all" data-i18n="log.copyAll">Copier tout</button>
+        <button class="btn-ghost" id="btn-log-copy-last" data-i18n="log.copyLast">Copier le dernier échange</button>
+        <button class="btn-ghost" id="btn-log-export" data-i18n="log.export">Exporter (.txt)</button>
       </div>
       <pre id="log-console"></pre>
     </section>
