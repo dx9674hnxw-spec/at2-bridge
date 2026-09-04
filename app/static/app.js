@@ -717,13 +717,23 @@ async function startPtt() {
     // (see static/ptt-amr-codec.js + static/amrnb.js) since PTT has been
     // confirmed BLE-only -- see CONSIGNES_PROJET.md.
     try {
-      pttSession = AT2BleClient.startPtt(
+      pttSession = await AT2BleClient.startPtt(
         (pcm) => {
           PttAudio.playPcmFrame(pcm);
           $("#rf-indicator").classList.add("rx");
         },
         appendLog
       );
+      // startPtt() now awaits a radio key-on handshake before returning
+      // (see ble-client.js), so a very short tap can release the button
+      // before it resolves -- mirror the reference app (PttUiController.kt)
+      // and bail out cleanly instead of starting mic capture for a press
+      // that already ended, leaving the radio keyed up for nothing.
+      if (!pttActive) {
+        await pttSession.close();
+        pttSession = null;
+        return;
+      }
       await PttAudio.startCapture((int16Frame) => {
         pttSession.feedPcmFrame(int16Frame).catch((e) => appendLog(`PTT BLE erreur d'envoi: ${e.message}`));
         setWaveHeights(true);
