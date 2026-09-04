@@ -14,10 +14,37 @@ from .frame import build_payload
 FAMILY_PTT = 0x02
 CMD_PTT = 0x04
 PTT_VOICE_SUBTYPE = bytes([0x03, 0x00, 0x00])
+PTT_KEY_SUBTYPE = 0x02
+OFFLINE_SESSION_SUBTYPE = 0x07
 
 FRAMES_PER_PACKET = 5
 TAIL_MIN_FRAMES = 4
 PACKET_PACING_SECONDS = 0.10
+
+
+def build_ptt_key_payload(ptt_on: bool) -> bytes:
+    """Key the radio's transmitter on/off, ported from
+    `At2ProtocolExecutor.kt::setOfflineMode(ptt=...)` (reference Android
+    app). MUST be sent (and, ideally, given a brief moment to take
+    effect) before the first voice packet of a transmission, and again
+    after the last one. Without it, the radio's receiver is never told
+    to enter PTT/offline-comm mode and silently discards incoming voice
+    packets -- even though they are correctly built, paced, and
+    transmitted, which matches a "PTT does nothing on the radio" report
+    exactly.
+    """
+    return build_payload(FAMILY_PTT, CMD_PTT, bytes([PTT_KEY_SUBTYPE, 0x01 if ptt_on else 0x00]))
+
+
+def build_offline_session_payload(enabled: bool) -> bytes:
+    """Enable/disable the radio's offline comm (chat/PTT) session, ported
+    from `At2ProtocolExecutor.kt::setOfflineSession()` /
+    `enterPttPreflight()`. The reference app sends this once before ever
+    using PTT or offline chat; sent here alongside every PTT key-on for
+    simplicity and to be resilient to the radio not persisting the flag
+    across BLE reconnects.
+    """
+    return build_payload(FAMILY_PTT, CMD_PTT, bytes([OFFLINE_SESSION_SUBTYPE, 0x01 if enabled else 0x00]))
 
 
 def build_ptt_voice_payload(amr_frames: list[bytes]) -> bytes:

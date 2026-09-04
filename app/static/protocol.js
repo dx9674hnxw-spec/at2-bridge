@@ -259,9 +259,28 @@ const AT2Protocol = (() => {
   const PTT_FAMILY = 0x02;
   const PTT_CMD = 0x04;
   const PTT_VOICE_SUBTYPE = [0x03, 0x00, 0x00];
+  const PTT_KEY_SUBTYPE = 0x02;
+  const OFFLINE_SESSION_SUBTYPE = 0x07;
   const PTT_FRAMES_PER_PACKET = 5;
   const PTT_TAIL_MIN_FRAMES = 4;
   const PTT_PACKET_PACING_MS = 100;
+
+  // Key the radio's transmitter on/off, ported from
+  // At2ProtocolExecutor.kt::setOfflineMode(ptt=...) (reference Android
+  // app). MUST be sent before the first voice packet of a transmission
+  // and again after the last one -- without it the radio's receiver is
+  // never told to enter PTT/offline-comm mode and silently discards
+  // voice packets, even though they're correctly built/paced/sent. This
+  // was entirely missing from this project's BLE local PTT path before.
+  function buildPttKeyPayload(pttOn) {
+    return buildPayload(PTT_FAMILY, PTT_CMD, [PTT_KEY_SUBTYPE, pttOn ? 0x01 : 0x00]);
+  }
+
+  // Enable/disable the radio's offline comm (chat/PTT) session, ported
+  // from At2ProtocolExecutor.kt::setOfflineSession() / enterPttPreflight().
+  function buildOfflineSessionPayload(enabled) {
+    return buildPayload(PTT_FAMILY, PTT_CMD, [OFFLINE_SESSION_SUBTYPE, enabled ? 0x01 : 0x00]);
+  }
 
   function buildPttVoicePayload(amrFrames) {
     if (amrFrames.length < PTT_TAIL_MIN_FRAMES || amrFrames.length > PTT_FRAMES_PER_PACKET) {
@@ -289,6 +308,6 @@ const AT2Protocol = (() => {
 
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
     encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
-    buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
+    buildPttVoicePayload, isPttVoicePacket, extractAmrFrames, buildPttKeyPayload, buildOfflineSessionPayload,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();

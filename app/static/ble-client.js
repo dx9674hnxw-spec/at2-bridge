@@ -7,8 +7,14 @@
  * - Channel selection
  * - Volume
  * - Offline text messaging
+ * - Channel read/write (CPS dialect)
+ * - Live PTT (client-side AMR encode/decode -- see startPtt() below;
+ *   PTT is confirmed BLE-only, there is no server-side radio path for it
+ *   at all -- see README's "PTT in local BLE mode" section).
  *
- * Full codeplug operations and live PTT remain server mode only.
+ * Full codeplug operations (bulk read/write of all 30 channels) remain
+ * out of scope here (and unsupported by the radio in general -- see
+ * README's "Confirmed not working" section).
  */
 const AT2BleClient = (() => {
   const SERVICE_UUID = "0000ae60-0000-1000-8000-00805f9b34fb";
@@ -258,11 +264,24 @@ const AT2BleClient = (() => {
   // constants, from AT2Protocol.PTT_*), except encode/decode both
   // happen in the browser via ptt-amr-codec.js instead of server-side.
 
-  function startPtt(onRxPcm, onLog) {
+  async function startPtt(onRxPcm, onLog) {
     const log = onLog || (() => {});
     if (typeof PttAmr === "undefined") {
       throw new Error("ptt-amr-codec.js (and amrnb.js) must be loaded for live PTT");
     }
+
+    // Key the radio's transmitter on *before* touching the mic/codec at
+    // all -- ported from At2ProtocolExecutor.kt::setOfflineMode(ptt=true)
+    // / enterPttPreflight() in the reference Android app. This command
+    // was entirely missing here before: voice packets were correctly
+    // built, paced and sent, but the radio was never told to enter
+    // PTT/offline-comm mode and silently discarded them -- a very
+    // plausible explanation for "live PTT sends but the radio does
+    // nothing".
+    await sendFrame(AT2Protocol.encodeFrame(AT2Protocol.buildOfflineSessionPayload(true)));
+    await sendFrame(AT2Protocol.encodeFrame(AT2Protocol.buildPttKeyPayload(true)));
+    await new Promise((resolve) => setTimeout(resolve, 20)); // let the radio key up, mirrors the reference app's 20ms guard
+
     const codec = new PttAmr.Codec();
     let pending = [];
     let lastSend = 0;
@@ -280,7 +299,7 @@ const AT2BleClient = (() => {
     let amrFramesSent = 0;
     let loggedFirstFailure = false;
 
-    log("PTT BLE: session démarrée (attente de frames audio du navigateur)");
+    log("PTT BLE: clé radio activée, session démarrée (attente de frames audio du navigateur)");
 
     const rxUnsubscribe = onPacket((pkt) => {
       if (!AT2Protocol.isPttVoicePacket(pkt)) return;
@@ -361,6 +380,11 @@ const AT2BleClient = (() => {
         }
         rxUnsubscribe();
         codec.close();
+        try {
+          await sendFrame(AT2Protocol.encodeFrame(AT2Protocol.buildPttKeyPayload(false)));
+        } catch (e) {
+          log(`PTT BLE: ⚠️ échec d'envoi de la commande de relâchement PTT: ${e.message}`);
+        }
         log(
           "PTT BLE: transmission terminée — " +
           `${pcmFramesReceived} frame(s) PCM reçue(s) du navigateur, ` +

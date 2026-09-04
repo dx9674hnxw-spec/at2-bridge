@@ -165,6 +165,29 @@ def test_ptt_voice_payload_rejects_bad_frame_count():
         ptt.build_ptt_voice_payload([b"\x00" * 12] * 2)
 
 
+def test_ptt_key_payload_on_off():
+    from app.protocol import ptt
+
+    for ptt_on in (True, False):
+        pkt = frame.decode_packet(ptt.build_ptt_key_payload(ptt_on))
+        assert pkt.family == ptt.FAMILY_PTT
+        assert pkt.command == ptt.CMD_PTT
+        assert pkt.body == bytes([ptt.PTT_KEY_SUBTYPE, 0x01 if ptt_on else 0x00])
+        # Must never be mistaken for a voice packet (distinct subtype byte).
+        assert not ptt.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body)
+
+
+def test_offline_session_payload_on_off():
+    from app.protocol import ptt
+
+    for enabled in (True, False):
+        pkt = frame.decode_packet(ptt.build_offline_session_payload(enabled))
+        assert pkt.family == ptt.FAMILY_PTT
+        assert pkt.command == ptt.CMD_PTT
+        assert pkt.body == bytes([ptt.OFFLINE_SESSION_SUBTYPE, 0x01 if enabled else 0x00])
+        assert not ptt.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body)
+
+
 # ---------------------------------------------------------------------------
 # Offline messaging: voice, image, generic decode(), MessageAssembler
 # (previously validated manually, not yet locked in by automated tests)

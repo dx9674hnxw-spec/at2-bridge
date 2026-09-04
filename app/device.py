@@ -372,6 +372,20 @@ class PttSession:
         self._pending_amr: list[bytes] = []
         self._last_send = 0.0
 
+    async def start(self) -> None:
+        """Key the radio's transmitter on. MUST be awaited before feeding
+        the first PCM frame -- ported from
+        `At2ProtocolExecutor.kt::setOfflineMode(ptt=true)` /
+        `enterPttPreflight()` in the reference Android app. This was
+        previously entirely missing here: voice packets were built,
+        paced, and sent correctly, but the radio was never told to key
+        up, so it silently discarded them -- a very plausible explanation
+        for live PTT producing no audio on real hardware.
+        """
+        await self._transport.send_payload(self._ptt_proto.build_offline_session_payload(True))
+        await self._transport.send_payload(self._ptt_proto.build_ptt_key_payload(True))
+        await asyncio.sleep(0.02)  # give the radio a moment to key up, mirrors the reference app's 20ms guard
+
     async def feed_pcm_frame(self, pcm_320_bytes: bytes) -> None:
         """Call once per 20ms with exactly 320 bytes of 16-bit mono PCM @8kHz."""
         encoded = self._codec.encode(pcm_320_bytes)
@@ -396,6 +410,10 @@ class PttSession:
     async def close(self) -> None:
         if len(self._pending_amr) >= self._ptt_proto.TAIL_MIN_FRAMES:
             await self._flush(len(self._pending_amr))
+        try:
+            await self._transport.send_payload(self._ptt_proto.build_ptt_key_payload(False))
+        except Exception:
+            logger.exception("failed to send PTT key-off")
         self._codec.close()
         self._log_line("PTT: transmission terminée")
 
