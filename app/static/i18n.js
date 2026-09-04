@@ -51,6 +51,13 @@ const I18N_DICT = {
     "debug.rawFrameSending": "Envoi en cours…",
     "debug.rawFrameInvalidHex": "Hex de trame invalide.",
     "debug.rawFrameNoConnection": "Aucune connexion active — connecte-toi d'abord.",
+    "log.copyAll": "📋 Copier tout",
+    "log.copyLast": "📋 Copier le dernier échange",
+    "log.export": "💾 Exporter (.txt)",
+    "log.empty": "Le journal est vide.",
+    "log.copiedAll": "Journal complet copié dans le presse-papiers.",
+    "log.copiedLast": "Dernier échange copié dans le presse-papiers.",
+    "log.copyFailed": "Échec de la copie — le navigateur a peut-être bloqué l'accès au presse-papiers.",
     "mode.notSupportedLocal": "Pas encore disponible en mode BLE local — utilise le mode Serveur.",
 
     // Devices tab
@@ -217,6 +224,13 @@ const I18N_DICT = {
     "debug.rawFrameSending": "Sending…",
     "debug.rawFrameInvalidHex": "Invalid frame hex.",
     "debug.rawFrameNoConnection": "No active connection — connect first.",
+    "log.copyAll": "📋 Copy all",
+    "log.copyLast": "📋 Copy last exchange",
+    "log.export": "💾 Export (.txt)",
+    "log.empty": "The journal is empty.",
+    "log.copiedAll": "Full journal copied to clipboard.",
+    "log.copiedLast": "Last exchange copied to clipboard.",
+    "log.copyFailed": "Copy failed — the browser may have blocked clipboard access.",
     "mode.notSupportedLocal": "Not available in local BLE mode yet — use Server mode.",
 
     "devices.empty": "No known devices yet — scan over BLE or connect via serial to remember one.",

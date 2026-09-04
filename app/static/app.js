@@ -169,12 +169,106 @@ async function apiUpload(path, formData) {
   return res.json();
 }
 
-function appendLog(line) {
+// ---------------------------------------------------------------------------
+// Journal (Log tab) -- structured lines (not just raw text) so we can
+// color-code by type, copy just the last exchange, and export to a file.
+// "Last exchange" = everything from the last non-RX line (a TX/DEBUG/PTT
+// action) to the end -- matches the TX-then-RX(es) pattern already used
+// consistently everywhere in this project's logging (serial/BLE transports,
+// PttSession, the raw-frame debug tool), so no per-feature special-casing
+// is needed here.
+// ---------------------------------------------------------------------------
+let logLines = []; // { timestamp, text, cls }
+let lastActionStart = 0;
+
+function classifyLogLine(text) {
+  if (/^RX\b/.test(text)) return "log-rx";
+  if (/^TX\b/.test(text)) return "log-tx";
+  if (/^\[DEBUG\]/.test(text)) return "log-debug";
+  if (/⚠️|erreur|error|échec|failed/i.test(text)) return "log-error";
+  return "log-info";
+}
+
+function renderLogLine(entry) {
   const el = $("#log-console");
+  const span = document.createElement("span");
+  span.className = `log-line ${entry.cls}`;
+  span.textContent = `[${entry.timestamp}] ${entry.text}\n`;
+  el.appendChild(span);
+}
+
+function appendLog(line) {
   const now = new Date().toLocaleTimeString("fr-FR");
-  el.textContent += `[${now}] ${line}\n`;
+  const entry = { timestamp: now, text: line, cls: classifyLogLine(line) };
+  logLines.push(entry);
+  if (entry.cls !== "log-rx") lastActionStart = logLines.length - 1;
+  renderLogLine(entry);
+  const el = $("#log-console");
   el.scrollTop = el.scrollHeight;
 }
+
+function formatLogEntries(entries) {
+  return entries.map((e) => `[${e.timestamp}] ${e.text}`).join("\n");
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      // fall through to the legacy fallback below
+    }
+  }
+  // navigator.clipboard requires a secure context (HTTPS/localhost), same
+  // restriction as getUserMedia -- fall back to the older execCommand
+  // approach, which still works over plain HTTP in most browsers, so
+  // "Copier" doesn't silently fail the same way the PTT mic capture did.
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand("copy");
+    textarea.remove();
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+$("#btn-log-copy-all").addEventListener("click", async () => {
+  if (!logLines.length) return showToast(t("log.empty"), "info");
+  const ok = await copyToClipboard(formatLogEntries(logLines));
+  showToast(t(ok ? "log.copiedAll" : "log.copyFailed"), ok ? "success" : "error");
+});
+
+$("#btn-log-copy-last").addEventListener("click", async () => {
+  if (!logLines.length) return showToast(t("log.empty"), "info");
+  const ok = await copyToClipboard(formatLogEntries(logLines.slice(lastActionStart)));
+  showToast(t(ok ? "log.copiedLast" : "log.copyFailed"), ok ? "success" : "error");
+});
+
+$("#btn-log-export").addEventListener("click", () => {
+  if (!logLines.length) return showToast(t("log.empty"), "info");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  downloadTextFile(`at2bridge-journal-${stamp}.txt`, formatLogEntries(logLines));
+});
 
 // ---------------------------------------------------------------------------
 // Toast notifications (non-blocking, replaces alert() -- see style.css for
