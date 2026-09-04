@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app import auth, store
 from app.device import device_manager
-from app.protocol.channel import ChannelConfig, tone_options
+from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
 from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
@@ -140,6 +140,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RawFrameRequest(BaseModel):
+    frame_hex: str
+    listen_seconds: float = 2.0
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -233,6 +238,34 @@ async def clear_channel(channel_number: int, _: None = Depends(auth.require_auth
 async def select_channel(channel_number: int, _: None = Depends(auth.require_auth)):
     await device_manager.select_channel(channel_number)
     return {"ok": True}
+
+
+_MAX_XML_UPLOAD_BYTES = 5 * 1024 * 1024  # a CPS export is a few KB; generous cap against abuse
+
+
+@app.post("/api/channels/import-xml")
+async def import_channels_xml(file: UploadFile = File(...), _: None = Depends(auth.require_auth)):
+    """Parses a CPS XML export into channel rows for the UI table to
+    review -- see app/protocol/channel.py::parse_cps_xml. Never writes to
+    the radio directly; "Write" stays an explicit, separate action, same
+    as after a live "Read". (This endpoint was referenced by app.js but
+    missing server-side -- the import button 404'd; fixed here.)"""
+    raw = await file.read()
+    if len(raw) > _MAX_XML_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="fichier XML trop volumineux")
+    # xml.etree.ElementTree (used by parse_cps_xml) doesn't resolve
+    # external entities, but a crafted internal DOCTYPE can still trigger
+    # entity-expansion ("billion laughs") DoS. A real CPS export never
+    # carries a DOCTYPE/ENTITY, so rejecting one outright is a cheap,
+    # dependency-free mitigation against a malicious upload.
+    upper = raw.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        raise HTTPException(status_code=400, detail="XML avec DOCTYPE/ENTITY non autorisé")
+    try:
+        configs = parse_cps_xml(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return [c.__dict__ for c in configs]
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +454,28 @@ async def send_sos(req: PositionRequest, _: None = Depends(auth.require_auth)):
 
 
 # ---------------------------------------------------------------------------
+# Debug: raw frame injection (experimental tool for probing undocumented
+# commands while reverse-engineering -- gated behind the same auth as
+# everything else). Referenced by app.js but missing server-side; fixed
+# here alongside /api/channels/import-xml above.
+# ---------------------------------------------------------------------------
+
+@app.post("/api/debug/send-raw-frame")
+async def send_raw_frame(req: RawFrameRequest, _: None = Depends(auth.require_auth)):
+    try:
+        frame = bytes.fromhex(req.frame_hex.strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="hex invalide") from e
+    if not frame:
+        raise HTTPException(status_code=400, detail="trame vide")
+    # Cap listen_seconds: this is a debug tool, not a place to let a client
+    # tie up the request for an arbitrary amount of time.
+    listen_seconds = max(0.0, min(req.listen_seconds, 10.0))
+    await device_manager.send_debug_raw_frame(frame, listen_seconds)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Live log over WebSocket
 # ---------------------------------------------------------------------------
 
@@ -442,6 +497,13 @@ async def ws_log(websocket: WebSocket):
             await websocket.send_text(line)
     except WebSocketDisconnect:
         pass
+    finally:
+        # Without this, _on_log stays registered on the DeviceManager
+        # singleton forever -- app.js reconnects this socket automatically
+        # every 2s after a drop, so this leaked a callback (+ its queue)
+        # per reconnect on any long-running instance. Confirmed via code
+        # review; same fix applied to /ws/ptt and /ws/messages below.
+        device_manager.off_log(_on_log)
 
 
 @app.websocket("/ws/ptt")
@@ -488,6 +550,7 @@ async def ws_ptt(websocket: WebSocket):
     finally:
         forward_task.cancel()
         await session.close()
+        device_manager.off_ptt_voice_packet(_on_rx_pcm)  # see /ws/log's finally block above
 
 
 @app.websocket("/ws/messages")
@@ -521,6 +584,8 @@ async def ws_messages(websocket: WebSocket):
             await websocket.send_json(payload)
     except WebSocketDisconnect:
         pass
+    finally:
+        device_manager.off_message_received(_on_message)  # see /ws/log's finally block above
 
 
 # ---------------------------------------------------------------------------

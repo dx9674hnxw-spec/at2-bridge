@@ -61,6 +61,10 @@ class DeviceManager:
     def on_log(self, cb) -> None:
         self._log_listeners.append(cb)
 
+    def off_log(self, cb) -> None:
+        if cb in self._log_listeners:
+            self._log_listeners.remove(cb)
+
     async def connect_serial(self, port: str, baud_rate: int = 115200) -> None:
         await self.disconnect()
         t = SerialTransport()
@@ -206,6 +210,23 @@ class DeviceManager:
         t = self._require_transport()
         await t.send_payload(commands.select_channel(channel_number))
 
+    # -- debug ----------------------------------------------------------------
+
+    async def send_debug_raw_frame(self, frame: bytes, listen_seconds: float = 2.0) -> None:
+        """Backs the "raw frame" debug panel in the UI (app.js's
+        #btn-send-raw-frame). Sends an already fully-encoded frame
+        (AA55..77EE) as-is -- no protocol validation, this is meant for
+        probing undocumented commands while reverse-engineering. TX and
+        any RX are already surfaced in the Journal automatically (the TX
+        log line comes from Transport.send_raw_frame itself; RX comes
+        from the packet listener installed in connect_serial/connect_ble),
+        so this just needs to send and give the radio time to answer."""
+        t = self._require_transport()
+        self._log_line(f"[DEBUG] Envoi trame brute: {frame.hex()}")
+        await t.send_raw_frame(frame)
+        if listen_seconds > 0:
+            await asyncio.sleep(listen_seconds)
+
     # -- messaging ----------------------------------------------------------
 
     async def send_text_message(self, username: str, text: str) -> None:
@@ -271,6 +292,10 @@ class DeviceManager:
         offline message has been reassembled from incoming packets."""
         self._message_rx_listeners.append(callback)
 
+    def off_message_received(self, callback) -> None:
+        if callback in self._message_rx_listeners:
+            self._message_rx_listeners.remove(callback)
+
     def _install_message_rx_listener(self, transport: Transport) -> None:
         assembler = messages.MessageAssembler()
 
@@ -301,6 +326,10 @@ class DeviceManager:
         """`callback(pcm_bytes)` is invoked (sync) with 320 bytes of decoded
         PCM for every incoming voice packet on the active transport."""
         self._ptt_rx_listeners.append(callback)
+
+    def off_ptt_voice_packet(self, callback) -> None:
+        if callback in self._ptt_rx_listeners:
+            self._ptt_rx_listeners.remove(callback)
 
     def _install_ptt_rx_listener(self, transport: Transport) -> None:
         from app.protocol.amr_codec import AmrNbCodec
