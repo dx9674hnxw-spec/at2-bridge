@@ -454,8 +454,18 @@ async function reconnectKnownDevice(id, transport, target) {
 }
 
 async function forgetKnownDevice(id) {
-  await api("DELETE", `/api/known-devices/${id}`);
-  await loadDeviceList();
+  try {
+    // encodeURIComponent est indispensable ici : les IDs d'appareils série
+    // sont construits comme "serial-/dev/ttyACM0" (contiennent des "/"),
+    // qui sans encodage cassaient le routage FastAPI de la route DELETE
+    // (404 silencieux, jamais visible car cette fonction n'avait alors
+    // aucun try/catch) -- confirmé comme cause du bug "Oublier ne
+    // fonctionne pas" le 29/08/2026.
+    await api("DELETE", `/api/known-devices/${encodeURIComponent(id)}`);
+    await loadDeviceList();
+  } catch (e) {
+    showToast(e.message, "error");
+  }
 }
 
 // ---------------------------------------------------------------------------
