@@ -241,7 +241,7 @@ main { padding: 16px 16px calc(24px + var(--safe-bottom)); max-width: 1100px; ma
 .device-list { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; margin-bottom: 16px; }
 .device-card { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .device-card.selected { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary-outline); }
-.device-thumb { width: 42px; height: 42px; border-radius: var(--radius-lg); flex-shrink: 0; background: var(--color-surface); border: 1px solid var(--color-border-strong); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.device-thumb { width: 42px; height: 42px; border-radius: var(--radius-lg); flex-shrink: 0; background: var(--color-surface); border: 1px solid var(--color-border-strong); object-fit: cover; }
 .device-card-info { flex: 1; min-width: 0; }
 .device-card-name { font-size: 13.5px; font-weight: 600; color: var(--color-text); }
 .device-card-model { font-size: 10.5px; color: var(--color-text-subtle); }
@@ -307,8 +307,23 @@ main { padding: 16px 16px calc(24px + var(--safe-bottom)); max-width: 1100px; ma
 
 .gps-send-btn { width: 100%; margin: 12px 0 14px; }
 .sos-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.sos-btn { background: var(--status-down); color: #fff; border-radius: var(--radius-md); padding: 10px 16px; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+.sos-btn { background: var(--status-down); color: #fff; border-radius: var(--radius-md); padding: 10px 16px; font-weight: 700; font-size: 13px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; }
 .sos-btn.sent { background: var(--status-up); }
+.sos-btn::before {
+  content: "!";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--status-down);
+  font-size: 11px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.sos-btn.sent::before { color: var(--status-up); }
 .sos-preset { flex: 1; min-width: 140px; }
 
 .table-wrap { overflow-x: auto; background: rgba(18, 18, 18, 0.92); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); -webkit-overflow-scrolling: touch; }
