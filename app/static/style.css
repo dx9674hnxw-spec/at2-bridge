@@ -204,6 +204,7 @@ body {
 .prefs-item:hover { background-color: var(--color-surface-hover); }
 
 .conn-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.conn-controls[hidden] { display: none; }
 
 /* Server-mode transport sub-toggle (29/08/2026 connection panel redesign)
    -- visually a smaller/secondary variant of .mode-toggle, since it's a
@@ -417,6 +418,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
   cursor: pointer;
   min-height: auto;
 }
+.alert-footer[hidden] { display: none; }
 
 .alert-footer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-info); }
 .alert-footer-success .alert-footer-dot { background: var(--status-up); }
@@ -430,6 +432,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
 /* Alert history: full session log of every alert shown, opened by
    clicking the footer above. */
 .alert-history-overlay { position: fixed; inset: 0; z-index: 250; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; }
+.alert-history-overlay[hidden] { display: none; }
 .alert-history-panel {
   width: 100%;
   max-width: 560px;
