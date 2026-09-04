@@ -70,10 +70,13 @@ class DeviceManager:
         self._transport, self._kind, self._target = t, "serial", port
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
-        # `port` (e.g. /dev/ttyACM0) is the best name we have here -- there's
-        # no friendly device name available over a plain serial link, unlike
-        # BLE which at least has an advertised name from the scan step.
-        store.remember_device(f"serial-{port}", port, "serial", port)
+        # NOTE (29/08/2026): remembering the device is now an EXPLICIT action
+        # taken by the frontend (see app.js's btn-connect-serial handler),
+        # not an automatic side effect of every successful connect. This used
+        # to unconditionally re-add the device via store.remember_device()
+        # here, which silently undid "Forget" the moment the person
+        # reconnected to the same port for any reason -- confirmed as a real,
+        # reported bug. See CONSIGNES_PROJET.md.
         self._log_line(f"Connecté en série sur {port} @ {baud_rate} bauds")
 
     async def connect_ble(self, address: str) -> None:
@@ -85,13 +88,10 @@ class DeviceManager:
         self._transport, self._kind, self._target = t, "ble", address
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
-        # Fallback name (address) -- app/static/app.js immediately overwrites
-        # this with the properly scanned device name right after a
-        # successful connect, since store.remember_device() dedupes by id
-        # and keeps the latest write. Connecting directly by address
-        # (e.g. via a known-device reconnect) without going through a
-        # fresh scan will keep this fallback name, which is expected.
-        store.remember_device(f"ble-{address}", address, "ble", address)
+        # NOTE (29/08/2026): same reasoning as connect_serial above --
+        # remembering is now explicit (app.js's btn-scan-ble handler already
+        # does its own remember_device call with the proper scanned name
+        # right after this returns). No longer done automatically here.
         self._log_line(f"Connecté en BLE sur {address}")
 
     async def disconnect(self) -> None:
@@ -108,131 +108,56 @@ class DeviceManager:
     # -- channels ---------------------------------------------------------
 
     async def write_channel(self, config: chan.ChannelConfig) -> None:
-        """Writes one channel using the CPS-style per-channel format
-        (opcode=0x12, confirmed structurally correct against the
-        decompiled official CPS's own field order/encoding, 27-28/08/2026).
-
-        IMPORTANT: a write-then-read round-trip on real hardware was
-        still in progress as of this writing -- the previous format
-        (family=0x02/command=0x02, ported from the Android app) got
-        ACK'd but was CONFIRMED to have no actual effect (read-back
-        showed the old value unchanged). Do not mark this ✅ in the
-        README/CONSIGNES_PROJET.md until a write-then-read round-trip
-        with a real hardware confirmation exists. See
-        CONSIGNES_PROJET.md "accusé de réception ≠ confirmation
-        fonctionnelle".
-        """
-        from app.protocol.frame import encode_cps_frame
-
         t = self._require_transport()
-        request = chan.build_channel_write_request(config)
-        await t.send_raw_frame(encode_cps_frame(request))
-        self._log_line(f"Canal {config.channel} écrit (format CPS, non confirmé fonctionnellement)")
+        record = chan.encode_channel_record(config)
+        from app.protocol.frame import build_payload
+        await t.send_payload(build_payload(0x02, 0x02, record))
+        self._log_line(f"Canal {config.channel} écrit")
 
     async def clear_channel(self, channel_number: int) -> None:
         t = self._require_transport()
         await t.send_payload(commands.clear_channel(channel_number))
         self._log_line(f"Canal {channel_number} effacé")
 
-    async def send_raw_frame_debug(self, frame_hex: str, listen_seconds: float = 2.0) -> dict:
-        """EXPERIMENTAL / DEBUG ONLY -- bypasses the entire protocol layer
-        (frame.py/commands.py) and writes an already-fully-encoded frame
-        (as a hex string, e.g. "aa55...77ee") directly to the wire.
+    async def read_all_channels(self, timeout: float = 8.0) -> list[chan.ChannelConfig]:
+        """Request the codeplug and reassemble channel records from the
+        incoming family=0x02/command=0x02 packets.
 
-        Used to test protocol hypotheses derived from reverse-engineering
-        (e.g. the decompiled Windows CPS's per-channel read format) without
-        first committing them to commands.py/channel.py -- see
-        CONSIGNES_PROJET.md "Prochain test matériel prioritaire" (27/08/2026).
-
-        Collects whatever raw packets arrive within `listen_seconds` after
-        sending, and returns them for inspection alongside the normal
-        Journal log (which will also show them via the existing on_packet
-        RX logging already wired in connect_serial/connect_ble).
+        NOTE: the exact chunking of the *read* response was not directly
+        observed (see commands.query_channel_config docstring). This
+        collects raw 0x02/0x02 packet bodies until either 720 bytes have
+        been reassembled or `timeout` elapses, then parses what it has.
         """
         t = self._require_transport()
-        try:
-            frame_bytes = bytes.fromhex(frame_hex.strip())
-        except ValueError as e:
-            raise RuntimeError(f"hex de trame invalide: {e}") from e
-
-        received: list[dict] = []
+        collected = bytearray()
+        done = asyncio.Event()
 
         def _listener(pkt: At2Packet) -> None:
-            received.append({
-                "family": f"0x{pkt.family:02x}",
-                "command": f"0x{pkt.command:02x}",
-                "body_hex": pkt.body.hex(),
-            })
+            if pkt.family == 0x02 and pkt.command == 0x02:
+                collected.extend(pkt.body)
+                if len(collected) >= chan.CHANNEL_COUNT * chan.CHANNEL_RECORD_LEN:
+                    done.set()
 
         t.on_packet(_listener)
-        self._log_line(f"[DEBUG] Envoi trame brute: {frame_bytes.hex()}")
+        await t.send_payload(commands.query_channel_config())
         try:
-            await t.send_raw_frame(frame_bytes)
-            await asyncio.sleep(listen_seconds)
+            await asyncio.wait_for(done.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            self._log_line(f"Lecture codeplug incomplète: {len(collected)} octets reçus")
         finally:
             t._packet_listeners.remove(_listener)  # noqa: SLF001
 
-        if received:
-            self._log_line(f"[DEBUG] {len(received)} paquet(s) reçu(s) en réponse")
-        else:
-            self._log_line("[DEBUG] Aucun paquet reçu en réponse")
-
-        return {"sent_hex": frame_bytes.hex(), "received": received}
-
-    async def read_channel(self, channel: int, timeout: float = 0.5) -> chan.ChannelConfig | None:
-        """Reads one channel using the CPS-style per-channel read --
-        confirmed working on real hardware 27-28/08/2026 for channels 1,
-        11, 12 (frequency, tone, mode, encrypt key all matched
-        independently-known values, including a real CPS XML export for
-        the same channels -- see CONSIGNES_PROJET.md).
-
-        Returns None if the radio doesn't respond within `timeout`. In
-        every case tested so far this has meant "this channel slot is
-        blank / never configured" (e.g. channel 20 on Ely's radio, which
-        the CPS XML export also shows as absent) rather than a genuine
-        error, so callers treat a None here as an empty slot, not a
-        failure.
-        """
-        from app.protocol.frame import encode_cps_frame
-
-        t = self._require_transport()
-        request = chan.build_channel_read_request(channel)
-        wait_task = asyncio.ensure_future(
-            t.wait_for_packet(lambda p: p.family == 0x91 and p.command == 0x02, timeout=timeout)
-        )
-        await t.send_raw_frame(encode_cps_frame(request))
-        pkt = await wait_task
-        if pkt is None:
-            return None
-        try:
-            return chan.decode_channel_read_response(pkt.body)
-        except ValueError:
-            logger.warning("unexpected channel read body for channel %d: %s", channel, pkt.body.hex())
-            self._log_line(f"Canal {channel}: réponse de lecture inattendue ({pkt.body.hex()})")
-            return None
-
-    async def read_all_channels(self) -> list[chan.ChannelConfig]:
-        """Reads all 30 channels one at a time (matching the official
-        CPS's own behaviour, confirmed by decompiling its JS source --
-        it never sends a single bulk-read command either). Channels that
-        don't respond (empty/unconfigured slots) are simply omitted from
-        the result rather than causing the whole read to fail."""
-        results: list[chan.ChannelConfig] = []
-        for channel in range(1, chan.CHANNEL_COUNT + 1):
-            config = await self.read_channel(channel)
-            if config is not None:
-                results.append(config)
-            await asyncio.sleep(0.05)
-        self._log_line(f"Lecture codeplug: {len(results)}/{chan.CHANNEL_COUNT} canaux configurés trouvés")
-        return results
+        usable = bytes(collected[: (len(collected) // chan.CHANNEL_RECORD_LEN) * chan.CHANNEL_RECORD_LEN])
+        if not usable:
+            return []
+        return chan.parse_codeplug_read_chunks([usable])
 
     async def write_all_channels(self, configs: list[chan.ChannelConfig]) -> None:
-        """Writes each channel individually (matching the official CPS's
-        own per-channel write behaviour). See write_channel()'s
-        docstring for the important caveat about write confirmation."""
-        for i, config in enumerate(configs):
-            await self.write_channel(config)
-            self._log_line(f"Codeplug: canal {i + 1}/{len(configs)} envoyé")
+        t = self._require_transport()
+        chunks = chan.build_codeplug_write_chunks(configs)
+        for i, chunk in enumerate(chunks):
+            await t.send_payload(commands.write_channel_chunk(chunk))
+            self._log_line(f"Codeplug: bloc {i + 1}/{len(chunks)} envoyé")
             await asyncio.sleep(0.05)
 
     # -- device settings ----------------------------------------------------
@@ -402,12 +327,6 @@ class PttSession:
     """One push-to-talk transmission: buffers 20ms PCM frames, AMR-encodes
     them, and sends them to the radio in 100ms (5-frame) packets, exactly
     matching PttVoiceSender.kt's pacing and chunking.
-
-    Instrumented with per-stage counters (28/08/2026) since PTT has been
-    confirmed on real hardware to send zero voice frames in every attempt
-    so far, with no visibility into WHERE in the pipeline (browser mic
-    capture -> WebSocket -> AMR encode -> packet send) it's failing --
-    see CONSIGNES_PROJET.md.
     """
 
     def __init__(self, transport: Transport, log_line) -> None:
@@ -421,31 +340,11 @@ class PttSession:
         self._pending_amr: list[bytes] = []
         self._last_send = 0.0
 
-        # Per-stage counters for diagnosing the "zero voice frames sent"
-        # issue -- see class docstring.
-        self._pcm_frames_received = 0
-        self._amr_encode_failures = 0
-        self._amr_frames_encoded = 0
-        self._packets_sent = 0
-        self._amr_frames_sent = 0
-        self._logged_first_encode_failure = False
-
-        self._log_line("PTT: session démarrée (attente de frames audio du navigateur)")
-
     async def feed_pcm_frame(self, pcm_320_bytes: bytes) -> None:
         """Call once per 20ms with exactly 320 bytes of 16-bit mono PCM @8kHz."""
-        self._pcm_frames_received += 1
         encoded = self._codec.encode(pcm_320_bytes)
         if encoded is None:
-            self._amr_encode_failures += 1
-            if not self._logged_first_encode_failure:
-                self._logged_first_encode_failure = True
-                self._log_line(
-                    f"PTT: ⚠️ échec d'encodage AMR sur la frame PCM #{self._pcm_frames_received} "
-                    f"({len(pcm_320_bytes)} octets reçus, 320 attendus)"
-                )
             return
-        self._amr_frames_encoded += 1
         self._pending_amr.append(encoded)
         if len(self._pending_amr) >= self._ptt_proto.FRAMES_PER_PACKET:
             await self._flush(self._ptt_proto.FRAMES_PER_PACKET)
@@ -461,21 +360,12 @@ class PttSession:
         self._last_send = asyncio.get_event_loop().time()
         payload = self._ptt_proto.build_ptt_voice_payload(chunk)
         await self._transport.send_payload(payload)
-        self._packets_sent += 1
-        self._amr_frames_sent += len(chunk)
 
     async def close(self) -> None:
         if len(self._pending_amr) >= self._ptt_proto.TAIL_MIN_FRAMES:
             await self._flush(len(self._pending_amr))
         self._codec.close()
-        self._log_line(
-            "PTT: transmission terminée — "
-            f"{self._pcm_frames_received} frame(s) PCM reçue(s) du navigateur, "
-            f"{self._amr_frames_encoded} encodée(s) en AMR "
-            f"({self._amr_encode_failures} échec(s) d'encodage), "
-            f"{self._packets_sent} paquet(s) envoyé(s) à la radio "
-            f"({self._amr_frames_sent} frame(s) AMR au total)"
-        )
+        self._log_line("PTT: transmission terminée")
 
 
 device_manager = DeviceManager()
