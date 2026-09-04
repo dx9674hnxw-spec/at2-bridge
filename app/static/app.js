@@ -274,22 +274,53 @@ $("#btn-log-export").addEventListener("click", () => {
 // Toast notifications (non-blocking, replaces alert() -- see style.css for
 // the color-coded border variants: info=blue, success=green, error=red)
 // ---------------------------------------------------------------------------
-function showToast(message, type = "info", durationMs = 4000) {
-  const container = $("#toast-container");
-  const el = document.createElement("div");
-  el.className = `toast toast-${type}`;
-  el.textContent = message;
-  container.appendChild(el);
-  // Force a reflow before adding "show" so the CSS transition actually
-  // plays (otherwise the initial + final state would apply in the same
-  // frame and the fade-in would be skipped).
-  requestAnimationFrame(() => el.classList.add("show"));
-  setTimeout(() => {
-    el.classList.remove("show");
-    el.classList.add("hide");
-    setTimeout(() => el.remove(), 220);
-  }, durationMs);
+// ---------------------------------------------------------------------------
+// Alerts: a Blender-style status footer showing the latest message, click
+// to open the full session history -- replaces the earlier floating
+// top-right toast stack (29/08/2026 redesign). showToast() keeps the exact
+// same call signature used everywhere else in this file (message, type);
+// only what happens visually changed, so no other call site needed touching.
+// ---------------------------------------------------------------------------
+let alertHistory = []; // { timestamp, message, type }
+
+function renderAlertFooter(entry) {
+  const footer = $("#alert-footer");
+  footer.hidden = false;
+  footer.classList.remove("alert-footer-info", "alert-footer-success", "alert-footer-error", "pulse");
+  void footer.offsetWidth; // force reflow so the "pulse" animation restarts even for same-type messages in a row
+  footer.classList.add(`alert-footer-${entry.type}`, "pulse");
+  footer.querySelector(".alert-footer-text").textContent = entry.message;
 }
+
+function renderAlertHistory() {
+  const list = $("#alert-history-list");
+  if (!alertHistory.length) {
+    list.innerHTML = `<div class="hint">${t("alerts.empty")}</div>`;
+    return;
+  }
+  list.innerHTML = alertHistory.map((e) => `
+    <div class="alert-history-item alert-history-${e.type}">
+      <span class="alert-history-time">${e.timestamp}</span>
+      <span class="alert-history-msg">${e.message}</span>
+    </div>`).join("");
+}
+
+function showToast(message, type = "info") {
+  const entry = { timestamp: new Date().toLocaleTimeString("fr-FR"), message, type };
+  alertHistory.unshift(entry);
+  if (alertHistory.length > 200) alertHistory.length = 200; // cap session history size
+  renderAlertFooter(entry);
+  if (!$("#alert-history-overlay").hidden) renderAlertHistory(); // keep an open panel live
+}
+
+$("#alert-footer").addEventListener("click", () => {
+  renderAlertHistory();
+  $("#alert-history-overlay").hidden = false;
+});
+$("#alert-history-close").addEventListener("click", () => { $("#alert-history-overlay").hidden = true; });
+$("#alert-history-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "alert-history-overlay") $("#alert-history-overlay").hidden = true;
+});
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -347,44 +378,69 @@ async function refreshStatus() {
   $("#btn-disconnect").hidden = !status.connected;
 }
 
-async function refreshSerialPorts() {
-  const ports = await api("GET", "/api/connection/serial/ports");
-  const select = $("#serial-port-select");
-  select.innerHTML = ports.length
-    ? ports.map((p) => `<option value="${p.path}">${p.path} — ${p.description}</option>`).join("")
-    : `<option value="">${t("devices.noPortsFound")}</option>`;
+// Server-side connection: unified transport toggle (USB serial / server
+// Bluetooth) driving one shared dropdown + one shared "Connect" button,
+// replacing what used to be two visually-peer-looking buttons ("USB série"
+// as a disguised connect action, "Scanner BLE" opening a native prompt())
+// that behaved completely differently -- a real source of confusion
+// (Ely, 29/08/2026). The dropdown's *content* and the refresh/scan button's
+// behavior change based on which transport is selected; "Connect" always
+// acts on the currently selected transport + dropdown value.
+let selectedServerTransport = "serial"; // "serial" | "ble"
+
+async function refreshTargetList() {
+  const select = $("#target-select");
+  if (selectedServerTransport === "serial") {
+    const ports = await api("GET", "/api/connection/serial/ports");
+    select.innerHTML = ports.length
+      ? ports.map((p) => `<option value="${p.path}">${p.path} — ${p.description}</option>`).join("")
+      : `<option value="">${t("devices.noPortsFound")}</option>`;
+  } else {
+    const devices = await api("GET", "/api/connection/ble/scan");
+    select.innerHTML = devices.length
+      ? devices.map((d) => `<option value="${d.address}" data-name="${d.name}">${d.name} (${d.address})</option>`).join("")
+      : `<option value="">${t("devices.noBleFound")}</option>`;
+  }
 }
 
-$("#btn-refresh-ports").addEventListener("click", refreshSerialPorts);
+function applyServerTransportUi() {
+  $("#transport-serial").classList.toggle("active", selectedServerTransport === "serial");
+  $("#transport-ble").classList.toggle("active", selectedServerTransport === "ble");
+  const refreshBtn = $("#btn-refresh-target");
+  refreshBtn.title = t(selectedServerTransport === "serial" ? "btn.refreshPorts" : "btn.scanBle");
+  $("#target-select").innerHTML = "";
+}
 
-$("#btn-connect-serial").addEventListener("click", async () => {
-  const port = $("#serial-port-select").value;
-  if (!port) return showToast(t("devices.selectPortFirst"), "info");
-  try {
-    await api("POST", "/api/connection/serial/connect", { port, baud_rate: 115200 });
-    // Mémorisation explicite (29/08/2026) -- ce n'est plus un effet de bord
-    // automatique de connect_serial côté serveur, qui annulait "Oublier"
-    // dès qu'on se reconnectait au même port. Voir CONSIGNES_PROJET.md.
-    await api("POST", "/api/known-devices", {
-      id: `serial-${port}`, name: port, transport: "serial", target: port,
-    });
-    await refreshStatus();
-    await loadDeviceList();
-  } catch (e) { showToast(e.message, "error"); }
+$$(".transport-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    selectedServerTransport = btn.dataset.transport;
+    applyServerTransportUi();
+    refreshTargetList().catch((e) => showToast(e.message, "error"));
+  });
 });
 
-$("#btn-scan-ble").addEventListener("click", async () => {
+$("#btn-refresh-target").addEventListener("click", () => refreshTargetList().catch((e) => showToast(e.message, "error")));
+
+$("#btn-connect-server").addEventListener("click", async () => {
+  const select = $("#target-select");
+  const value = select.value;
+  if (!value) return showToast(t(selectedServerTransport === "serial" ? "devices.selectPortFirst" : "devices.noBleFound"), "info");
   try {
-    const devices = await api("GET", "/api/connection/ble/scan");
-    if (!devices.length) return showToast(t("devices.noBleFound"), "info");
-    const names = devices.map((d, i) => `${i}: ${d.name} (${d.address})`).join("\n");
-    const choice = prompt(`Appareils trouvés :\n${names}\n\nEntre le numéro à connecter :`);
-    const idx = parseInt(choice, 10);
-    if (Number.isNaN(idx) || !devices[idx]) return;
-    await api("POST", "/api/connection/ble/connect", { address: devices[idx].address });
-    await api("POST", "/api/known-devices", {
-      id: `ble-${devices[idx].address}`, name: devices[idx].name, transport: "ble", target: devices[idx].address,
-    });
+    if (selectedServerTransport === "serial") {
+      await api("POST", "/api/connection/serial/connect", { port: value, baud_rate: 115200 });
+      // Mémorisation explicite (29/08/2026) -- ce n'est plus un effet de bord
+      // automatique de connect_serial côté serveur, qui annulait "Oublier"
+      // dès qu'on se reconnectait au même port. Voir CONSIGNES_PROJET.md.
+      await api("POST", "/api/known-devices", {
+        id: `serial-${value}`, name: value, transport: "serial", target: value,
+      });
+    } else {
+      const name = select.selectedOptions[0]?.dataset.name || value;
+      await api("POST", "/api/connection/ble/connect", { address: value });
+      await api("POST", "/api/known-devices", {
+        id: `ble-${value}`, name, transport: "ble", target: value,
+      });
+    }
     await refreshStatus();
     await loadDeviceList();
   } catch (e) { showToast(e.message, "error"); }
@@ -1064,7 +1120,7 @@ function startApp() {
   loadChannelNames().then(() => applyActiveChannel(false));
   api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; }).catch(() => {});
   refreshStatus();
-  refreshSerialPorts();
+  refreshTargetList();
   setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
 }
 

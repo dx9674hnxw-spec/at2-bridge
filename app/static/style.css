@@ -205,6 +205,20 @@ body {
 
 .conn-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
+/* Server-mode transport sub-toggle (29/08/2026 connection panel redesign)
+   -- visually a smaller/secondary variant of .mode-toggle, since it's a
+   nested choice (which transport, once "Server mode" is already active). */
+.transport-toggle { display: inline-flex; background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-pill); padding: 2px; margin-bottom: 10px; }
+.transport-btn { border: none; background: transparent; color: var(--color-text-dim); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-pill); cursor: pointer; min-height: auto; }
+.transport-btn.active { background: var(--status-info-bg); color: #fff; }
+
+/* Single action row: target dropdown + refresh/scan + one Connect button,
+   replacing what used to be two visually-peer buttons that behaved
+   completely differently ("USB série" connected directly, "Scanner BLE"
+   opened a native prompt() dialog) -- a real source of confusion. */
+.conn-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.conn-row > select { flex: 1 1 auto; min-width: 0; }
+
 select, input[type=text], input[type=number], textarea {
   background-color: var(--color-surface); border: 1px solid var(--color-border);
   color: var(--color-text-soft); border-radius: var(--radius-input);
@@ -226,7 +240,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .tab { background-color: transparent; color: var(--color-text-dim); font-size: 12.5px; font-weight: 600; border-radius: var(--radius-md); padding: 8px 13px; min-height: auto; }
 .tab.active { background-color: var(--status-info-bg); color: #fff; box-shadow: 0 0 0 1px var(--color-primary-outline); }
 
-main { padding: 16px 16px calc(24px + var(--safe-bottom)); max-width: 1100px; margin: 0 auto; }
+main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; margin: 0 auto; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
@@ -379,45 +393,66 @@ tbody tr:hover { background: var(--color-surface-hover); }
 }
 
 /* ---------------------------------------------------------------------
-   Toast notifications -- replace blocking alert() popups with
-   non-blocking, auto-dismissing banners stacked top-right, color-coded
-   by severity (border-left) similar to Portainer's own toast style.
+   Alert footer (Blender-style status bar, 29/08/2026 redesign) -- shows
+   the latest message; click opens the full session history. Replaces
+   the earlier floating top-right toast stack.
    --------------------------------------------------------------------- */
-.toast-container {
+.alert-footer {
   position: fixed;
-  top: calc(16px + var(--safe-top));
-  right: calc(16px + var(--safe-right));
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 200;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: min(360px, calc(100vw - 32px));
-  pointer-events: none;
-}
-
-.toast {
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 16px calc(9px + var(--safe-bottom));
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--status-info);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card-hover);
-  padding: 10px 14px;
-  font-size: 12.5px;
+  border: none;
+  border-top: 1px solid var(--color-border);
   color: var(--color-text-soft);
-  pointer-events: auto;
-  opacity: 0;
-  transform: translateX(12px);
-  transition: opacity 180ms ease, transform 180ms ease;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  min-height: auto;
 }
 
-.toast.show { opacity: 1; transform: translateX(0); }
-.toast.hide { opacity: 0; transform: translateX(12px); }
+.alert-footer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-info); }
+.alert-footer-success .alert-footer-dot { background: var(--status-up); }
+.alert-footer-error .alert-footer-dot { background: var(--status-down); }
 
-.toast.toast-info { border-left-color: var(--status-info); }
-.toast.toast-success { border-left-color: var(--status-up); }
-.toast.toast-error { border-left-color: var(--status-down); }
+.alert-footer-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+
+@keyframes alert-footer-pulse { 0% { background-color: var(--color-bg-alt); } 100% { background-color: var(--color-surface); } }
+.alert-footer.pulse { animation: alert-footer-pulse 900ms ease-out; }
+
+/* Alert history: full session log of every alert shown, opened by
+   clicking the footer above. */
+.alert-history-overlay { position: fixed; inset: 0; z-index: 250; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; }
+.alert-history-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 70vh;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: calc(46px + var(--safe-bottom));
+}
+.alert-history-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--color-border); font-weight: 600; font-size: 13px; }
+.alert-history-list { overflow-y: auto; padding: 4px 16px; }
+.alert-history-item { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); font-size: 12px; }
+.alert-history-item:last-child { border-bottom: none; }
+.alert-history-time { color: var(--color-text-dim); flex-shrink: 0; font-family: var(--font-mono); font-size: 11px; }
+.alert-history-msg { color: var(--color-text-soft); }
+.alert-history-info .alert-history-time { color: var(--status-info); }
+.alert-history-success .alert-history-time { color: var(--status-up); }
+.alert-history-error .alert-history-time { color: var(--status-down); }
 
 @media (max-width: 420px) {
-  .toast-container { left: 12px; right: 12px; max-width: none; }
+  .alert-history-panel { max-width: none; margin-bottom: calc(42px + var(--safe-bottom)); }
 }
 

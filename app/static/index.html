@@ -47,10 +47,15 @@
         </div>
 
         <div class="conn-controls" id="server-controls" style="margin-top:12px;">
-          <select id="serial-port-select"></select>
-          <button id="btn-refresh-ports" class="btn-ghost" data-i18n="btn.refreshPorts">↻</button>
-          <button id="btn-connect-serial" class="btn-primary" data-i18n="btn.connectSerial">USB série</button>
-          <button id="btn-scan-ble" class="btn-ghost" data-i18n="btn.scanBle">Scanner BLE</button>
+          <div class="transport-toggle">
+            <button class="transport-btn active" id="transport-serial" data-transport="serial" data-i18n="transport.serial">USB série</button>
+            <button class="transport-btn" id="transport-ble" data-transport="ble" data-i18n="transport.ble">Bluetooth</button>
+          </div>
+          <div class="conn-row">
+            <select id="target-select"></select>
+            <button id="btn-refresh-target" class="btn-ghost" data-i18n-title="btn.refreshPorts" title="Rafraîchir">↻</button>
+            <button id="btn-connect-server" class="btn-primary" data-i18n="btn.connect">Connecter</button>
+          </div>
           <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
         </div>
         <div class="conn-controls" id="local-controls" hidden style="margin-top:12px;">
@@ -265,7 +270,20 @@
     </div>
   </div>
 
-  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+  <button id="alert-footer" class="alert-footer" hidden aria-live="polite">
+    <span class="alert-footer-dot"></span>
+    <span class="alert-footer-text"></span>
+  </button>
+
+  <div id="alert-history-overlay" class="alert-history-overlay" hidden>
+    <div class="alert-history-panel">
+      <div class="alert-history-header">
+        <span data-i18n="alerts.historyTitle">Historique des alertes</span>
+        <button id="alert-history-close" class="btn-ghost" data-i18n-title="alerts.close" title="Fermer">×</button>
+      </div>
+      <div id="alert-history-list" class="alert-history-list"></div>
+    </div>
+  </div>
 
   <script src="/static/i18n.js"></script>
   <script src="/static/protocol.js"></script>
