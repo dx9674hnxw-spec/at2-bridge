@@ -41,30 +41,41 @@
   <main>
     <section id="tab-devices" class="tab-panel active">
       <div class="card" id="connection-card">
-        <div class="mode-toggle">
-          <button class="mode-btn active" id="mode-server" data-mode="server" data-i18n="mode.server">Serveur</button>
-          <button class="mode-btn" id="mode-local" data-mode="local" data-i18n="mode.local">BLE local</button>
-        </div>
+        <div class="section-label" data-i18n="devices.knownLabel">Appareils enregistrés</div>
+        <div class="device-list" id="device-list"></div>
 
-        <div class="conn-controls" id="server-controls" style="margin-top:12px;">
-          <div class="transport-toggle">
-            <button class="transport-btn active" id="transport-serial" data-transport="serial" data-i18n="transport.serial">USB série</button>
-            <button class="transport-btn" id="transport-ble" data-transport="ble" data-i18n="transport.ble">Bluetooth</button>
+        <div class="new-conn-disclosure">
+          <button class="new-conn-toggle" id="new-conn-toggle">
+            <span data-i18n="devices.newConnection">+ Nouvelle connexion</span>
+            <span class="chevron">›</span>
+          </button>
+          <div class="new-conn-body" id="new-conn-body">
+            <div class="new-conn-inner">
+              <div class="mode-toggle">
+                <button class="mode-btn active" id="mode-server" data-mode="server" data-i18n="mode.server">Serveur</button>
+                <button class="mode-btn" id="mode-local" data-mode="local" data-i18n="mode.local">BLE local</button>
+              </div>
+
+              <div class="conn-controls" id="server-controls" style="margin-top:12px;">
+                <div class="transport-toggle">
+                  <button class="transport-btn active" id="transport-serial" data-transport="serial" data-i18n="transport.serial">USB série</button>
+                  <button class="transport-btn" id="transport-ble" data-transport="ble" data-i18n="transport.ble">Bluetooth</button>
+                </div>
+                <div class="conn-row">
+                  <select id="target-select"></select>
+                  <button id="btn-refresh-target" class="btn-ghost" data-i18n-title="btn.refreshPorts" title="Rafraîchir">↻</button>
+                  <button id="btn-connect-server" class="btn-primary" data-i18n="btn.connect">Connecter</button>
+                </div>
+                <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
+              </div>
+              <div class="conn-controls" id="local-controls" hidden style="margin-top:12px;">
+                <button id="btn-local-connect" class="btn-primary" data-i18n="btn.connectLocal">Connecter (Web Bluetooth)</button>
+                <button id="btn-local-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
+              </div>
+            </div>
           </div>
-          <div class="conn-row">
-            <select id="target-select"></select>
-            <button id="btn-refresh-target" class="btn-ghost" data-i18n-title="btn.refreshPorts" title="Rafraîchir">↻</button>
-            <button id="btn-connect-server" class="btn-primary" data-i18n="btn.connect">Connecter</button>
-          </div>
-          <button id="btn-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
-        </div>
-        <div class="conn-controls" id="local-controls" hidden style="margin-top:12px;">
-          <button id="btn-local-connect" class="btn-primary" data-i18n="btn.connectLocal">Connecter (Web Bluetooth)</button>
-          <button id="btn-local-disconnect" class="btn-danger" hidden data-i18n="btn.disconnect">Déconnecter</button>
         </div>
       </div>
-
-      <div class="device-list" id="device-list"></div>
 
       <div class="devices-grid">
         <div class="card" id="ptt-panel">

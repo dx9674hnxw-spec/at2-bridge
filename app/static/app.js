@@ -4,6 +4,8 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 let mode = "server"; // "server" | "local"
 let connected = false;
 let localDeviceInfo = null;
+let activeServerTarget = null; // {kind, target} of the current server-mode connection, for
+let activeServerKind = null;   // highlighting the matching row in the known-devices list.
 
 /** Returns "server" | "local" | null based on which transport is
  * ACTUALLY connected -- ignores the `mode` tab entirely for routing
@@ -388,6 +390,10 @@ async function refreshStatus() {
   const status = await api("GET", "/api/connection/status");
   setConnUi(status.connected, status.connected ? t("conn.connected", { kind: status.kind, target: status.target }) : t("conn.disconnected"));
   $("#btn-disconnect").hidden = !status.connected;
+  const wasActive = activeServerTarget;
+  activeServerTarget = status.connected ? status.target : null;
+  activeServerKind = status.connected ? status.kind : null;
+  if (wasActive !== activeServerTarget) loadDeviceList();
 }
 
 // Server-side connection: unified transport toggle (USB serial / server
@@ -422,6 +428,11 @@ function applyServerTransportUi() {
   refreshBtn.title = t(selectedServerTransport === "serial" ? "btn.refreshPorts" : "btn.scanBle");
   $("#target-select").innerHTML = "";
 }
+
+$("#new-conn-toggle").addEventListener("click", (e) => {
+  e.currentTarget.classList.toggle("open");
+  $("#new-conn-body").classList.toggle("open");
+});
 
 $$(".transport-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -496,18 +507,28 @@ async function loadDeviceList() {
       list.innerHTML = `<div class="card hint">${t("devices.empty")}</div>`;
       return;
     }
-    list.innerHTML = known.map((d) => `
-      <div class="card device-card">
+    list.innerHTML = known.map((d) => {
+      // Reliable "is this the active connection" check only exists for
+      // server mode (target+kind come from a real API call). Local BLE
+      // connections can't be matched this way: the browser's Web Bluetooth
+      // device.id is an opaque per-browser identifier, not the same as the
+      // MAC address stored here, so no attempt is made to highlight a
+      // local-BLE row as "active" -- a known, documented limitation rather
+      // than a guessed/fragile match.
+      const isActive = mode === "server" && connected && d.transport === activeServerKind && d.target === activeServerTarget;
+      return `
+      <div class="card device-card${isActive ? " is-connected" : ""}">
         <img class="device-thumb" src="/static/at2-icon.png" alt="AT2" />
         <div class="device-card-info">
-          <div class="device-card-name">${d.name}</div>
-          <div class="device-card-model">${d.transport.toUpperCase()} · ${d.target}</div>
+          <div class="device-card-name">${d.name} <span class="transport-badge transport-badge-${d.transport}">${d.transport === "ble" ? t("transport.ble") : t("transport.serial")}</span></div>
+          <div class="device-card-model">${d.target}</div>
         </div>
         <div class="device-card-actions">
-          <button class="btn-primary" onclick="reconnectKnownDevice('${d.id}', '${d.transport}', '${d.target}')">${t("devices.connect")}</button>
+          ${isActive ? "" : `<button class="btn-primary" onclick="reconnectKnownDevice('${d.id}', '${d.transport}', '${d.target}')">${t("devices.connect")}</button>`}
           <button class="btn-ghost" onclick="forgetKnownDevice('${d.id}')">${t("devices.forget")}</button>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } catch (e) {
     list.innerHTML = `<div class="card hint">${e.message}</div>`;
   }
