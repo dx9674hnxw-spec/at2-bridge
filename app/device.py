@@ -190,6 +190,26 @@ class DeviceManager:
         t = self._require_transport()
         await t.send_payload(commands.set_volume(level))
 
+    async def set_dual_watch(self, enabled: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_dual_watch(enabled))
+
+    async def select_dual_watch_channel(self, side: str, channel_number: int) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.select_dual_watch_channel(side, channel_number))
+
+    async def select_dual_watch_focus(self, side: str) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.select_dual_watch_focus(side))
+
+    async def set_prompt_language(self, english: bool) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_prompt_language(english))
+
+    async def set_tx_interval_seconds(self, seconds: int) -> None:
+        t = self._require_transport()
+        await t.send_payload(commands.set_tx_interval_seconds(seconds))
+
     async def set_squelch(self, level: int) -> None:
         t = self._require_transport()
         await t.send_payload(commands.set_squelch(level))

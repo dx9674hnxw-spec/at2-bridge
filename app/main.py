@@ -87,6 +87,23 @@ class VolumeRequest(BaseModel):
     level: int
 
 
+class DualWatchChannelRequest(BaseModel):
+    side: str  # "A" or "B"
+    channel: int
+
+
+class DualWatchFocusRequest(BaseModel):
+    side: str  # "A" or "B"
+
+
+class PromptLanguageRequest(BaseModel):
+    english: bool
+
+
+class TxIntervalRequest(BaseModel):
+    seconds: int
+
+
 class SquelchRequest(BaseModel):
     level: int
 
@@ -335,6 +352,36 @@ async def set_device_name(req: DeviceNameRequest, _: None = Depends(auth.require
 @app.put("/api/device/smart-link")
 async def set_smart_link(req: ToggleRequest, _: None = Depends(auth.require_auth)):
     await device_manager.set_smart_link(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/dual-watch")
+async def set_dual_watch(req: ToggleRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_dual_watch(req.enabled)
+    return {"ok": True}
+
+
+@app.put("/api/device/dual-watch/channel")
+async def select_dual_watch_channel(req: DualWatchChannelRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.select_dual_watch_channel(req.side, req.channel)
+    return {"ok": True}
+
+
+@app.put("/api/device/dual-watch/focus")
+async def select_dual_watch_focus(req: DualWatchFocusRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.select_dual_watch_focus(req.side)
+    return {"ok": True}
+
+
+@app.put("/api/device/prompt-language")
+async def set_prompt_language(req: PromptLanguageRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_prompt_language(req.english)
+    return {"ok": True}
+
+
+@app.put("/api/device/tx-interval")
+async def set_tx_interval(req: TxIntervalRequest, _: None = Depends(auth.require_auth)):
+    await device_manager.set_tx_interval_seconds(req.seconds)
     return {"ok": True}
 
 

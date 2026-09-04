@@ -209,6 +209,11 @@
               <button class="btn-primary" data-action="set-tot" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
+              <label for="tx-interval-slider" data-i18n="settings.txInterval">Intervalle TX ("hop") — secondes (0 = désactivé, max 240)</label>
+              <input id="tx-interval-slider" type="range" min="0" max="240" step="10" value="0" />
+              <button class="btn-primary" data-action="set-tx-interval" data-i18n="settings.apply">Appliquer</button>
+            </div>
+            <div class="setting-card">
               <label><input id="tx-inhibit-toggle" type="checkbox" /> <span data-i18n="settings.txInhibit">Inhibition TX (bloque l'émission)</span></label>
               <button class="btn-primary" data-action="set-tx-inhibit" data-i18n="settings.apply">Appliquer</button>
             </div>
@@ -221,6 +226,10 @@
               <button class="btn-primary" data-action="set-prompt-tone" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
+              <label><input id="prompt-language-toggle" type="checkbox" /> <span data-i18n="settings.promptLanguage">Annonces vocales en anglais (décoché = chinois)</span></label>
+              <button class="btn-primary" data-action="set-prompt-language" data-i18n="settings.apply">Appliquer</button>
+            </div>
+            <div class="setting-card">
               <label for="device-name-input" data-i18n="settings.deviceName">Nom de l'appareil</label>
               <input id="device-name-input" type="text" placeholder="AT2_XXXX" />
               <button class="btn-primary" data-action="set-device-name" data-i18n="settings.apply">Appliquer</button>
@@ -229,8 +238,29 @@
               <label><input id="smart-link-toggle" type="checkbox" /> <span data-i18n="settings.smartLink">Smart Link (pont vers apps tierces)</span></label>
               <button class="btn-primary" data-action="set-smart-link" data-i18n="settings.apply">Appliquer</button>
             </div>
+            <div class="setting-card">
+              <label><input id="dual-watch-toggle" type="checkbox" /> <span data-i18n="settings.dualWatch">Dual Watch (veille sur 2 canaux)</span></label>
+              <button class="btn-primary" data-action="set-dual-watch" data-i18n="settings.apply">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label for="dual-watch-channel-a" data-i18n="settings.dualWatchChannelA">Dual Watch — canal A</label>
+              <input id="dual-watch-channel-a" type="number" min="1" max="30" value="1" />
+              <button class="btn-primary" data-action="set-dual-watch-channel-a" data-i18n="settings.apply">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label for="dual-watch-channel-b" data-i18n="settings.dualWatchChannelB">Dual Watch — canal B</label>
+              <input id="dual-watch-channel-b" type="number" min="1" max="30" value="1" />
+              <button class="btn-primary" data-action="set-dual-watch-channel-b" data-i18n="settings.apply">Appliquer</button>
+            </div>
+            <div class="setting-card">
+              <label data-i18n="settings.dualWatchFocus">Dual Watch — canal actif pour le PTT</label>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-primary" data-action="set-dual-watch-focus-a" style="flex:1;" data-i18n="settings.dualWatchFocusA">Focus A</button>
+                <button class="btn-primary" data-action="set-dual-watch-focus-b" style="flex:1;" data-i18n="settings.dualWatchFocusB">Focus B</button>
+              </div>
+            </div>
           </div>
-          <span class="hint" data-i18n="settings.advancedHint">Ces 7 réglages sont câblés au protocole réel mais jamais testés sur radio physique — voir README.</span>
+          <span class="hint" data-i18n="settings.advancedHint">Ces réglages sont câblés au protocole réel mais jamais testés sur radio physique — voir README.</span>
         </div>
       </div>
     </section>

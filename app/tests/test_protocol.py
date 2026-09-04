@@ -40,7 +40,8 @@ def test_decode_packet_roundtrip():
     pkt = frame.decode_packet(payload)
     assert pkt is not None
     assert pkt.family == 0x02
-    assert pkt.command == 0x0E
+    assert pkt.command == 0x02
+    assert pkt.body[0] == 0x0E
 
 
 def test_channel_encode_decode_round_trip():
@@ -165,6 +166,109 @@ def test_ptt_voice_payload_rejects_bad_frame_count():
         ptt.build_ptt_voice_payload([b"\x00" * 12] * 2)
 
 
+def test_ptt_key_payload_on_off():
+    from app.protocol import ptt
+
+    for ptt_on in (True, False):
+        pkt = frame.decode_packet(ptt.build_ptt_key_payload(ptt_on))
+        assert pkt.family == ptt.FAMILY_PTT
+        assert pkt.command == ptt.CMD_PTT
+        assert pkt.body == bytes([ptt.PTT_KEY_SUBTYPE, 0x01 if ptt_on else 0x00])
+        # Must never be mistaken for a voice packet (distinct subtype byte).
+        assert not ptt.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body)
+
+
+def test_offline_session_payload_on_off():
+    from app.protocol import ptt
+
+    for enabled in (True, False):
+        pkt = frame.decode_packet(ptt.build_offline_session_payload(enabled))
+        assert pkt.family == ptt.FAMILY_PTT
+        assert pkt.command == ptt.CMD_PTT
+        assert pkt.body == bytes([ptt.OFFLINE_SESSION_SUBTYPE, 0x01 if enabled else 0x00])
+        assert not ptt.is_ptt_voice_packet(pkt.family, pkt.command, pkt.body)
+
+
+# ---------------------------------------------------------------------------
+# Device settings -- byte-exact against `At2Commands.kt` (reference Android
+# app). The commented hex next to each assertion is the literal Kotlin
+# byteArrayOf(...) this was transcribed from, leading 0x00 included.
+# ---------------------------------------------------------------------------
+
+def test_select_channel_matches_reference_app():
+    # At2Commands.kt::selectChannel(5) -> 00 02 02 0E 01 05 00
+    assert commands.select_channel(5) == bytes([0x00, 0x02, 0x02, 0x0E, 0x01, 0x05, 0x00])
+
+
+def test_select_dual_watch_channel_matches_reference_app():
+    # At2Commands.kt::selectDualWatchChannel(Side.B, 7) -> 00 02 02 0E 02 07 00
+    assert commands.select_dual_watch_channel("B", 7) == bytes([0x00, 0x02, 0x02, 0x0E, 0x02, 0x07, 0x00])
+    # side A is exactly what select_channel() sends
+    assert commands.select_dual_watch_channel("A", 5) == commands.select_channel(5)
+
+
+def test_select_dual_watch_focus_matches_reference_app():
+    # At2Commands.kt::selectDualWatchFocus(Side.A / Side.B)
+    assert commands.select_dual_watch_focus("A") == bytes([0x00, 0x02, 0x02, 0x0F, 0x01])
+    assert commands.select_dual_watch_focus("B") == bytes([0x00, 0x02, 0x02, 0x0F, 0x02])
+
+
+def test_set_dual_watch_matches_reference_app():
+    # At2Commands.kt::setDualWatch -- note the "on" value is 0x02, not 0x01.
+    assert commands.set_dual_watch(True) == bytes([0x00, 0x02, 0x02, 0x0D, 0x02])
+    assert commands.set_dual_watch(False) == bytes([0x00, 0x02, 0x02, 0x0D, 0x00])
+    assert commands.query_dual_watch() == bytes([0x00, 0x01, 0x02, 0x0D])
+
+
+def test_side_rejects_invalid_value():
+    import pytest
+
+    with pytest.raises(ValueError):
+        commands.select_dual_watch_channel("C", 1)
+
+
+def test_set_volume_matches_reference_app():
+    # At2Commands.kt::setVolume(5) -> 00 02 01 01 05
+    assert commands.set_volume(5) == bytes([0x00, 0x02, 0x01, 0x01, 0x05])
+    assert commands.query_volume() == bytes([0x00, 0x01, 0x01, 0x01])
+
+
+def test_set_prompt_language_matches_reference_app():
+    # At2Commands.kt::setPromptLanguage(Chinese=0x00 / English=0x01)
+    assert commands.set_prompt_language(english=False) == bytes([0x00, 0x02, 0x01, 0x03, 0x00])
+    assert commands.set_prompt_language(english=True) == bytes([0x00, 0x02, 0x01, 0x03, 0x01])
+    assert commands.query_prompt_language() == bytes([0x00, 0x01, 0x01, 0x03])
+
+
+def test_set_prompt_tone_matches_reference_app():
+    # At2Commands.kt::setPromptTone -- family=0x02/command=0x01, NOT the
+    # family=0x02/command=0x04 messaging/PTT pair this used to (mis)use.
+    assert commands.set_prompt_tone(True) == bytes([0x00, 0x02, 0x01, 0x04, 0x01])
+    assert commands.set_prompt_tone(False) == bytes([0x00, 0x02, 0x01, 0x04, 0x00])
+    assert commands.query_prompt_tone() == bytes([0x00, 0x01, 0x01, 0x04])
+    # And it must no longer collide with the messaging/PTT family+command.
+    from app.protocol import messages as messages_mod
+    pkt = frame.decode_packet(commands.set_prompt_tone(True))
+    assert not (pkt.family == messages_mod.FAMILY_MSG and pkt.command == messages_mod.CMD_MSG)
+
+
+def test_query_current_channel_info_matches_reference_app():
+    # At2Commands.kt::queryCurrentChannelInfo() -> 00 01 02 0E
+    assert commands.query_current_channel_info() == bytes([0x00, 0x01, 0x02, 0x0E])
+
+
+def test_set_tx_interval_matches_reference_app():
+    # At2Commands.kt::setTxIntervalSeconds(90) -> 00 02 02 0A 5A 00 (little-endian)
+    assert commands.set_tx_interval_seconds(90) == bytes([0x00, 0x02, 0x02, 0x0A, 0x5A, 0x00])
+    assert commands.query_tx_interval_seconds() == bytes([0x00, 0x01, 0x02, 0x0A])
+
+
+def test_new_query_counterparts_match_reference_app():
+    assert commands.query_tot_seconds() == bytes([0x00, 0x01, 0x02, 0x05])
+    assert commands.query_vox_sensitivity() == bytes([0x00, 0x01, 0x02, 0x07])
+    assert commands.query_tx_inhibit() == bytes([0x00, 0x01, 0x02, 0x09])
+
+
 # ---------------------------------------------------------------------------
 # Offline messaging: voice, image, generic decode(), MessageAssembler
 # (previously validated manually, not yet locked in by automated tests)
@@ -186,7 +290,7 @@ def _round_trip(frames_list):
 
 
 def test_message_decode_rejects_wrong_family_command():
-    # A channel-select packet (family=0x02, command=0x0e) must not be
+    # A channel-select packet (family=0x02, command=0x02) must not be
     # mistaken for a messaging packet (family=0x02, command=0x04).
     payload = commands.select_channel(5)
     pkt = frame.decode_packet(payload)
