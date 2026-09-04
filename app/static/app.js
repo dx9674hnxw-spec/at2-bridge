@@ -1,6 +1,22 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+/** Escapes text for safe interpolation into innerHTML (element content or
+ * a quoted attribute value). Anything that ends up in a template string
+ * assigned to .innerHTML MUST go through this if it isn't a literal --
+ * in particular anything that came from the radio link (sender/text of an
+ * incoming offline message: any transmitter in range can set these) or
+ * from another user of the shared instance (channel names, stored
+ * server-side and shown to every user of the shared password -- see
+ * app/store.py). Missing this on `pushReceivedBubble`/`channelRowHtml`/
+ * `renderAlertHistory` was a real stored-XSS finding fixed alongside this
+ * helper -- keep using it for any future innerHTML template. */
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 let mode = "server"; // "server" | "local"
 let connected = false;
 let localDeviceInfo = null;
@@ -302,8 +318,8 @@ function renderAlertHistory() {
   }
   list.innerHTML = alertHistory.map((e) => `
     <div class="alert-history-item alert-history-${e.type}">
-      <span class="alert-history-time">${e.timestamp}</span>
-      <span class="alert-history-msg">${e.message}</span>
+      <span class="alert-history-time">${escapeHtml(e.timestamp)}</span>
+      <span class="alert-history-msg">${escapeHtml(e.message)}</span>
     </div>`).join("");
 }
 
@@ -807,7 +823,7 @@ function channelRowHtml(ch) {
   return `
     <tr data-channel="${ch.channel}">
       <td>${ch.channel}</td>
-      <td><input type="text" class="ch-name" value="${channelNames[ch.channel] || ch.name || ""}" placeholder="—" /></td>
+      <td><input type="text" class="ch-name" value="${escapeHtml(channelNames[ch.channel] || ch.name || "")}" placeholder="—" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-rx" value="${ch.rx_mhz ?? ""}" /></td>
       <td class="freq-cell"><input type="number" step="0.00001" class="ch-tx" value="${ch.tx_mhz ?? ""}" /></td>
       <td>${toneSelect(ch.rx_tone ?? "OFF")}</td>
@@ -981,7 +997,7 @@ function pushSentBubble(text) {
   const thread = $("#msg-thread");
   const el = document.createElement("div");
   el.className = "msg-bubble mine";
-  el.innerHTML = `<div class="meta">${t("msg.me")} · ${new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${text}</div>`;
+  el.innerHTML = `<div class="meta">${t("msg.me")} · ${new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${escapeHtml(text)}</div>`;
   thread.appendChild(el);
   thread.scrollTop = thread.scrollHeight;
 }
@@ -1122,15 +1138,22 @@ function pushReceivedBubble(msg) {
   const time = new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" });
   let body;
   if (msg.kind === "text") {
-    body = `<div class="msg-body">${msg.text ?? ""}</div>`;
+    body = `<div class="msg-body">${escapeHtml(msg.text ?? "")}</div>`;
   } else if (msg.kind === "image" && msg.data_base64) {
+    // data_base64 is server-produced base64 (see app/main.py's ws_messages
+    // encoder) so it can't contain a literal `"` -- safe to interpolate
+    // as-is inside the attribute value here.
     body = `<div class="msg-body"><img src="data:image/jpeg;base64,${msg.data_base64}" style="max-width:220px; border-radius:6px; display:block;" /></div>`;
   } else if (msg.kind === "voice") {
     body = `<div class="msg-body">${t("msg.voiceReceived", { seconds: Math.round((msg.duration_ms || 0) / 1000) })}</div>`;
   } else {
-    body = `<div class="msg-body">${t("msg.unknownKind", { kind: msg.kind })}</div>`;
+    body = `<div class="msg-body">${escapeHtml(t("msg.unknownKind", { kind: msg.kind }))}</div>`;
   }
-  el.innerHTML = `<div class="meta">${msg.sender || "?"} · ${time}</div>${body}`;
+  // msg.sender and msg.text come straight off the radio link (see
+  // app/protocol/messages.py): any transmitter in range can set them, so
+  // they must never reach innerHTML unescaped -- this was a real stored
+  // XSS reachable by anyone able to send an offline message to the radio.
+  el.innerHTML = `<div class="meta">${escapeHtml(msg.sender || "?")} · ${time}</div>${body}`;
   thread.appendChild(el);
   thread.scrollTop = thread.scrollHeight;
 }
