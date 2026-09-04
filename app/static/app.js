@@ -313,13 +313,25 @@ function showToast(message, type = "info") {
   if (!$("#alert-history-overlay").hidden) renderAlertHistory(); // keep an open panel live
 }
 
-$("#alert-footer").addEventListener("click", () => {
+$("#alert-footer").addEventListener("click", (e) => {
+  e.stopPropagation();
   renderAlertHistory();
   $("#alert-history-overlay").hidden = false;
 });
-$("#alert-history-close").addEventListener("click", () => { $("#alert-history-overlay").hidden = true; });
-$("#alert-history-overlay").addEventListener("click", (e) => {
-  if (e.target.id === "alert-history-overlay") $("#alert-history-overlay").hidden = true;
+$("#alert-history-close").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("#alert-history-overlay").hidden = true;
+});
+// Même mécanisme que #prefs-menu ci-dessus (un seul listener document,
+// vérification de confinement) plutôt qu'un listener séparé sur l'overlay
+// lui-même -- c'est le schéma déjà éprouvé dans ce projet pour ce genre
+// de panneau qui doit se fermer au clic extérieur.
+document.addEventListener("click", (e) => {
+  const overlay = $("#alert-history-overlay");
+  const panel = $(".alert-history-panel");
+  if (!overlay.hidden && !panel.contains(e.target) && e.target !== $("#alert-footer")) {
+    overlay.hidden = true;
+  }
 });
 
 // ---------------------------------------------------------------------------
