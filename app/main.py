@@ -532,6 +532,13 @@ async def ws_ptt(websocket: WebSocket):
 
     device_manager.on_ptt_voice_packet(_on_rx_pcm)
     session = device_manager.start_ptt_session()
+    try:
+        await session.start()  # keys the radio's transmitter on -- see PttSession.start()
+    except Exception:
+        logger.exception("PTT key-on failed")
+        device_manager.off_ptt_voice_packet(_on_rx_pcm)
+        await websocket.close(code=1011, reason="PTT key-on failed")
+        return
 
     async def _rx_forward() -> None:
         while True:
