@@ -6,8 +6,9 @@
  * - Connection + notifications
  * - Channel selection
  * - Volume
- * - Offline text messaging, both sending and receiving (text/voice/image
- *   reception -- see onMessageReceived() below; sending is text-only)
+ * - Offline messaging, both sending and receiving, all three types
+ *   (text/voice/image) -- see sendText()/sendVoice()/sendImage() and
+ *   onMessageReceived() below
  * - Channel read/write (CPS dialect)
  * - Live PTT (client-side AMR encode/decode -- see startPtt() below;
  *   PTT is confirmed BLE-only, there is no server-side radio path for it
@@ -260,6 +261,50 @@ const AT2BleClient = (() => {
     await sendFramesWithAck(frames, "Message texte");
   }
 
+  // Store-and-forward voice message (distinct from live PTT streaming --
+  // see startPtt() below). `pcm`: Int16Array, 16-bit mono @ 8kHz (same
+  // format PttAudio.startCapture produces). AMR-NB encoding happens here,
+  // client-side, via the same codec used for live PTT (ptt-amr-codec.js)
+  // -- mirrors app/device.py::send_voice_message, which does the
+  // equivalent encoding server-side with AmrNbCodec. Previously this was
+  // server-mode only for exactly this reason: no AMR encoder ran in the
+  // browser until PTT needed one.
+  async function sendVoice(username, pcm, durationMs) {
+    if (typeof PttAmr === "undefined") {
+      throw new Error("ptt-amr-codec.js (and amrnb.js) must be loaded to send voice in local BLE mode");
+    }
+    const codec = new PttAmr.Codec();
+    const encodedChunks = [];
+    try {
+      const frameSamples = PttAmr.FRAME_SAMPLES; // 160 (20ms @ 8kHz)
+      for (let i = 0; i + frameSamples <= pcm.length; i += frameSamples) {
+        const encoded = codec.encode(pcm.subarray(i, i + frameSamples));
+        if (encoded) encodedChunks.push(encoded);
+      }
+    } finally {
+      codec.close();
+    }
+    if (encodedChunks.length === 0) {
+      throw new Error("aucun audio encodé (enregistrement trop court ?)");
+    }
+    const encodedVoice = new Uint8Array(encodedChunks.length * PttAmr.ENCODED_FRAME_BYTES);
+    encodedChunks.forEach((chunk, i) => encodedVoice.set(chunk, i * PttAmr.ENCODED_FRAME_BYTES));
+
+    const frames = AT2Protocol.buildVoiceMessageFrames(username, encodedVoice, durationMs, nextMsgId++);
+    await sendFramesWithAck(frames, "Message vocal");
+  }
+
+  // `jpegBytes`: already resized/compressed by the caller (app.js does
+  // this with a <canvas>, matching the server's Pillow resize target --
+  // see app/protocol/messages.py::IMAGE_LONG_EDGE_PX/IMAGE_JPEG_QUALITY)
+  // -- mirrors app/device.py::send_image_message, which likewise expects
+  // pre-resized bytes from its caller (the upload endpoint, resizing with
+  // Pillow) rather than resizing itself.
+  async function sendImage(username, jpegBytes, width, height) {
+    const frames = AT2Protocol.buildImageMessageFrames(username, jpegBytes, width, height, nextMsgId++);
+    await sendFramesWithAck(frames, "Image");
+  }
+
   // -- channel read/write (CPS-style dialect, confirmed on real hardware
   // 27-28/08/2026 -- see app/protocol/channel.py and static/protocol.js).
   // Incoming BLE notifications are already decoded by the "legacy" frame
@@ -461,6 +506,8 @@ const AT2BleClient = (() => {
     selectChannel,
     setVolume,
     sendText,
+    sendVoice,
+    sendImage,
     readChannel,
     readAllChannels,
     writeChannel,

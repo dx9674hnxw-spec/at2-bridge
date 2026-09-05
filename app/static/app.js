@@ -1292,13 +1292,43 @@ async function sendTextMessage() {
 $("#btn-send-message").addEventListener("click", sendTextMessage);
 $("#msg-text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendTextMessage(); });
 
-// -- sending: image (server mode only -- image encoding happens server-side
-// with Pillow, see app/main.py; no BLE-local equivalent yet) ---------------
+// -- sending: image. Server mode uploads the original and lets Pillow
+// resize it server-side; local BLE mode has no server in the loop, so the
+// same resize (300px long edge, JPEG quality ~75, matching
+// app/protocol/messages.py::IMAGE_LONG_EDGE_PX/IMAGE_JPEG_QUALITY) happens
+// client-side via <canvas> instead, then the actual bytes go straight to
+// AT2BleClient.sendImage(). ---------------------------------------------
 
-// Independent of what's actually transmitted (the server does its own
-// resize for the wire): a small client-side thumbnail so the bubble has
-// something to show and localStorage doesn't fill up with full-resolution
-// originals.
+// Resizes/re-encodes `file` to the wire format via <canvas>, returning
+// both the JPEG bytes (what local BLE mode actually sends) and a base64
+// copy (what every mode uses for the bubble preview) in one pass.
+function resizeImageForWire(file, maxEdge = 300, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const width = Math.max(1, Math.round(img.width * scale));
+      const height = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("image encode failed")); return; }
+        blob.arrayBuffer().then((buf) => resolve({ bytes: new Uint8Array(buf), width, height }));
+      }, "image/jpeg", quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image decode failed")); };
+    img.src = url;
+  });
+}
+
+// Server mode doesn't need the real bytes client-side (the server does
+// its own independent resize for the wire) -- just a lightweight preview
+// so the bubble has something to show without storing a full-resolution
+// original in localStorage.
 function downscaleImageToBase64(file, maxEdge = 300, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -1320,7 +1350,7 @@ function downscaleImageToBase64(file, maxEdge = 300, quality = 0.7) {
 }
 
 $("#btn-attach-image").addEventListener("click", () => {
-  if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredImage"), "info");
+  if (!activeTransport()) return showToast(t("gps.noActiveConnection"), "info");
   $("#image-file-input").click();
 });
 
@@ -1328,14 +1358,24 @@ $("#image-file-input").addEventListener("change", async () => {
   const file = $("#image-file-input").files[0];
   if (!file) return;
   const username = $("#msg-username").value || "AT2Bridge";
-  const form = new FormData();
-  form.append("username", username);
-  form.append("image", file);
   try {
-    const [dataBase64] = await Promise.all([
-      downscaleImageToBase64(file).catch(() => null),
-      apiUpload("/api/messages/image", form),
-    ]);
+    const transport = activeTransport();
+    let dataBase64;
+    if (transport === "server") {
+      const form = new FormData();
+      form.append("username", username);
+      form.append("image", file);
+      [dataBase64] = await Promise.all([
+        downscaleImageToBase64(file).catch(() => null),
+        apiUpload("/api/messages/image", form),
+      ]);
+    } else if (transport === "local") {
+      const { bytes, width, height } = await resizeImageForWire(file);
+      await AT2BleClient.sendImage(username, bytes, width, height);
+      dataBase64 = uint8ToBase64(bytes);
+    } else {
+      return showToast(t("gps.noActiveConnection"), "info");
+    }
     addMessage(activeChannel, { kind: "image", sender: username, mine: true, dataBase64, caption: file.name });
   } catch (e) {
     showToast(e.message, "error");
@@ -1346,12 +1386,16 @@ $("#image-file-input").addEventListener("change", async () => {
 
 // -- sending: voice notes (store-and-forward, distinct from live PTT).
 // Reuses PttAudio.startCapture/stopCapture as-is (already exported by
-// ptt-audio.js) to accumulate a full recording instead of streaming it. -
+// ptt-audio.js) to accumulate a full recording instead of streaming it.
+// Local BLE mode AMR-encodes client-side via AT2BleClient.sendVoice() --
+// see that function's comment in ble-client.js -- the same codec startPtt()
+// already uses for live PTT, just applied to a full recording instead of
+// a stream. --------------------------------------------------------------
 let voiceRecording = false;
 let voiceChunks = [];
 
 $("#btn-record-voice").addEventListener("click", async () => {
-  if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredVoice"), "info");
+  if (!activeTransport()) return showToast(t("gps.noActiveConnection"), "info");
   const btn = $("#btn-record-voice");
 
   if (!voiceRecording) {
@@ -1381,12 +1425,19 @@ $("#btn-record-voice").addEventListener("click", async () => {
     const durationMs = Math.round((totalSamples / 8000) * 1000);
 
     const username = $("#msg-username").value || "AT2Bridge";
-    const form = new FormData();
-    form.append("username", username);
-    form.append("duration_ms", String(durationMs));
-    form.append("pcm", new Blob([merged.buffer], { type: "application/octet-stream" }), "voice.pcm");
     try {
-      await apiUpload("/api/messages/voice", form);
+      const transport = activeTransport();
+      if (transport === "server") {
+        const form = new FormData();
+        form.append("username", username);
+        form.append("duration_ms", String(durationMs));
+        form.append("pcm", new Blob([merged.buffer], { type: "application/octet-stream" }), "voice.pcm");
+        await apiUpload("/api/messages/voice", form);
+      } else if (transport === "local") {
+        await AT2BleClient.sendVoice(username, merged, durationMs);
+      } else {
+        return showToast(t("gps.noActiveConnection"), "info");
+      }
       addMessage(activeChannel, { kind: "voice", sender: username, mine: true, durationMs, pcm: Array.from(merged) });
     } catch (e) {
       showToast(e.message, "error");

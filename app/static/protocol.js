@@ -126,6 +126,74 @@ const AT2Protocol = (() => {
     return frames;
   }
 
+  // `encodedVoice`: Uint8Array (or plain array) of concatenated 12-byte
+  // AMR-NB MR475 frames -- mirrors app/protocol/messages.py::build_voice_message_frames.
+  // This is the store-and-forward voice *message* format, distinct from
+  // the live PTT protocol (buildPttVoicePayload below).
+  function buildVoiceMessageFrames(username, encodedVoice, durationMs, msgId) {
+    if (!encodedVoice || encodedVoice.length === 0) throw new Error("voice data empty");
+    if (durationMs <= 0) throw new Error("voice duration invalid");
+
+    const sender = encodeSender(username);
+    const msgIdBytes = [
+      (msgId >>> 24) & 0xff, (msgId >>> 16) & 0xff, (msgId >>> 8) & 0xff, msgId & 0xff,
+    ];
+    const chunkSize = 132;
+    const packetCount = Math.max(1, Math.ceil(encodedVoice.length / chunkSize));
+    const durationSeconds = Math.max(1, Math.ceil(durationMs / 1000));
+
+    const startBody = [
+      0x01, 0x03, // TYPE_VOICE_START
+      ...msgIdBytes,
+      0x00,
+      ...sender,
+      encodedVoice.length & 0xff, (encodedVoice.length >> 8) & 0xff,
+      packetCount & 0xff, (packetCount >> 8) & 0xff,
+      durationSeconds & 0xff, (durationSeconds >> 8) & 0xff,
+    ];
+    const frames = [encodeFrame(buildPayload(0x02, 0x04, startBody))];
+    for (let index = 0; index < packetCount; index++) {
+      const chunk = Array.from(encodedVoice.slice(index * chunkSize, (index + 1) * chunkSize));
+      const chunkBody = [0x01, 0x04, ...msgIdBytes, (index >> 8) & 0xff, index & 0xff, 0x00, ...chunk]; // TYPE_VOICE_CHUNK
+      frames.push(encodeFrame(buildPayload(0x02, 0x04, chunkBody)));
+    }
+    return frames;
+  }
+
+  // `jpegBytes`: Uint8Array (or plain array), already resized/compressed
+  // by the caller -- mirrors app/protocol/messages.py::build_image_message_frames.
+  function buildImageMessageFrames(username, jpegBytes, width, height, msgId) {
+    if (!jpegBytes || jpegBytes.length === 0) throw new Error("image data empty");
+    if (width <= 0 || height <= 0) throw new Error("image size invalid");
+
+    const sender = encodeSender(username);
+    const msgIdBytes = [
+      (msgId >>> 24) & 0xff, (msgId >>> 16) & 0xff, (msgId >>> 8) & 0xff, msgId & 0xff,
+    ];
+    const chunkSize = 132;
+    const parts = [];
+    for (let i = 0; i < jpegBytes.length; i += chunkSize) parts.push(Array.from(jpegBytes.slice(i, i + chunkSize)));
+    const partCount = Math.max(1, parts.length);
+    if (partCount > 0xff) throw new Error("image too large to fragment (>255 chunks)");
+
+    const startBody = [
+      0x01, 0x05, // TYPE_IMAGE_START
+      ...msgIdBytes,
+      0x00,
+      ...sender,
+      jpegBytes.length & 0xff, (jpegBytes.length >> 8) & 0xff,
+      partCount & 0xff, 0x00,
+      width & 0xff, (width >> 8) & 0xff,
+      height & 0xff, (height >> 8) & 0xff,
+    ];
+    const frames = [encodeFrame(buildPayload(0x02, 0x04, startBody))];
+    parts.forEach((part, index) => {
+      const chunkBody = [0x01, 0x06, ...msgIdBytes, (index >> 8) & 0xff, index & 0xff, 0x00, ...part]; // TYPE_IMAGE_CHUNK
+      frames.push(encodeFrame(buildPayload(0x02, 0x04, chunkBody)));
+    });
+    return frames;
+  }
+
   // -- incoming offline messages: decode + reassembly ------------------------
   //
   // Full JS port of app/protocol/messages.py's decode()/MessageAssembler --
@@ -517,6 +585,7 @@ const AT2Protocol = (() => {
   }
 
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
+    buildVoiceMessageFrames, buildImageMessageFrames,
     isMessageAck, MessageAssembler, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
     buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
