@@ -577,6 +577,34 @@ const AT2Protocol = (() => {
       && pkt.body[0] === PTT_VOICE_SUBTYPE[0] && pkt.body[1] === PTT_VOICE_SUBTYPE[1] && pkt.body[2] === PTT_VOICE_SUBTYPE[2];
   }
 
+  // Confirmed live on real hardware (05/09/2026, local BLE mode): incoming
+  // voice traffic from another radio's PTT transmission does NOT decode as
+  // isPttVoicePacket() above (family=0x02/command=0x04, ported from the
+  // Android reference for the frames WE build/send) -- it decodes instead
+  // as family=0x91/command=0x02, at a ~100ms cadence matching the known
+  // voice-packet pacing (PTT_PACKET_PACING_MS). This is the exact same
+  // family/command a genuine CPS-dialect channel-read reply produces (see
+  // decodeFrame()'s own comment, and readAllChannels()'s predicate below) --
+  // not a coincidence: decodeFrame() only ever implements the "legacy"
+  // 1-byte-length dialect, and a CPS-dialect frame (2-byte length, no
+  // leading 0x00 pad) with a body under 256 bytes decodes cleanly under
+  // that logic too, since the length field's unused high byte reads as the
+  // legacy dialect's expected 0x00 pad. In other words, this radio appears
+  // to actually send live incoming voice audio framed in the CPS dialect,
+  // not the legacy one the reference Android app's decompiled source
+  // assumes for RX. Used ONLY to drive the "someone is talking" visual
+  // indicator -- NOT to decode/play this traffic as audio, since its real
+  // payload shape (presumably NOT the same 25-byte channel-config record
+  // decodeChannelReadResponse() expects) hasn't been reverse-engineered.
+  // Caveat: a real channel-read reply (deliberate "read channels" action)
+  // shares this exact signature and will also blip the indicator -- an
+  // accepted, low-impact false positive given there's no cleaner signal
+  // yet, and this app never issues channel reads on its own in the
+  // background (only on an explicit user action).
+  function isIncomingRfActivity(pkt) {
+    return isPttVoicePacket(pkt) || (pkt.family === 0x91 && pkt.command === 0x02);
+  }
+
   function extractAmrFrames(body) {
     const data = body.slice(3);
     const frames = [];
@@ -587,6 +615,6 @@ const AT2Protocol = (() => {
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
     buildVoiceMessageFrames, buildImageMessageFrames,
     isMessageAck, MessageAssembler, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
-    buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
+    buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, isIncomingRfActivity, extractAmrFrames,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();

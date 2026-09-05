@@ -812,7 +812,7 @@ function connectPttRxSocket() {
 }
 
 AT2BleClient.onPacket((pkt) => {
-  if (AT2Protocol.isPttVoicePacket(pkt)) markIncomingRfActivity();
+  if (AT2Protocol.isIncomingRfActivity(pkt)) markIncomingRfActivity();
 });
 
 // ---------------------------------------------------------------------------
