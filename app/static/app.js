@@ -398,6 +398,26 @@ function setConnUi(isConnected, label) {
   $("#brand-mark").classList.toggle("connected", isConnected);
   $("#status-pill").classList.toggle("up", isConnected);
   $("#conn-label").textContent = label;
+  updatePageTitle();
+}
+
+// Every tab always showed the same generic "AT2 Bridge" title -- no way
+// to tell, from the browser's tab bar/window list, which physical radio a
+// given tab is actually talking to. Confirmed as a real point of
+// confusion (05/09/2026): with two tabs open side by side, each connected
+// to a different radio over local BLE and sharing the same PC speakers,
+// there was no way to tell which tab's audio was actually playing when
+// testing incoming voice. Local BLE takes priority, matching
+// activeTransport()'s own precedence (BLE wins if, unusually, both are
+// connected at once).
+function updatePageTitle() {
+  if (AT2BleClient.connected() && localDeviceInfo) {
+    document.title = `${localDeviceInfo.name} — AT2 Bridge`;
+  } else if (connected && activeServerTarget) {
+    document.title = `${activeServerTarget} — AT2 Bridge`;
+  } else {
+    document.title = "AT2 Bridge";
+  }
 }
 
 async function refreshStatus() {
