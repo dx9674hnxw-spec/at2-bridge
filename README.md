@@ -65,7 +65,7 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >  - **Voice message playback** — received messages are decoded (AMR → PCM, client-side) and playable via a button on the bubble (previously text-only, "message received, no player"); sent voice notes are playable too now, from the raw PCM kept in memory (no AMR round-trip needed for our own audio).
 >  - Confirmed live (05/09/2026, local BLE, two tabs/two radios): text reception works reliably. Image/voice reception should now work with the pacing fix above — **still needs a re-test to confirm**.
 >- **Position/SOS** — relies on the text messaging channel (no structured "Position" type exists in the real protocol).
->- **Reconnecting to known devices.**
+>- **Reconnecting to known devices** — **fixed a UI bug** (05/09/2026): clicking "Connecter" on a known BLE-local radio already connected correctly in the background, but the Serveur/BLE local mode toggle never followed, so the visible panel (status text, connect/disconnect button) stayed on whichever mode was showing before — looking like nothing happened until switching mode by hand. `reconnectKnownDevice()` (`app/static/app.js`) now switches the mode toggle to match the device's own transport before connecting.
 
 > [!CAUTION]
 >###  Confirmed not working / abandoned

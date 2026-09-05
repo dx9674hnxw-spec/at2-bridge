@@ -560,6 +560,17 @@ async function loadDeviceList() {
 }
 
 async function reconnectKnownDevice(id, transport, target) {
+  // Switch the Serveur/BLE local mode toggle to match this device's own
+  // transport BEFORE connecting -- previously `mode` never changed here,
+  // so clicking "Connecter" on a known BLE-local device actually connected
+  // fine in the background but left the "Serveur" panel showing (wrong
+  // hint text, wrong connect/disconnect button visible), making it look
+  // like nothing happened until the mode tab was flipped by hand (reported
+  // 05/09/2026). Doing it up front, not just on success, also means a
+  // failed connect still leaves the user looking at the right panel to
+  // retry from.
+  mode = transport === "ble-local" ? "local" : "server";
+  applyModeUi();
   try {
     if (transport === "ble-local") {
       // Web Bluetooth ne permet jamais de cibler silencieusement une
