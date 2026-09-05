@@ -777,6 +777,44 @@ pttBtn.addEventListener("mousedown", startPtt);
 pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startPtt(); });
 ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((evt) => pttBtn.addEventListener(evt, stopPtt));
 
+$("#ptt-help").addEventListener("click", () => showToast(t("chan.optsLegend"), "info"));
+
+// ---------------------------------------------------------------------------
+// Passive "someone is talking" RX indicator -- previously the only way to
+// see incoming voice activity at all was to already be transmitting
+// yourself (the `.rx` class added inside startPtt() above, for audio the
+// radio echoes back mid-session). This lights up the same indicator/wave
+// from incoming PTT voice packets alone, with no local mic capture and no
+// keying of the local transmitter, so the channel's busy state is visible
+// BEFORE pressing PTT -- server mode via a dedicated receive-only
+// websocket (/ws/ptt-rx, never keys the radio, unlike /ws/ptt), local BLE
+// mode by watching the same packet stream ble-client.js already exposes.
+// ---------------------------------------------------------------------------
+let rfActivityTimer = null;
+
+function markIncomingRfActivity() {
+  if (pttActive) return; // already showing our own TX state, don't fight it
+  $("#rf-indicator").classList.add("rx");
+  $("#rf-label").textContent = t("chan.receiving");
+  waveEl.classList.add("rx-active");
+  clearTimeout(rfActivityTimer);
+  rfActivityTimer = setTimeout(() => {
+    $("#rf-indicator").classList.remove("rx");
+    $("#rf-label").textContent = t("chan.standby");
+    waveEl.classList.remove("rx-active");
+  }, 500);
+}
+
+function connectPttRxSocket() {
+  const ws = new WebSocket(wsUrl("/ws/ptt-rx"));
+  ws.onmessage = () => markIncomingRfActivity();
+  ws.onclose = () => setTimeout(connectPttRxSocket, 2000);
+}
+
+AT2BleClient.onPacket((pkt) => {
+  if (AT2Protocol.isPttVoicePacket(pkt)) markIncomingRfActivity();
+});
+
 // ---------------------------------------------------------------------------
 // GPS position + SOS
 // ---------------------------------------------------------------------------
@@ -1581,6 +1619,7 @@ AT2BleClient.onMessageReceived((msg) => {
 function startApp() {
   connectLogSocket();
   connectMessagesSocket();
+  connectPttRxSocket();
   loadDeviceList();
   loadChannelNames().then(() => applyActiveChannel(false));
   api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; }).catch(() => {});

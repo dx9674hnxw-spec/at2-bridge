@@ -93,8 +93,11 @@ const I18N_DICT = {
     "chan.analog": "Analogique",
     "chan.readFirst": "Lis les canaux pour voir les options",
     "chan.selectError": "Erreur sélection canal: {error}",
+    "chan.receiving": "Réception",
+    "chan.optsLegend": "H/L : puissance haute/basse · N/W : bande étroite/large · 📡 : ajouté au scan · A/D : analogique/numérique",
 
     // PTT panel
+    "ptt.helpTitle": "Aide PTT",
     "ptt.hintServer": "Maintiens pour émettre — encode et transmet la voix en temps réel",
     "ptt.hintLocalBle": "Maintiens pour émettre — encodage AMR dans le navigateur, transmis directement en BLE",
     "ptt.micError": "Micro indisponible : {error}",
@@ -283,7 +286,10 @@ const I18N_DICT = {
     "chan.analog": "Analog",
     "chan.readFirst": "Read the channels to see options",
     "chan.selectError": "Channel select error: {error}",
+    "chan.receiving": "Receiving",
+    "chan.optsLegend": "H/L: high/low power · N/W: narrow/wide band · 📡: added to scan · A/D: analog/digital",
 
+    "ptt.helpTitle": "PTT help",
     "ptt.hintServer": "Hold to transmit — encodes and streams voice in real time",
     "ptt.hintLocalBle": "Hold to transmit — AMR-encoded in the browser, sent directly over BLE",
     "ptt.micError": "Microphone unavailable: {error}",

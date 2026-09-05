@@ -297,19 +297,19 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 .chan-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
 .chan-arrow { width: 30px; height: 30px; min-height: auto; border-radius: var(--radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-dim); font-size: 15px; padding: 0; }
 .chan-select { flex: 1; min-width: 130px; font-weight: 600; font-size: 13px; }
-.chan-opts { display: flex; gap: 4px; flex-wrap: wrap; }
+.chan-opts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
 .chan-opt-icon { width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-faint); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .chan-opt-icon.on { color: var(--status-info); border-color: var(--color-primary-border-soft); background: var(--status-info-bg); }
 .chan-opt-icon.warn-on { color: var(--status-degraded); border-color: var(--status-degraded-border); background: var(--status-degraded-bg); }
 
 .ptt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
-.ptt-device-name { font-size: 14px; font-weight: 600; color: var(--color-text); }
-.ptt-device-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-subtle); }
+.ptt-device-sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-subtle); }
 .rf-indicator { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-pill); padding: 4px 11px; font-size: 11px; font-weight: 600; background: var(--status-neutral-bg); color: var(--status-neutral); border: 1px solid var(--status-neutral-border); }
 .rf-indicator .rf-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .rf-indicator.tx { background: var(--status-down-bg); color: var(--status-down); border-color: var(--status-down-border); }
 .rf-indicator.tx .rf-dot { animation: pulse 0.6s infinite; }
 .rf-indicator.rx { background: var(--status-up-bg); color: var(--status-up); border-color: var(--status-up-border); }
+.rf-indicator.rx .rf-dot { animation: pulse 0.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.4; } }
 
 .ptt-wave { height: 52px; display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 16px; background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }

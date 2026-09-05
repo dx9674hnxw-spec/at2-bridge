@@ -664,6 +664,44 @@ async def ws_messages(websocket: WebSocket):
         device_manager.off_message_received(_on_message)
 
 
+@app.websocket("/ws/ptt-rx")
+async def ws_ptt_rx(websocket: WebSocket):
+    """Passive, receive-only signal for the "someone is talking" visual
+    indicator on the PTT panel -- unlike /ws/ptt, opening this connection
+    never keys the local radio's transmitter (no PttSession involved at
+    all). It just pings the client once per incoming PTT voice packet, so
+    the UI can light up an "RX" indicator even while the user isn't
+    holding their own PTT button -- previously the only way to see any
+    incoming-voice signal at all was to already be transmitting yourself
+    (see /ws/ptt's docstring), which defeats the point of knowing the
+    channel is busy *before* keying up over someone else.
+
+    Always accepted regardless of connection state (mirrors /ws/messages)
+    -- device_manager.on_ptt_voice_packet() callbacks are stored on the
+    manager itself and simply fire once a transport is later connected."""
+    if not auth.require_auth_ws(websocket.query_params.get("token")):
+        await websocket.close(code=4401)
+        return
+    await websocket.accept()
+
+    queue: asyncio.Queue[None] = asyncio.Queue()
+
+    def _on_rx_pcm(_pcm: bytes) -> None:
+        # Presence-only ping -- the client just needs to know "someone is
+        # transmitting right now", not to play back the audio itself.
+        queue.put_nowait(None)
+
+    device_manager.on_ptt_voice_packet(_on_rx_pcm)
+    try:
+        while True:
+            await queue.get()
+            await websocket.send_text("rx")
+    except WebSocketDisconnect:
+        pass
+    finally:
+        device_manager.off_ptt_voice_packet(_on_rx_pcm)
+
+
 # ---------------------------------------------------------------------------
 # Static frontend
 # ---------------------------------------------------------------------------
