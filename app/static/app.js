@@ -1302,27 +1302,52 @@ $("#msg-text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendT
 // Resizes/re-encodes `file` to the wire format via <canvas>, returning
 // both the JPEG bytes (what local BLE mode actually sends) and a base64
 // copy (what every mode uses for the bubble preview) in one pass.
-function resizeImageForWire(file, maxEdge = 300, quality = 0.75) {
+function loadImageElement(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
-      const width = Math.max(1, Math.round(img.width * scale));
-      const height = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        if (!blob) { reject(new Error("image encode failed")); return; }
-        blob.arrayBuffer().then((buf) => resolve({ bytes: new Uint8Array(buf), width, height }));
-      }, "image/jpeg", quality);
-    };
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image decode failed")); };
     img.src = url;
   });
+}
+
+function encodeCanvasJpeg(img, maxEdge, quality) {
+  return new Promise((resolve, reject) => {
+    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("image encode failed")); return; }
+      blob.arrayBuffer().then((buf) => resolve({ bytes: new Uint8Array(buf), width, height }));
+    }, "image/jpeg", quality);
+  });
+}
+
+// Resizes/re-encodes `file` to fit the protocol's hard cap on chunk count
+// (255 * 132 = 33660 bytes -- app/protocol/messages.py's
+// build_image_message_frames raises "image too large to fragment" past
+// that). A single fixed 300px/quality-0.75 pass can still exceed it for
+// busy/detailed photos -- confirmed in testing, this used to just throw
+// outright. Backs off quality first (75% -> 35% floor), then shrinks the
+// long edge further if quality alone isn't enough.
+async function resizeImageForWire(file, maxEdge = 300, quality = 0.75) {
+  const MAX_IMAGE_BYTES = 255 * 132;
+  const img = await loadImageElement(file);
+  let edge = maxEdge;
+  let q = quality;
+  let result = null;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    result = await encodeCanvasJpeg(img, edge, q);
+    if (result.bytes.length <= MAX_IMAGE_BYTES) return result;
+    if (q > 0.35) q = Math.max(0.35, q - 0.15);
+    else edge = Math.max(60, Math.round(edge * 0.85));
+  }
+  throw new Error(`image trop volumineuse même après compression maximale (${result.bytes.length} octets, max ${MAX_IMAGE_BYTES})`);
 }
 
 // Server mode doesn't need the real bytes client-side (the server does

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app import auth, store
 from app.device import device_manager
 from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
-from app.protocol.messages import CompletedMessage, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
+from app.protocol.messages import CompletedMessage, IMAGE_CHUNK_BYTES, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
 from app.transport.ble_transport import scan_for_devices
 from app.transport.serial_transport import list_serial_ports
 
@@ -440,12 +440,36 @@ async def send_image(
         scale = IMAGE_LONG_EDGE_PX / long_edge
         img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))))
 
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=IMAGE_JPEG_QUALITY)
-    jpeg_bytes = buf.getvalue()
+    # A single fixed 300px/quality-75 pass can still exceed the protocol's
+    # hard cap on chunk count (255 * IMAGE_CHUNK_BYTES -- see
+    # build_image_message_frames' "image too large to fragment" check) for
+    # busy/detailed photos -- confirmed in testing, this used to just
+    # propagate that as a 500. Back off quality first, then dimensions.
+    max_image_bytes = 255 * IMAGE_CHUNK_BYTES
+    quality = IMAGE_JPEG_QUALITY
+    working_img = img
+    jpeg_bytes = b""
+    for _ in range(8):
+        buf = io.BytesIO()
+        working_img.save(buf, format="JPEG", quality=quality)
+        jpeg_bytes = buf.getvalue()
+        if len(jpeg_bytes) <= max_image_bytes:
+            break
+        if quality > 35:
+            quality = max(35, quality - 15)
+        else:
+            working_img = working_img.resize((
+                max(1, round(working_img.width * 0.85)),
+                max(1, round(working_img.height * 0.85)),
+            ))
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"image trop volumineuse même après compression maximale ({len(jpeg_bytes)} octets, max {max_image_bytes})",
+        )
 
-    await device_manager.send_image_message(username, jpeg_bytes, img.width, img.height)
-    return {"ok": True, "width": img.width, "height": img.height, "bytes": len(jpeg_bytes)}
+    await device_manager.send_image_message(username, jpeg_bytes, working_img.width, working_img.height)
+    return {"ok": True, "width": working_img.width, "height": working_img.height, "bytes": len(jpeg_bytes)}
 
 
 # ---------------------------------------------------------------------------

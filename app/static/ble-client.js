@@ -252,11 +252,12 @@ const AT2BleClient = (() => {
   }
 
   async function sendText(username, text) {
-    const frames = AT2Protocol.buildTextMessageFrames(
-      username,
-      text,
-      nextMsgId++
-    );
+    // msgId is only actually consumed once the build below succeeds (see
+    // sendVoice/sendImage for why: buildXxxFrames() can throw -- e.g. "too
+    // large to fragment" -- and nextMsgId++ as a call argument would have
+    // burned an id even on a build that never sent anything).
+    const frames = AT2Protocol.buildTextMessageFrames(username, text, nextMsgId);
+    nextMsgId++;
 
     await sendFramesWithAck(frames, "Message texte");
   }
@@ -290,7 +291,8 @@ const AT2BleClient = (() => {
     const encodedVoice = new Uint8Array(encodedChunks.length * PttAmr.ENCODED_FRAME_BYTES);
     encodedChunks.forEach((chunk, i) => encodedVoice.set(chunk, i * PttAmr.ENCODED_FRAME_BYTES));
 
-    const frames = AT2Protocol.buildVoiceMessageFrames(username, encodedVoice, durationMs, nextMsgId++);
+    const frames = AT2Protocol.buildVoiceMessageFrames(username, encodedVoice, durationMs, nextMsgId);
+    nextMsgId++;
     await sendFramesWithAck(frames, "Message vocal");
   }
 
@@ -301,7 +303,8 @@ const AT2BleClient = (() => {
   // pre-resized bytes from its caller (the upload endpoint, resizing with
   // Pillow) rather than resizing itself.
   async function sendImage(username, jpegBytes, width, height) {
-    const frames = AT2Protocol.buildImageMessageFrames(username, jpegBytes, width, height, nextMsgId++);
+    const frames = AT2Protocol.buildImageMessageFrames(username, jpegBytes, width, height, nextMsgId);
+    nextMsgId++;
     await sendFramesWithAck(frames, "Image");
   }
 
