@@ -230,16 +230,49 @@ const AT2BleClient = (() => {
   const MESSAGE_ACK_RETRIES = 3;
   const MESSAGE_ACK_RETRY_BACKOFF_MS = 220;
 
-  async function sendFramesWithAck(frames, tag) {
+  // Minimum, fixed-cadence pacing enforced BETWEEN successive chunk frames
+  // of a multi-frame message, on top of the ack-wait above -- mirrors the
+  // identical fix in app/device.py::_send_message_frames_with_ack (ported
+  // from At2ProtocolExecutor.kt's OFFLINE_*_FIRST_CHUNK_DELAY_MS /
+  // OFFLINE_*_CHUNK_PERIOD_MS + delayUntil()). This was missing entirely:
+  // the ack we wait for just confirms the radio queued the frame over BLE,
+  // NOT that it finished keying up and transmitting that chunk over RF to
+  // the other radio -- without this floor, frames were pushed to the
+  // radio's TX pipeline far faster than it can physically transmit each one
+  // on air. Confirmed live (2026-09-05): text (1-2 short frames) arrived
+  // fine, image (up to 255 chunks) never arrived at all on the other radio,
+  // voice (dozens of chunks) arrived as a corrupt partial reassembly --
+  // exactly what unpaced back-to-back OTA chunk loss looks like.
+  // `nextChunkAt` is a fixed schedule anchored right after frame 0's ack
+  // (not "firstChunkDelay + previous chunk's ack latency"), matching the
+  // reference's own accumulation -- it's a floor, so a slow ack round-trip
+  // never gets penalized twice.
+  const MESSAGE_TEXT_FIRST_CHUNK_DELAY_MS = 360;
+  const MESSAGE_TEXT_CHUNK_PERIOD_MS = 400;
+  const MESSAGE_VOICE_FIRST_CHUNK_DELAY_MS = 350;
+  const MESSAGE_VOICE_CHUNK_PERIOD_MS = 360;
+  const MESSAGE_IMAGE_FIRST_CHUNK_DELAY_MS = 360;
+  const MESSAGE_IMAGE_CHUNK_PERIOD_MS = 400;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function sendFramesWithAck(frames, tag, firstChunkDelayMs = 0, chunkPeriodMs = 0) {
+    let nextChunkAt = null;
     for (let index = 0; index < frames.length; index++) {
       const f = frames[index];
+      if (index >= 1 && nextChunkAt !== null) {
+        const wait = nextChunkAt - performance.now();
+        if (wait > 0) await sleep(wait);
+      }
       let acked = false;
       for (let attempt = 1; attempt <= MESSAGE_ACK_RETRIES && !acked; attempt++) {
         const waitPromise = waitForPacket(AT2Protocol.isMessageAck, MESSAGE_ACK_TIMEOUT_MS);
         await sendFrame(f);
         acked = !!(await waitPromise);
         if (!acked && attempt < MESSAGE_ACK_RETRIES) {
-          await new Promise((resolve) => setTimeout(resolve, MESSAGE_ACK_RETRY_BACKOFF_MS));
+          await sleep(MESSAGE_ACK_RETRY_BACKOFF_MS);
         }
       }
       if (!acked) {
@@ -247,6 +280,11 @@ const AT2BleClient = (() => {
           `${tag}: pas d'accusé de réception de la radio pour la trame ${index + 1}/${frames.length} ` +
           `après ${MESSAGE_ACK_RETRIES} tentatives`
         );
+      }
+      if (index === 0) {
+        nextChunkAt = performance.now() + firstChunkDelayMs;
+      } else if (nextChunkAt !== null) {
+        nextChunkAt += chunkPeriodMs;
       }
     }
   }
@@ -259,7 +297,7 @@ const AT2BleClient = (() => {
     const frames = AT2Protocol.buildTextMessageFrames(username, text, nextMsgId);
     nextMsgId++;
 
-    await sendFramesWithAck(frames, "Message texte");
+    await sendFramesWithAck(frames, "Message texte", MESSAGE_TEXT_FIRST_CHUNK_DELAY_MS, MESSAGE_TEXT_CHUNK_PERIOD_MS);
   }
 
   // Store-and-forward voice message (distinct from live PTT streaming --
@@ -293,7 +331,7 @@ const AT2BleClient = (() => {
 
     const frames = AT2Protocol.buildVoiceMessageFrames(username, encodedVoice, durationMs, nextMsgId);
     nextMsgId++;
-    await sendFramesWithAck(frames, "Message vocal");
+    await sendFramesWithAck(frames, "Message vocal", MESSAGE_VOICE_FIRST_CHUNK_DELAY_MS, MESSAGE_VOICE_CHUNK_PERIOD_MS);
   }
 
   // `jpegBytes`: already resized/compressed by the caller (app.js does
@@ -305,7 +343,7 @@ const AT2BleClient = (() => {
   async function sendImage(username, jpegBytes, width, height) {
     const frames = AT2Protocol.buildImageMessageFrames(username, jpegBytes, width, height, nextMsgId);
     nextMsgId++;
-    await sendFramesWithAck(frames, "Image");
+    await sendFramesWithAck(frames, "Image", MESSAGE_IMAGE_FIRST_CHUNK_DELAY_MS, MESSAGE_IMAGE_CHUNK_PERIOD_MS);
   }
 
   // -- channel read/write (CPS-style dialect, confirmed on real hardware

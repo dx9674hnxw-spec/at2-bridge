@@ -258,7 +258,10 @@ class DeviceManager:
         msg_id = self._next_msg_id
         self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
         frames = messages.build_text_message_frames(username, text, msg_id)
-        await self._send_message_frames_with_ack(t, frames, "Message texte")
+        await self._send_message_frames_with_ack(
+            t, frames, "Message texte",
+            self.MESSAGE_TEXT_FIRST_CHUNK_DELAY_SECONDS, self.MESSAGE_TEXT_CHUNK_PERIOD_SECONDS,
+        )
         self._log_line(f"Message texte envoyé ({len(text)} caractères, {len(frames)} trame(s))")
 
     async def send_position(self, username: str, lat: float, lon: float, note: str = "") -> None:
@@ -288,7 +291,10 @@ class DeviceManager:
             msg_id = self._next_msg_id
             self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
             frames = messages.build_voice_message_frames(username, bytes(encoded), duration_ms, msg_id)
-            await self._send_message_frames_with_ack(t, frames, "Message vocal")
+            await self._send_message_frames_with_ack(
+                t, frames, "Message vocal",
+                self.MESSAGE_VOICE_FIRST_CHUNK_DELAY_SECONDS, self.MESSAGE_VOICE_CHUNK_PERIOD_SECONDS,
+            )
             self._log_line(f"Message vocal envoyé ({duration_ms}ms, {len(frames)} trame(s))")
         finally:
             codec.close()
@@ -302,7 +308,10 @@ class DeviceManager:
         msg_id = self._next_msg_id
         self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
         frames = messages.build_image_message_frames(username, jpeg_bytes, width, height, msg_id)
-        await self._send_message_frames_with_ack(t, frames, "Image")
+        await self._send_message_frames_with_ack(
+            t, frames, "Image",
+            self.MESSAGE_IMAGE_FIRST_CHUNK_DELAY_SECONDS, self.MESSAGE_IMAGE_CHUNK_PERIOD_SECONDS,
+        )
         self._log_line(f"Image envoyée ({len(jpeg_bytes)} octets, {len(frames)} trame(s))")
 
     def on_message_received(self, callback) -> None:
@@ -355,8 +364,46 @@ class DeviceManager:
     MESSAGE_ACK_RETRIES = 3
     MESSAGE_ACK_RETRY_BACKOFF_SECONDS = 0.22
 
-    async def _send_message_frames_with_ack(self, transport: Transport, frames: list[bytes], tag: str) -> None:
+    # Minimum, fixed-cadence pacing enforced BETWEEN successive chunk
+    # frames of a multi-frame message, on top of the ack-wait above --
+    # ported from At2ProtocolExecutor.kt's OFFLINE_*_FIRST_CHUNK_DELAY_MS /
+    # OFFLINE_*_CHUNK_PERIOD_MS + delayUntil(). This was missing entirely
+    # until now: the ack we wait for is almost immediate (it just confirms
+    # the radio queued the frame over BLE), NOT that it finished actually
+    # keying up and transmitting that chunk over RF to the other radio. Without
+    # this extra floor, frames were pushed to the radio's TX pipeline far
+    # faster than it can physically key/transmit each one on air, so most of
+    # a message's chunks never actually left the radio (or arrived corrupted)
+    # even though every local BLE ack came back fine -- explaining the
+    # confirmed symptom (2026-09-05 live test): text (1-2 short frames)
+    # arrived fine, but image (up to 255 chunks) never arrived at all, and
+    # voice (dozens of chunks) arrived as a corrupt partial reassembly.
+    # `next_chunk_at` is a fixed schedule anchored right after frame 0's ack
+    # (not "first_chunk_delay + previous chunk's ack latency"), matching the
+    # reference's own delayUntil()/nextChunkAtNs accumulation -- it's a
+    # floor, so a slow ack round-trip never gets penalized twice.
+    MESSAGE_TEXT_FIRST_CHUNK_DELAY_SECONDS = 0.36
+    MESSAGE_TEXT_CHUNK_PERIOD_SECONDS = 0.40
+    MESSAGE_VOICE_FIRST_CHUNK_DELAY_SECONDS = 0.35
+    MESSAGE_VOICE_CHUNK_PERIOD_SECONDS = 0.36
+    MESSAGE_IMAGE_FIRST_CHUNK_DELAY_SECONDS = 0.36
+    MESSAGE_IMAGE_CHUNK_PERIOD_SECONDS = 0.40
+
+    async def _send_message_frames_with_ack(
+        self,
+        transport: Transport,
+        frames: list[bytes],
+        tag: str,
+        first_chunk_delay_seconds: float = 0.0,
+        chunk_period_seconds: float = 0.0,
+    ) -> None:
+        loop = asyncio.get_event_loop()
+        next_chunk_at: float | None = None
         for index, f in enumerate(frames):
+            if index >= 1 and next_chunk_at is not None:
+                wait = next_chunk_at - loop.time()
+                if wait > 0:
+                    await asyncio.sleep(wait)
             for attempt in range(1, self.MESSAGE_ACK_RETRIES + 1):
                 self._message_ack_event.clear()
                 await transport.send_raw_frame(f)
@@ -384,6 +431,10 @@ class DeviceManager:
                         f"nouvelle tentative ({attempt}/{self.MESSAGE_ACK_RETRIES})"
                     )
                     await asyncio.sleep(self.MESSAGE_ACK_RETRY_BACKOFF_SECONDS)
+            if index == 0:
+                next_chunk_at = loop.time() + first_chunk_delay_seconds
+            elif next_chunk_at is not None:
+                next_chunk_at += chunk_period_seconds
 
     # -- live PTT (real-time voice) -----------------------------------------
 

@@ -773,6 +773,47 @@ def test_send_message_frames_with_ack_success():
     asyncio.run(run())
 
 
+def test_send_message_frames_with_ack_paces_chunks_even_with_instant_acks():
+    """The fixed-cadence floor between chunks (first_chunk_delay_seconds /
+    chunk_period_seconds) must hold even when every ack comes back
+    immediately -- this is exactly the case that silently broke image/voice
+    reception in practice: a near-instant local BLE ack (confirming only
+    that the radio queued the frame) was mistaken for "safe to send the
+    next chunk", flooding the radio's TX pipeline far faster than it can
+    actually key up and transmit each chunk over RF."""
+    import asyncio
+    import time
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        t = _FakeMessageTransport()
+
+        async def ack_instantly():
+            for _ in range(4):
+                while dm._message_ack_event.is_set():
+                    await asyncio.sleep(0.0005)
+                await asyncio.sleep(0.0005)
+                dm._message_ack_event.set()
+
+        acker = asyncio.create_task(ack_instantly())
+        try:
+            start = time.monotonic()
+            await dm._send_message_frames_with_ack(
+                t, [b"f0", b"f1", b"f2", b"f3"], "Test",
+                first_chunk_delay_seconds=0.05, chunk_period_seconds=0.05,
+            )
+            elapsed = time.monotonic() - start
+        finally:
+            acker.cancel()
+        assert t.sent == [b"f0", b"f1", b"f2", b"f3"]
+        # 3 gaps (after frame 0, 1, 2) of >= 0.05s each, minus scheduling
+        # slack -- comfortably distinguishes "paced" from "back-to-back".
+        assert elapsed >= 0.13
+
+    asyncio.run(run())
+
+
 def test_send_message_frames_with_ack_retries_then_succeeds():
     import asyncio
     from app.device import DeviceManager
