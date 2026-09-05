@@ -44,6 +44,7 @@ DEFAULT_USERNAME = "AT2Bridge"
 # FAMILY_EXT (0x04) used for smart-link in commands.py, which is unrelated.
 FAMILY_MSG = 0x02
 CMD_MSG = 0x04
+FAMILY_MSG_ACK = FAMILY_MSG | 0x80  # 0x82 -- the radio's response family for a family=0x02 write
 
 TYPE_TEXT_START = 0x01
 TYPE_TEXT_CHUNK = 0x02
@@ -197,6 +198,21 @@ class OfflineChunk:
     data: bytes
 
 
+def is_message_ack(family: int, command: int, body: bytes) -> bool:
+    """True for the radio's acknowledgment of an offline-message frame
+    (text/voice/image start or chunk) -- ported from
+    `BleEventController.kt`'s
+    `packet.containsSubsequence(byteArrayOf(0x82, 0x04, 0x01, 0x00))`.
+
+    Used to send each frame of a multi-frame message and wait for this
+    ack before sending the next one (with retry), instead of the old
+    fixed-delay fire-and-forget approach -- a dropped frame on a lossy
+    BLE link used to go completely undetected, silently truncating
+    whatever the receiving end could reassemble.
+    """
+    return family == FAMILY_MSG_ACK and command == CMD_MSG and len(body) >= 2 and body[0] == 0x01 and body[1] == 0x00
+
+
 def decode(packet: At2Packet) -> OfflineStartFrame | OfflineChunk | None:
     if packet.family != FAMILY_MSG or packet.command != CMD_MSG:
         return None
@@ -292,6 +308,36 @@ class CompletedMessage:
     height: int | None = None
 
 
+# Full (unpadded) chunk-data size per chunk type, used both to detect
+# whether a start frame's declared total looks sane and, for orphan
+# chunks (see below), as the "this one is shorter, so it must be the
+# last one" heuristic -- ported from
+# `OfflineMessageAssembler.kt::consumeChunk`'s fullTextChunkSize/
+# fullVoiceChunkSize/lastChunkSize logic.
+_FULL_CHUNK_BYTES = {
+    TYPE_TEXT_CHUNK: FRAGMENT_TEXT_CHUNK_BYTES,
+    TYPE_VOICE_CHUNK: VOICE_CHUNK_BYTES,
+    TYPE_IMAGE_CHUNK: IMAGE_CHUNK_BYTES,
+}
+_CHUNK_KIND = {TYPE_TEXT_CHUNK: "text", TYPE_VOICE_CHUNK: "voice", TYPE_IMAGE_CHUNK: "image"}
+
+
+def _trim_to_declared(data: bytes, declared_length: int | None) -> bytes:
+    """Ported from `OfflineMessageAssembler.kt::trimToDeclared`. The radio's
+    real over-the-air chunks may pad the last one out to the fixed chunk
+    size instead of sending only the remaining bytes (neither this
+    project's nor the reference app's own encoder does this, but nothing
+    guarantees the *radio* doesn't) -- without this, a received message
+    whose length isn't an exact multiple of the chunk size could get
+    trailing garbage appended by the reassembly. Trimming to the
+    start frame's self-declared length is a pure safety net: it only
+    ever removes bytes, never legitimate ones, since declared_length is
+    always <= the reassembled size in that scenario."""
+    if not declared_length or declared_length <= 0 or not data:
+        return data
+    return data[:declared_length]
+
+
 class MessageAssembler:
     """Buffers start + chunk frames per msg_id and yields a
     `CompletedMessage` once every declared part has arrived.
@@ -317,16 +363,39 @@ class MessageAssembler:
         if f.type == TYPE_TEXT_START:
             if f.total_parts <= 1:
                 # Single-frame short text: inline_data[0] is the redundant
-                # seq byte (see module docstring), actual text follows.
-                text = f.inline_data[1:].decode("utf-8", errors="replace") if f.inline_data else ""
+                # seq byte (see module docstring) -- but only strip it when
+                # it's actually the reference decoder's `0x00` padding
+                # convention (`stripLeadingControlByte` in
+                # OfflineMessageAssembler.kt is conditional on that byte
+                # being zero, not an unconditional drop -- this used to
+                # unconditionally drop byte 0, which would have eaten a
+                # real leading character on some other value).
+                data = f.inline_data[1:] if f.inline_data[:1] == b"\x00" else f.inline_data
+                text = _trim_to_declared(data, f.declared_length).decode("utf-8", errors="replace")
                 return CompletedMessage(kind="text", sender=f.sender, msg_id=f.msg_id, text=text)
-            self._pending[f.msg_id] = {"kind": "text", "sender": f.sender, "total": f.total_parts, "chunks": {}}
+            # `declared_length` here is the *stream* length as computed by
+            # build_text_message_frames() -- `sum(len(part) + 1 for part
+            # in parts)`, i.e. it bakes in one extra byte per chunk (the
+            # leading 0x00 pad byte each chunk carries on the wire).
+            # Python's own chunk decoder deliberately extracts chunk data
+            # *without* that pad byte (see the module docstring on the
+            # offset-8-vs-9 divergence from the reference decoder), so
+            # reassembled chunks are `total_parts` bytes shorter than
+            # `declared_length` even with no padding at all. Correct for
+            # that unit mismatch here so `_trim_to_declared` trims against
+            # the right target instead of leaving `total_parts` stray
+            # bytes behind.
+            declared_length = f.declared_length - f.total_parts if f.declared_length else f.declared_length
+            self._pending[f.msg_id] = {
+                "kind": "text", "sender": f.sender, "total": f.total_parts,
+                "declared_length": declared_length, "chunks": {},
+            }
             return None
 
         if f.type == TYPE_VOICE_START:
             self._pending[f.msg_id] = {
                 "kind": "voice", "sender": f.sender, "total": f.total_parts,
-                "chunks": {}, "duration_ms": f.duration_ms,
+                "declared_length": f.declared_length, "chunks": {}, "duration_ms": f.duration_ms,
             }
             return None
 
@@ -335,7 +404,7 @@ class MessageAssembler:
             height = int.from_bytes(f.inline_data[2:4], "little") if len(f.inline_data) >= 4 else None
             self._pending[f.msg_id] = {
                 "kind": "image", "sender": f.sender, "total": f.total_parts,
-                "chunks": {}, "width": width, "height": height,
+                "declared_length": f.declared_length, "chunks": {}, "width": width, "height": height,
             }
             return None
         return None
@@ -343,21 +412,58 @@ class MessageAssembler:
     def _on_chunk(self, c: OfflineChunk) -> CompletedMessage | None:
         entry = self._pending.get(c.msg_id)
         if entry is None:
-            return None  # chunk for a start frame we never saw (e.g. joined mid-stream)
+            # Chunk for a start frame we never saw -- e.g. it was dropped
+            # on a lossy BLE link, or we joined mid-transmission. Ported
+            # from OfflineMessageAssembler.kt: rather than discarding
+            # these forever (the previous behavior here), start tracking
+            # them under a synthetic entry so the message can still be
+            # recovered once enough chunks arrive. We don't know `total`
+            # in this case, so completion instead falls back to a
+            # "contiguous from 0, and the last one is shorter than a
+            # full chunk" heuristic below -- same limitation the
+            # reference app has: a message whose length happens to be an
+            # exact multiple of the chunk size can't be detected as
+            # complete this way and needs its start frame.
+            kind = _CHUNK_KIND.get(c.type)
+            if kind is None:
+                return None
+            entry = self._pending[c.msg_id] = {
+                "kind": kind, "sender": None, "total": None, "declared_length": None, "chunks": {},
+            }
         entry["chunks"][c.seq] = c.data
-        if len(entry["chunks"]) < entry["total"]:
-            return None
 
-        ordered = b"".join(entry["chunks"][i] for i in sorted(entry["chunks"]))
+        total = entry["total"]
+        if total is not None:
+            # Strict: not just "enough chunks arrived" (len >= total) but
+            # exactly the expected contiguous set 0..total-1 -- guards
+            # against a dropped-then-duplicated or out-of-range seq
+            # silently reassembling the wrong bytes (sorted(dict) sorts
+            # whatever keys actually arrived, not the expected range).
+            if sorted(entry["chunks"]) != list(range(total)):
+                return None
+        else:
+            keys = sorted(entry["chunks"])
+            if keys != list(range(len(keys))):
+                return None  # not contiguous from 0 yet
+            full_size = _FULL_CHUNK_BYTES.get(c.type)
+            last_size = len(entry["chunks"][keys[-1]])
+            if not full_size or not (0 < last_size < full_size):
+                return None  # last-seen chunk is still full-size: more likely still coming
+
+        ordered = _trim_to_declared(
+            b"".join(entry["chunks"][i] for i in sorted(entry["chunks"])),
+            entry["declared_length"],
+        )
         del self._pending[c.msg_id]
+        sender = entry["sender"] or DEFAULT_USERNAME
 
         if entry["kind"] == "text":
-            return CompletedMessage(kind="text", sender=entry["sender"], msg_id=c.msg_id,
+            return CompletedMessage(kind="text", sender=sender, msg_id=c.msg_id,
                                      text=ordered.decode("utf-8", errors="replace"))
         if entry["kind"] == "voice":
-            return CompletedMessage(kind="voice", sender=entry["sender"], msg_id=c.msg_id,
+            return CompletedMessage(kind="voice", sender=sender, msg_id=c.msg_id,
                                      data=ordered, duration_ms=entry.get("duration_ms"))
         if entry["kind"] == "image":
-            return CompletedMessage(kind="image", sender=entry["sender"], msg_id=c.msg_id,
+            return CompletedMessage(kind="image", sender=sender, msg_id=c.msg_id,
                                      data=ordered, width=entry.get("width"), height=entry.get("height"))
         return None

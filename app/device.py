@@ -33,6 +33,7 @@ class DeviceManager:
         self._ptt_rx_listeners: list = []
         self._message_rx_listeners: list = []
         self._rx_codec = None
+        self._message_ack_event = asyncio.Event()
 
     # -- connection lifecycle -------------------------------------------------
 
@@ -257,9 +258,7 @@ class DeviceManager:
         msg_id = self._next_msg_id
         self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
         frames = messages.build_text_message_frames(username, text, msg_id)
-        for f in frames:
-            await t.send_raw_frame(f)
-            await asyncio.sleep(0.35)
+        await self._send_message_frames_with_ack(t, frames, "Message texte")
         self._log_line(f"Message texte envoyé ({len(text)} caractères, {len(frames)} trame(s))")
 
     async def send_position(self, username: str, lat: float, lon: float, note: str = "") -> None:
@@ -289,9 +288,7 @@ class DeviceManager:
             msg_id = self._next_msg_id
             self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
             frames = messages.build_voice_message_frames(username, bytes(encoded), duration_ms, msg_id)
-            for f in frames:
-                await t.send_raw_frame(f)
-                await asyncio.sleep(0.1)
+            await self._send_message_frames_with_ack(t, frames, "Message vocal")
             self._log_line(f"Message vocal envoyé ({duration_ms}ms, {len(frames)} trame(s))")
         finally:
             codec.close()
@@ -305,9 +302,7 @@ class DeviceManager:
         msg_id = self._next_msg_id
         self._next_msg_id = (self._next_msg_id + 1) & 0xFFFFFFFF
         frames = messages.build_image_message_frames(username, jpeg_bytes, width, height, msg_id)
-        for f in frames:
-            await t.send_raw_frame(f)
-            await asyncio.sleep(0.1)
+        await self._send_message_frames_with_ack(t, frames, "Image")
         self._log_line(f"Image envoyée ({len(jpeg_bytes)} octets, {len(frames)} trame(s))")
 
     def on_message_received(self, callback) -> None:
@@ -323,6 +318,9 @@ class DeviceManager:
         assembler = messages.MessageAssembler()
 
         def _on_packet(pkt) -> None:
+            if messages.is_message_ack(pkt.family, pkt.command, pkt.body):
+                self._message_ack_event.set()
+                return
             # Skip PTT voice packets -- same family/command, distinguished
             # by subtype (see app/protocol/ptt.py::PTT_VOICE_SUBTYPE).
             from app.protocol import ptt as ptt_proto
@@ -338,6 +336,54 @@ class DeviceManager:
                     logger.exception("message rx listener raised")
 
         transport.on_packet(_on_packet)
+
+    # -- offline messaging: ack-aware sending --------------------------------
+    #
+    # Each frame is sent, then we wait for the radio's ack (family=0x82,
+    # command=0x04) before sending the next one, retrying a dropped frame
+    # up to MESSAGE_ACK_RETRIES times -- ported from
+    # `At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck`. The
+    # previous implementation here just fired every frame with a fixed
+    # delay and never checked for a response at all: a single dropped
+    # frame on a lossy BLE link (a very real failure mode already
+    # confirmed elsewhere in this project -- see ble-client.js's
+    # concurrent-write comment) would silently truncate whatever the
+    # receiving end could reassemble, with zero indication anything went
+    # wrong on either end.
+
+    MESSAGE_ACK_TIMEOUT_SECONDS = 1.5
+    MESSAGE_ACK_RETRIES = 3
+    MESSAGE_ACK_RETRY_BACKOFF_SECONDS = 0.22
+
+    async def _send_message_frames_with_ack(self, transport: Transport, frames: list[bytes], tag: str) -> None:
+        for index, f in enumerate(frames):
+            for attempt in range(1, self.MESSAGE_ACK_RETRIES + 1):
+                self._message_ack_event.clear()
+                await transport.send_raw_frame(f)
+                try:
+                    await asyncio.wait_for(
+                        self._message_ack_event.wait(), timeout=self.MESSAGE_ACK_TIMEOUT_SECONDS
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    if attempt == self.MESSAGE_ACK_RETRIES:
+                        # RuntimeError, not TimeoutError: app/main.py has a
+                        # dedicated handler that surfaces a RuntimeError's
+                        # message to the client (409) -- any other
+                        # exception type is caught by the generic handler
+                        # and flattened to a content-free "internal server
+                        # error", which would defeat the point of this
+                        # error message (see app/main.py's exception
+                        # handlers section).
+                        raise RuntimeError(
+                            f"{tag}: pas d'accusé de réception de la radio pour la trame "
+                            f"{index + 1}/{len(frames)} après {self.MESSAGE_ACK_RETRIES} tentatives"
+                        )
+                    self._log_line(
+                        f"{tag}: pas d'accusé pour la trame {index + 1}/{len(frames)}, "
+                        f"nouvelle tentative ({attempt}/{self.MESSAGE_ACK_RETRIES})"
+                    )
+                    await asyncio.sleep(self.MESSAGE_ACK_RETRY_BACKOFF_SECONDS)
 
     # -- live PTT (real-time voice) -----------------------------------------
 

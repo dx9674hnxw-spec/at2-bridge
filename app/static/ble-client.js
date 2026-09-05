@@ -6,7 +6,8 @@
  * - Connection + notifications
  * - Channel selection
  * - Volume
- * - Offline text messaging
+ * - Offline text messaging, both sending and receiving (text/voice/image
+ *   reception -- see onMessageReceived() below; sending is text-only)
  * - Channel read/write (CPS dialect)
  * - Live PTT (client-side AMR encode/decode -- see startPtt() below;
  *   PTT is confirmed BLE-only, there is no server-side radio path for it
@@ -40,6 +41,31 @@ const AT2BleClient = (() => {
       packetListeners = packetListeners.filter((listener) => listener !== cb);
     };
   }
+
+  // -- incoming offline messages (text/voice/image) --------------------------
+  // Previously local BLE mode never decoded these at all -- every incoming
+  // packet was just logged as raw family/command hex. Reassembly now runs
+  // via the same MessageAssembler used to validate this port against the
+  // server-side (Python) implementation -- see static/protocol.js.
+  let messageAssembler = new AT2Protocol.MessageAssembler();
+  let messageRxListeners = [];
+
+  function onMessageReceived(cb) {
+    messageRxListeners.push(cb);
+    return () => {
+      messageRxListeners = messageRxListeners.filter((listener) => listener !== cb);
+    };
+  }
+
+  // Always-on (not tied to a particular connection's lifetime, same as
+  // the debug packetListeners above): AT2Protocol.decodeMessage() already
+  // rejects anything that isn't an offline-message start/chunk frame
+  // (PTT voice/key/session all have a different first body byte, acks
+  // are a different family), so no extra filtering is needed here.
+  onPacket((pkt) => {
+    const completed = messageAssembler.feed(pkt);
+    if (completed) messageRxListeners.forEach((cb) => cb(completed));
+  });
 
   function handleNotify(event) {
     const value = event.target.value;
@@ -81,6 +107,10 @@ const AT2BleClient = (() => {
     });
 
     device.addEventListener("gattserverdisconnected", handleDisconnected);
+
+    // Fresh reassembly state per connection -- a stale pending chunk from
+    // a previous session/device should never bleed into this one.
+    messageAssembler = new AT2Protocol.MessageAssembler();
 
     const server = await device.gatt.connect();
 
@@ -189,6 +219,37 @@ const AT2BleClient = (() => {
     await sendFrame(frame);
   }
 
+  // Send each frame of a multi-frame message and wait for the radio's
+  // ack before sending the next one, retrying a dropped frame instead
+  // of the old fixed-delay fire-and-forget (which never noticed a
+  // dropped frame at all) -- mirrors app/device.py's
+  // _send_message_frames_with_ack(), itself ported from
+  // At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck.
+  const MESSAGE_ACK_TIMEOUT_MS = 1500;
+  const MESSAGE_ACK_RETRIES = 3;
+  const MESSAGE_ACK_RETRY_BACKOFF_MS = 220;
+
+  async function sendFramesWithAck(frames, tag) {
+    for (let index = 0; index < frames.length; index++) {
+      const f = frames[index];
+      let acked = false;
+      for (let attempt = 1; attempt <= MESSAGE_ACK_RETRIES && !acked; attempt++) {
+        const waitPromise = waitForPacket(AT2Protocol.isMessageAck, MESSAGE_ACK_TIMEOUT_MS);
+        await sendFrame(f);
+        acked = !!(await waitPromise);
+        if (!acked && attempt < MESSAGE_ACK_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, MESSAGE_ACK_RETRY_BACKOFF_MS));
+        }
+      }
+      if (!acked) {
+        throw new Error(
+          `${tag}: pas d'accusé de réception de la radio pour la trame ${index + 1}/${frames.length} ` +
+          `après ${MESSAGE_ACK_RETRIES} tentatives`
+        );
+      }
+    }
+  }
+
   async function sendText(username, text) {
     const frames = AT2Protocol.buildTextMessageFrames(
       username,
@@ -196,10 +257,7 @@ const AT2BleClient = (() => {
       nextMsgId++
     );
 
-    for (const frame of frames) {
-      await sendFrame(frame);
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    }
+    await sendFramesWithAck(frames, "Message texte");
   }
 
   // -- channel read/write (CPS-style dialect, confirmed on real hardware
@@ -407,6 +465,7 @@ const AT2BleClient = (() => {
     readAllChannels,
     writeChannel,
     startPtt,
-    onPacket
+    onPacket,
+    onMessageReceived
   };
 })();

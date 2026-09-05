@@ -628,6 +628,7 @@ async function applyActiveChannel(select = true) {
   renderChanSelect();
   renderChanOpts();
   $("#ptt-device-sub").textContent = `${t("channelLabel", { n: String(activeChannel).padStart(2, "0") })}${channelNames[activeChannel] ? " · " + channelNames[activeChannel] : ""}`;
+  renderMessagingPanel(); // Messaging tab's group list/status grid/thread track the same active channel
   if (select) {
     try {
       const transport = activeTransport();
@@ -985,16 +986,23 @@ renderChannelTable(emptyChannels());
 // ---------------------------------------------------------------------------
 // Device settings
 // ---------------------------------------------------------------------------
+
+// Shared by the Settings tab's "Appliquer" button and the inline volume
+// slider in the Messaging tab (see renderMessagingPanel()) -- one real
+// code path for both instead of duplicating the transport branching.
+async function applyVolumeLevel(level) {
+  const transport = activeTransport();
+  if (transport === "server") await api("PUT", "/api/device/volume", { level });
+  else if (transport === "local") await AT2BleClient.setVolume(level);
+  else return showToast(t("gps.noActiveConnection"), "info");
+}
+
 $$("[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const action = btn.dataset.action;
     try {
       if (action === "set-volume") {
-        const level = parseInt($("#volume-slider").value, 10);
-        const transport = activeTransport();
-        if (transport === "server") await api("PUT", "/api/device/volume", { level });
-        else if (transport === "local") await AT2BleClient.setVolume(level);
-        else return showToast(t("gps.noActiveConnection"), "info");
+        await applyVolumeLevel(parseInt($("#volume-slider").value, 10));
         return;
       }
       // Les autres réglages ne sont pas encore câblés côté client BLE
@@ -1033,19 +1041,242 @@ $$("[data-action]").forEach((btn) => {
 });
 
 // ---------------------------------------------------------------------------
-// Messaging (single thread tied to the active channel; outgoing only for
-// now -- inbound offline-message decoding isn't wired yet, see README)
+// Off-grid messaging. Groups = radio channels used as chat rooms: the wire
+// protocol has no per-channel addressing at all -- a message just goes out
+// on whichever channel the radio is currently tuned to, and arrives however
+// it currently receives -- so "which group a message belongs to" is purely
+// a client-side bucketing by the channel active at send/receive time,
+// persisted in localStorage (this project had no message persistence at
+// all before: a reload used to lose the entire conversation).
 // ---------------------------------------------------------------------------
-function pushSentBubble(text) {
+
+const MSG_STORE_KEY = "at2_messages_by_channel";
+const MSG_MAX_PER_CHANNEL = 60;
+
+function loadMessageStore() {
+  try {
+    const raw = localStorage.getItem(MSG_STORE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveMessageStore() {
+  try {
+    // Sent voice notes keep their raw PCM in memory for instant, lossless
+    // local playback (see playVoiceMessage) -- but that's 16000 bytes/s
+    // uncompressed, serialized as a JSON number array (worse still). Never
+    // persist it: a reload loses the play button on *sent* voice notes,
+    // not the message itself, which is a fine trade-off against filling
+    // localStorage's ~5-10MB quota after a handful of voice notes.
+    const trimmed = {};
+    for (const ch of Object.keys(messagesByChannel)) {
+      trimmed[ch] = messagesByChannel[ch].map((m) => (m.pcm ? { ...m, pcm: undefined } : m));
+    }
+    localStorage.setItem(MSG_STORE_KEY, JSON.stringify(trimmed));
+  } catch (e) {
+    // Quota exceeded / private browsing -- degrade to session-only rather
+    // than breaking the UI.
+  }
+}
+
+let messagesByChannel = loadMessageStore();
+let nextLocalMsgId = 1;
+
+function channelMessages(channel) {
+  if (!messagesByChannel[channel]) messagesByChannel[channel] = [];
+  return messagesByChannel[channel];
+}
+
+function addMessage(channel, msg) {
+  const list = channelMessages(channel);
+  list.push({ ...msg, localId: nextLocalMsgId++, time: Date.now() });
+  if (list.length > MSG_MAX_PER_CHANNEL) list.splice(0, list.length - MSG_MAX_PER_CHANNEL);
+  saveMessageStore();
+  renderGroupList();
+  if (channel === activeChannel) renderThread();
+}
+
+// -- group sidebar + status grid --------------------------------------------
+
+function groupItemHtml(channel) {
+  const name = channelNames[channel] || t("msg.channelFallback", { n: String(channel).padStart(2, "0") });
+  const cfg = lastReadChannels.find((c) => c.channel === channel);
+  const freqText = cfg && cfg.rx_mhz ? `${cfg.rx_mhz} MHz` : "—";
+  const count = channelMessages(channel).length;
+  const active = channel === activeChannel;
+  const initials = (channelNames[channel] || "").trim().slice(0, 2).toUpperCase() || String(channel).padStart(2, "0");
+  return `
+    <div class="group-item ${active ? "active" : ""}" data-channel="${channel}">
+      <div class="group-avatar">${escapeHtml(initials)}</div>
+      <div class="group-meta">
+        <div class="group-name">${escapeHtml(name)}</div>
+        <div class="group-sub">CH${String(channel).padStart(2, "0")} · ${freqText}</div>
+      </div>
+      ${count > 0 ? `<span class="group-badge">${count}</span>` : ""}
+    </div>`;
+}
+
+function renderGroupList() {
+  const list = $("#group-list");
+  list.innerHTML = Array.from({ length: 30 }, (_, i) => i + 1).map(groupItemHtml).join("");
+  list.querySelectorAll(".group-item").forEach((el) => {
+    el.addEventListener("click", () => selectGroup(parseInt(el.dataset.channel, 10)));
+  });
+}
+
+function selectGroup(channel) {
+  if (channel === activeChannel) return;
+  activeChannel = channel;
+  applyActiveChannel(); // real channel switch on the radio -- also refreshes this panel, see the hook added there
+}
+
+function renderMsgStatusGrid() {
+  const cfg = lastReadChannels.find((c) => c.channel === activeChannel);
+  const freq = cfg && cfg.rx_mhz ? cfg.rx_mhz : "—";
+  const mode = cfg ? (cfg.mode_digital ? t("chan.digital") : t("chan.analog")) : "—";
+  const tone = cfg ? (cfg.rx_tone || "OFF") : "—";
+  const enc = cfg ? (cfg.encrypt_key ? String(cfg.encrypt_key) : "OFF") : "—";
+  $("#msg-status-grid").innerHTML = `
+    <div class="status-cell"><div class="sc-value accent">${escapeHtml(String(freq))}</div><div class="sc-label">${t("msg.statusFreq")}</div></div>
+    <div class="status-cell"><div class="sc-value">${escapeHtml(mode)}</div><div class="sc-label">${t("msg.statusMode")}</div></div>
+    <div class="status-cell"><div class="sc-value">${escapeHtml(tone)}</div><div class="sc-label">${t("msg.statusTone")}</div></div>
+    <div class="status-cell"><div class="sc-value ${enc === "OFF" || enc === "—" ? "" : "warn"}">${escapeHtml(enc)}</div><div class="sc-label">${t("msg.statusEnc")}</div></div>
+  `;
+}
+
+function renderMessagingPanel() {
+  const name = channelNames[activeChannel] || t("msg.channelFallback", { n: String(activeChannel).padStart(2, "0") });
+  $("#active-group-name").textContent = name;
+  $("#active-group-sub").textContent = `CH${String(activeChannel).padStart(2, "0")} · ${t("msg.messageCount", { n: channelMessages(activeChannel).length })}`;
+  renderGroupList();
+  renderMsgStatusGrid();
+  renderThread();
+}
+
+// -- message bubbles ---------------------------------------------------------
+
+// Decorative only -- not a real waveform of the audio, just something
+// visually alive instead of a flat line (same approach the demo uses).
+function voiceWaveBarsHtml(seed) {
+  let html = "";
+  for (let i = 0; i < 18; i++) {
+    const h = 4 + Math.round(Math.abs(Math.sin(seed * (i + 1))) * 12);
+    html += `<span style="height:${h}px"></span>`;
+  }
+  return html;
+}
+
+function formatVoiceDuration(seconds) {
+  const s = Math.max(0, Math.round(seconds || 0));
+  return `0:${String(s).padStart(2, "0")}`;
+}
+
+function msgBubbleHtml(msg) {
+  const time = new Date(msg.time).toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" });
+  let body;
+  if (msg.kind === "text") {
+    body = `<div class="msg-body">${escapeHtml(msg.text ?? "")}</div>`;
+  } else if (msg.kind === "image" && msg.dataBase64) {
+    const caption = msg.caption ? `<div class="cap-text">${escapeHtml(msg.caption)}</div>` : "";
+    body = `<div class="msg-body img-body${msg.caption ? " img-caption" : ""}"><img src="data:image/jpeg;base64,${msg.dataBase64}" />${caption}</div>`;
+  } else if (msg.kind === "voice" && (msg.dataBase64 || msg.pcm)) {
+    const seconds = Math.round((msg.durationMs || 0) / 1000);
+    body = `<div class="msg-body"><div class="voice-row"><button class="voice-play">▶</button><div class="voice-wave">${voiceWaveBarsHtml(msg.localId || seconds || 1)}</div><div class="voice-dur">${formatVoiceDuration(seconds)}</div></div></div>`;
+  } else if (msg.kind === "voice") {
+    body = `<div class="msg-body">${t("msg.voiceReceived", { seconds: Math.round((msg.durationMs || 0) / 1000) })}</div>`;
+  } else {
+    body = `<div class="msg-body">${t("msg.unknownKind", { kind: msg.kind })}</div>`;
+  }
+  return `<div class="msg-bubble ${msg.mine ? "mine" : ""}" data-msg-id="${msg.localId}"><div class="meta">${msg.mine ? t("msg.me") : escapeHtml(msg.sender || "?")} · ${time}</div>${body}</div>`;
+}
+
+function renderThread() {
   const thread = $("#msg-thread");
-  const el = document.createElement("div");
-  el.className = "msg-bubble mine";
-  el.innerHTML = `<div class="meta">${t("msg.me")} · ${new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</div><div class="msg-body">${escapeHtml(text)}</div>`;
-  thread.appendChild(el);
+  const list = channelMessages(activeChannel);
+  thread.innerHTML = list.length ? list.map(msgBubbleHtml).join("") : `<div class="msg-empty">${t("msg.noMessages")}</div>`;
+  thread.querySelectorAll(".msg-bubble .voice-play").forEach((btn) => {
+    const bubble = btn.closest(".msg-bubble");
+    const msg = list.find((m) => String(m.localId) === bubble.dataset.msgId);
+    if (msg) btn.addEventListener("click", () => playVoiceMessage(msg, btn));
+  });
   thread.scrollTop = thread.scrollHeight;
 }
 
-$("#btn-send-message").addEventListener("click", async () => {
+// -- voice playback -----------------------------------------------------
+// Sent messages keep their raw PCM around in memory -- no AMR round-trip
+// needed to play back our own audio. Received messages only ever have the
+// AMR bytes that actually came over the air, so those go through the
+// codec (ptt-amr-codec.js, same one used for live PTT).
+let voicePlaybackCtx = null;
+
+function playPcm(int16Array) {
+  if (!voicePlaybackCtx) voicePlaybackCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const buffer = voicePlaybackCtx.createBuffer(1, int16Array.length, 8000);
+  const channelData = buffer.getChannelData(0);
+  for (let i = 0; i < int16Array.length; i++) channelData[i] = int16Array[i] / 0x8000;
+  const src = voicePlaybackCtx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(voicePlaybackCtx.destination);
+  return src;
+}
+
+function decodeAmrToPcm(base64Amr) {
+  const binary = atob(base64Amr);
+  const amrBytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) amrBytes[i] = binary.charCodeAt(i);
+  const codec = new PttAmr.Codec();
+  const frameCount = Math.floor(amrBytes.length / PttAmr.ENCODED_FRAME_BYTES);
+  const pcm = new Int16Array(frameCount * PttAmr.FRAME_SAMPLES);
+  try {
+    for (let i = 0; i < frameCount; i++) {
+      const amrFrame = amrBytes.subarray(i * PttAmr.ENCODED_FRAME_BYTES, (i + 1) * PttAmr.ENCODED_FRAME_BYTES);
+      pcm.set(codec.decode(amrFrame), i * PttAmr.FRAME_SAMPLES);
+    }
+  } finally {
+    codec.close();
+  }
+  return pcm;
+}
+
+async function playVoiceMessage(msg, btn) {
+  if (!msg.pcm && (typeof PttAmr === "undefined" || typeof AMR === "undefined")) {
+    return showToast(t("msg.voicePlaybackUnavailable"), "error");
+  }
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "🔊";
+  try {
+    const pcm = msg.pcm ? Int16Array.from(msg.pcm) : decodeAmrToPcm(msg.dataBase64);
+    const src = playPcm(pcm);
+    src.onended = () => { btn.disabled = false; btn.textContent = originalLabel; };
+    src.start();
+  } catch (e) {
+    showToast(t("msg.voicePlaybackError", { error: e.message }), "error");
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+// -- clear this channel's local history (repurposed "eject" icon -- there's
+// no real concept of "leaving" a channel-as-group, but clearing its saved
+// history locally is a genuinely useful action now that messages persist).
+$("#btn-clear-channel-history").addEventListener("click", () => {
+  if (!channelMessages(activeChannel).length) return;
+  if (!confirm(t("msg.clearHistoryConfirm", { n: String(activeChannel).padStart(2, "0") }))) return;
+  messagesByChannel[activeChannel] = [];
+  saveMessageStore();
+  renderMessagingPanel();
+});
+
+// -- inline volume slider (mirrors the Settings tab's, see applyVolumeLevel)
+$("#msg-volume-slider").addEventListener("change", (e) => {
+  applyVolumeLevel(parseInt(e.target.value, 10)).catch((err) => showToast(err.message, "error"));
+});
+
+// -- sending: text ------------------------------------------------------
+async function sendTextMessage() {
   const username = $("#msg-username").value || "AT2Bridge";
   const text = $("#msg-text").value.trim();
   if (!text) return;
@@ -1054,13 +1285,40 @@ $("#btn-send-message").addEventListener("click", async () => {
     if (transport === "server") await api("POST", "/api/messages/text", { username, text });
     else if (transport === "local") await AT2BleClient.sendText(username, text);
     else return showToast(t("gps.noActiveConnection"), "info");
-    pushSentBubble(text);
+    addMessage(activeChannel, { kind: "text", sender: username, mine: true, text });
     $("#msg-text").value = "";
   } catch (e) { showToast(e.message, "error"); }
-});
+}
+$("#btn-send-message").addEventListener("click", sendTextMessage);
+$("#msg-text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendTextMessage(); });
 
-// -- Image messages (server mode only -- image encoding happens server-side
+// -- sending: image (server mode only -- image encoding happens server-side
 // with Pillow, see app/main.py; no BLE-local equivalent yet) ---------------
+
+// Independent of what's actually transmitted (the server does its own
+// resize for the wire): a small client-side thumbnail so the bubble has
+// something to show and localStorage doesn't fill up with full-resolution
+// originals.
+function downscaleImageToBase64(file, maxEdge = 300, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const width = Math.max(1, Math.round(img.width * scale));
+      const height = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image preview failed")); };
+    img.src = url;
+  });
+}
+
 $("#btn-attach-image").addEventListener("click", () => {
   if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredImage"), "info");
   $("#image-file-input").click();
@@ -1074,8 +1332,11 @@ $("#image-file-input").addEventListener("change", async () => {
   form.append("username", username);
   form.append("image", file);
   try {
-    await apiUpload("/api/messages/image", form);
-    pushSentBubble(t("msg.imageSent", { filename: file.name }));
+    const [dataBase64] = await Promise.all([
+      downscaleImageToBase64(file).catch(() => null),
+      apiUpload("/api/messages/image", form),
+    ]);
+    addMessage(activeChannel, { kind: "image", sender: username, mine: true, dataBase64, caption: file.name });
   } catch (e) {
     showToast(e.message, "error");
   } finally {
@@ -1083,8 +1344,8 @@ $("#image-file-input").addEventListener("change", async () => {
   }
 });
 
-// -- Voice notes (store-and-forward, distinct from live PTT). Reuses
-// PttAudio.startCapture/stopCapture as-is (already exported by
+// -- sending: voice notes (store-and-forward, distinct from live PTT).
+// Reuses PttAudio.startCapture/stopCapture as-is (already exported by
 // ptt-audio.js) to accumulate a full recording instead of streaming it. -
 let voiceRecording = false;
 let voiceChunks = [];
@@ -1092,29 +1353,28 @@ let voiceChunks = [];
 $("#btn-record-voice").addEventListener("click", async () => {
   if (activeTransport() !== "server") return showToast(t("msg.serverModeRequiredVoice"), "info");
   const btn = $("#btn-record-voice");
-  const status = $("#voice-record-status");
 
   if (!voiceRecording) {
     voiceRecording = true;
     voiceChunks = [];
-    btn.textContent = t("msg.stopRecording");
-    status.textContent = t("msg.recording");
+    btn.classList.add("active");
+    btn.textContent = "⏹️";
     try {
       await PttAudio.startCapture((int16Frame) => { voiceChunks.push(int16Frame); });
     } catch (e) {
       voiceRecording = false;
-      btn.textContent = t("msg.recordVoiceBtn");
-      status.textContent = "";
+      btn.classList.remove("active");
+      btn.textContent = "🎙️";
       showToast(t("msg.micUnavailable", { error: e.message }), "error");
     }
   } else {
     voiceRecording = false;
     PttAudio.stopCapture();
-    btn.textContent = t("msg.recordVoiceBtn");
-    status.textContent = t("msg.sending");
+    btn.classList.remove("active");
+    btn.textContent = "🎙️";
 
     const totalSamples = voiceChunks.reduce((sum, c) => sum + c.length, 0);
-    if (totalSamples === 0) { status.textContent = ""; return; }
+    if (totalSamples === 0) return;
     const merged = new Int16Array(totalSamples);
     let offset = 0;
     for (const c of voiceChunks) { merged.set(c, offset); offset += c.length; }
@@ -1127,10 +1387,8 @@ $("#btn-record-voice").addEventListener("click", async () => {
     form.append("pcm", new Blob([merged.buffer], { type: "application/octet-stream" }), "voice.pcm");
     try {
       await apiUpload("/api/messages/voice", form);
-      pushSentBubble(t("msg.voiceSent", { seconds: Math.round(durationMs / 1000) }));
-      status.textContent = "";
+      addMessage(activeChannel, { kind: "voice", sender: username, mine: true, durationMs, pcm: Array.from(merged) });
     } catch (e) {
-      status.textContent = "";
       showToast(e.message, "error");
     }
   }
@@ -1172,35 +1430,63 @@ $("#btn-send-raw-frame").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Incoming offline messages (text/voice/image) -- /ws/messages
+// Incoming offline messages (text/voice/image) -- server mode via
+// /ws/messages, local BLE mode via AT2BleClient.onMessageReceived() (see
+// static/protocol.js::MessageAssembler / static/ble-client.js -- local BLE
+// mode previously didn't decode incoming messages at all, only logged the
+// raw family/command of every packet).
 // ---------------------------------------------------------------------------
-function pushReceivedBubble(msg) {
-  const thread = $("#msg-thread");
-  const el = document.createElement("div");
-  el.className = "msg-bubble";
-  const time = new Date().toLocaleTimeString(getLang() === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" });
-  let body;
-  if (msg.kind === "text") {
-    body = `<div class="msg-body">${escapeHtml(msg.text ?? "")}</div>`;
-  } else if (msg.kind === "image" && msg.data_base64) {
-    body = `<div class="msg-body"><img src="data:image/jpeg;base64,${msg.data_base64}" style="max-width:220px; border-radius:6px; display:block;" /></div>`;
-  } else if (msg.kind === "voice") {
-    body = `<div class="msg-body">${t("msg.voiceReceived", { seconds: Math.round((msg.duration_ms || 0) / 1000) })}</div>`;
-  } else {
-    body = `<div class="msg-body">${t("msg.unknownKind", { kind: msg.kind })}</div>`;
+
+function uint8ToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
   }
-  el.innerHTML = `<div class="meta">${escapeHtml(msg.sender || "?")} · ${time}</div>${body}`;
-  thread.appendChild(el);
-  thread.scrollTop = thread.scrollHeight;
+  return btoa(binary);
+}
+
+// `msg`: {kind, sender, text?, dataBase64?, durationMs?, width?, height?} --
+// no channel tag on the wire, so bucketed under whichever channel is
+// currently active (the only one the radio could have received this on).
+function handleIncomingMessage(msg) {
+  addMessage(activeChannel, {
+    kind: msg.kind,
+    sender: msg.sender,
+    mine: false,
+    text: msg.text,
+    dataBase64: msg.dataBase64 || null,
+    durationMs: msg.durationMs || null,
+    width: msg.width || null,
+    height: msg.height || null,
+  });
 }
 
 function connectMessagesSocket() {
   const ws = new WebSocket(wsUrl("/ws/messages"));
   ws.onmessage = (evt) => {
-    try { pushReceivedBubble(JSON.parse(evt.data)); } catch (e) { appendLog(t("msg.unreadable", { error: e.message })); }
+    try {
+      const msg = JSON.parse(evt.data);
+      handleIncomingMessage({
+        kind: msg.kind, sender: msg.sender, text: msg.text, dataBase64: msg.data_base64,
+        durationMs: msg.duration_ms, width: msg.width, height: msg.height,
+      });
+    } catch (e) { appendLog(t("msg.unreadable", { error: e.message })); }
   };
   ws.onclose = () => setTimeout(connectMessagesSocket, 2000);
 }
+
+AT2BleClient.onMessageReceived((msg) => {
+  handleIncomingMessage({
+    kind: msg.kind,
+    sender: msg.sender,
+    text: msg.text,
+    dataBase64: msg.data ? uint8ToBase64(msg.data) : null,
+    durationMs: msg.durationMs,
+    width: msg.width,
+    height: msg.height,
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Init

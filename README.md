@@ -14,7 +14,7 @@
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
   
   <!-- Tests -->
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-53_passed-success.svg?logo=pytest" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-60_passed-success.svg?logo=pytest" />
   
   <!-- Hardware -->
   <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
@@ -41,9 +41,9 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >- **Channel read and write** — one channel at a time, via the protocol dialect found in the official Windows CPS (see "Protocol origin" below). Frequencies, CTCSS/DCS tones, bandwidth, power, scan, analog/digital mode, encryption key, busy lock, frequency hop: every field confirmed by cross-checking against a configuration export from the official CPS.
 >- **Importing an XML export from the official CPS** into the interface's channel table (only populates the screen, never writes to the radio automatically).
 >- **Offline text/voice/image messaging** (server mode) — construction, decoding, and reassembly of all three formats.
->- **Local BLE mode (Web Bluetooth)** — direct browser↔radio connection with no intermediate server: channel selection, volume, text messaging, channel read/write.
+>- **Local BLE mode (Web Bluetooth)** — direct browser↔radio connection with no intermediate server: channel selection, volume, sending/receiving text (and receiving voice/image), channel read/write.
 >- **Frame codec** (both protocol dialects, see below), AMR-NB codec (native binding server-side, JS/WebAssembly port client-side), HMAC token authentication, local storage (channel names, known devices), clean error handling (no traceback exposed to the client).
->- **53 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference, and byte-exact tests transcribed directly from the reference Android app's `At2Commands.kt` for every device-setting command below.
+>- **60 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference, byte-exact tests transcribed directly from the reference Android app's `At2Commands.kt` for every device-setting command below, and tests for the ack-retry message-sending logic and the reassembly edge cases (padded last chunk, missing start frame, out-of-range seq) described below.
 
 > [!WARNING]
 >###  Implemented, pending hardware confirmation
@@ -55,7 +55,13 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >- **Dual Watch, prompt language (Chinese/English), TX interval ("hop")** — newly added (`app/protocol/commands.py`, exposed as `PUT /api/device/dual-watch(/channel|/focus)`, `/prompt-language`, `/tx-interval`, server mode only), ported byte-for-byte from the reference app. Like every other advanced setting below, never verified by independent read-back.
 >- **Device settings other than volume** (squelch, VOX, VOX sensitivity, TX timeout, TX interval, TX inhibit, noise reduction, prompt tone, prompt language, device name, Smart Link, Dual Watch) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back. There is currently no "read settings back from the radio" feature at all (the `query_*` builders in `commands.py` exist but aren't wired to any endpoint yet).
 >- **Real-time PTT in server mode** — same missing key-on/key-off commands as above, now added to `app/device.py::PttSession`; never verified end-to-end on hardware.
->- **Receiving offline messages** — the reception pipeline (decoding + WebSocket + display) is wired up client-side, but no real incoming frame has been received in testing yet.
+>- **Offline messaging: reworked end to end.** The whole off-grid messaging system was overhauled, UI included (screenshots/details below):
+>  - **Sending reliability** — was fire-and-forget (each frame sent with a fixed delay, no check that the radio actually got it); now every frame is sent and its ack awaited before the next one goes out, with up to 3 retries on a dropped frame (`app/device.py::_send_message_frames_with_ack`, `app/static/ble-client.js::sendFramesWithAck`) — ported from `At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck`. A send that ultimately fails now raises a clear error instead of silently losing frames.
+>  - **Reassembly correctness** — two real bugs, fixed by comparing against `OfflineMessageAssembler.kt`: reassembled messages were never trimmed to their self-declared length (risking trailing garbage if the radio pads its last chunk, which neither software encoder does but nothing guarantees the radio doesn't), and a chunk arriving without its start frame having been seen (dropped first packet, or joining mid-transmission) was silently discarded forever instead of still being reassembled once enough of them arrive. Both fixed in `app/protocol/messages.py`.
+>  - **Local BLE mode could not receive messages at all** — every incoming packet was only ever logged as raw family/command hex; text/voice/image reception was server-mode only. Fixed by porting the (now-corrected) reassembly logic to JavaScript, byte-exact-validated against the Python implementation (`app/static/protocol.js::MessageAssembler`, wired up in `app/static/ble-client.js`). This means two browser tabs, each in local BLE mode connected to a different physical radio, can now both send and receive on their respective radio.
+>  - **UI rewritten** as grouped conversations — one thread per radio channel (channels double as chat rooms, ATAK VX-inspired, brought closer to `Demo/at2-bridge-demo-v6.html`'s mockup): a channel sidebar, a live status grid (frequency/mode/tone/encryption) for the selected channel, an inline volume slider, and selecting a channel there actually switches the radio's active channel (shared state with the Channels/PTT tabs). Message history now persists locally (`localStorage`) across reloads — there was no persistence at all before.
+>  - **Voice message playback** — received messages are decoded (AMR → PCM, client-side) and playable via a button on the bubble (previously text-only, "message received, no player"); sent voice notes are playable too now, from the raw PCM kept in memory (no AMR round-trip needed for our own audio).
+>  - Still true: no real incoming frame has been received in testing yet, on either transport.
 >- **Position/SOS** — relies on the text messaging channel (no structured "Position" type exists in the real protocol).
 >- **Reconnecting to known devices.**
 
@@ -67,9 +73,8 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 > [!CAUTION]
 >###  Not implemented / Roadmap
 >
->- **Voice message playback** — the message arrives and displays, but no audio player is wired up in the browser yet.
 >- **Structured "Position" message type** — currently formatted text.
->- **Managing multiple radios simultaneously** — only one active connection at a time server-side.
+>- **Managing multiple radios simultaneously** — only one active connection at a time server-side. In local BLE mode this is less of a hard limit: each browser tab holds its own independent Web Bluetooth connection, so e.g. two tabs on the same computer, each connected to a different physical radio, can each send/receive messages on their own radio (local BLE mode now supports receiving, see above) — just not through the same tab/connection.
 >- **Video streaming / periodic photos** — not implemented; the protocol's throughput (≈330 bytes/s for messaging, 4.8 kbps for PTT) makes real video unrealistic.
 >- **Cleanup of abandoned partial messages.**
 >- **Importing/exporting multiple configuration profiles, messaging groups** — under consideration, nothing started.
@@ -86,6 +91,10 @@ This wasn't obvious at first — the two dialects were mistaken for one another 
 ## PTT in local BLE mode
 
 PTT turned out to be an **exclusively BLE** feature: the official Windows CPS, which only handles codeplug programming, contains no real-time audio handling code at all. Without a Bluetooth module on the server, PTT in local BLE mode must therefore encode/decode audio (AMR-NB) directly in the browser — which this project does via [`opencore-amr-js`](https://github.com/yxl/opencore-amr-js) (Apache 2.0), a WebAssembly port of the same native codec already used server-side.
+
+## Off-grid messaging: channels as chat rooms
+
+The messaging UI treats each of the radio's 30 channels as a "group" (a chat room), inspired by `Demo/at2-bridge-demo-v6.html`'s mockup: a sidebar lists all 30, each showing its local name (or `Canal NN`), frequency, and local message count, and clicking one actually switches the radio's active channel — this is not just a UI convenience, it reflects the real protocol constraint that a message can only be sent/received on whichever channel the radio is currently tuned to. There is no per-channel addressing on the wire at all, so "which group a message belongs to" is a purely local (client-side) bucketing by the channel that was active at send/receive time; message history is kept in `localStorage` per browser (not synced anywhere).
 
 ## Architecture
 
