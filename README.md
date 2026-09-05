@@ -104,7 +104,7 @@ Local BLE mode runs in the user's browser. The Linux server is not in the Blueto
 
 - Use Chrome or Edge on Windows, macOS, Linux, or Android.
 - Firefox does not support Web Bluetooth.
-- iOS browsers do not support Web Bluetooth, including Chrome and Edge on iPhone/iPad, since they rely on WebKit.
+- iOS browsers do not support Web Bluetooth, including Chrome and Edge on iPhone/iPad, since they rely on WebKit. A native iOS app using CoreBluetooth instead lives in [`ios/`](./ios/README.md) — BLE-minimal scope for now (scan/connect, single-channel read/write, quick channel select).
 - On Linux, Web Bluetooth may require enabling experimental browser features depending on the build used.
 
 ### HTTPS required

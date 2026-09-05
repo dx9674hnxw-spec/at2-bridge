@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		59AA45D10EA24332D244988F /* AT2BridgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBDBC06C19514A1E691423C5 /* AT2BridgeApp.swift */; };
+		D8F5BAB3BF763A96CEFC736A /* CRC16.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A6EEEFFCA3A7351064F6FA /* CRC16.swift */; };
+		F1106B510699C4FF73D7A7B0 /* AT2Frame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96612A207ADEC1E28115E829 /* AT2Frame.swift */; };
+		5E3394ED1500D890C1EDBE20 /* AT2Channel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95FA0554ADEE107BAC0D4F21 /* AT2Channel.swift */; };
+		672EAAC322AEEA44217B1BAF /* AT2Commands.swift in Sources */ = {isa = PBXBuildFile; fileRef = B846D4FF9793E4905E16BE8C /* AT2Commands.swift */; };
+		33044C6E2A66F239E4566063 /* AT2BLEManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA80343FF3D9285D4665CFD8 /* AT2BLEManager.swift */; };
+		BF42557C7429AB6E25293E7A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9542C666232BA73C8FF6101B /* ContentView.swift */; };
+		7E790EEEE4E0F0BC58C91F6E /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9182D0BCF253C7B018214071 /* DeviceListView.swift */; };
+		27643EB359C70091C7ED0641 /* ChannelPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FD94BE601712573FB17FB0 /* ChannelPanelView.swift */; };
+		6F589D1F8585CF59ED179937 /* LogConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F05CA185FB138A54933C57 /* LogConsoleView.swift */; };
+		66821BA1DEFC164DE6A8497F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FCB8953AE57039F8C975994A /* Assets.xcassets */; };
+		AC60DAF39C11FC2BC626B19C /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FC6D180BE7A67769D0E96F58 /* Preview Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A3661A396C1E6F43E1304F85 /* AT2Bridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AT2Bridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DBDBC06C19514A1E691423C5 /* AT2BridgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AT2BridgeApp.swift; sourceTree = "<group>"; };
+		A7A6EEEFFCA3A7351064F6FA /* CRC16.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRC16.swift; sourceTree = "<group>"; };
+		96612A207ADEC1E28115E829 /* AT2Frame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AT2Frame.swift; sourceTree = "<group>"; };
+		95FA0554ADEE107BAC0D4F21 /* AT2Channel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AT2Channel.swift; sourceTree = "<group>"; };
+		B846D4FF9793E4905E16BE8C /* AT2Commands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AT2Commands.swift; sourceTree = "<group>"; };
+		DA80343FF3D9285D4665CFD8 /* AT2BLEManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AT2BLEManager.swift; sourceTree = "<group>"; };
+		9542C666232BA73C8FF6101B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		9182D0BCF253C7B018214071 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
+		19FD94BE601712573FB17FB0 /* ChannelPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPanelView.swift; sourceTree = "<group>"; };
+		77F05CA185FB138A54933C57 /* LogConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogConsoleView.swift; sourceTree = "<group>"; };
+		FCB8953AE57039F8C975994A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FC6D180BE7A67769D0E96F58 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		E712F8CCC9D8FDD0E5DFC4FA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		6BC9136C2E1B992EF374A2EA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		11825017CD3E200A0C327C21 /* Protocol */ = {
+			isa = PBXGroup;
+			children = (
+				A7A6EEEFFCA3A7351064F6FA /* CRC16.swift */,
+				96612A207ADEC1E28115E829 /* AT2Frame.swift */,
+				95FA0554ADEE107BAC0D4F21 /* AT2Channel.swift */,
+				B846D4FF9793E4905E16BE8C /* AT2Commands.swift */,
+			);
+			path = Protocol;
+			sourceTree = "<group>";
+		};
+		4FCCC7F782FED0F57027B5FF /* BLE */ = {
+			isa = PBXGroup;
+			children = (
+				DA80343FF3D9285D4665CFD8 /* AT2BLEManager.swift */,
+			);
+			path = BLE;
+			sourceTree = "<group>";
+		};
+		C454586A1F4E28C340BDC1AD /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				9542C666232BA73C8FF6101B /* ContentView.swift */,
+				9182D0BCF253C7B018214071 /* DeviceListView.swift */,
+				19FD94BE601712573FB17FB0 /* ChannelPanelView.swift */,
+				77F05CA185FB138A54933C57 /* LogConsoleView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		2575A824E1DE54D2B26A9A8B /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				FC6D180BE7A67769D0E96F58 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		CE882751F8B3EE4485706ED4 /* AT2Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				DBDBC06C19514A1E691423C5 /* AT2BridgeApp.swift */,
+				11825017CD3E200A0C327C21 /* Protocol */,
+				4FCCC7F782FED0F57027B5FF /* BLE */,
+				C454586A1F4E28C340BDC1AD /* Views */,
+				FCB8953AE57039F8C975994A /* Assets.xcassets */,
+				2575A824E1DE54D2B26A9A8B /* Preview Content */,
+				E712F8CCC9D8FDD0E5DFC4FA /* Info.plist */,
+			);
+			path = AT2Bridge;
+			sourceTree = "<group>";
+		};
+		1BADDC1D73C1A20F347483E1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A3661A396C1E6F43E1304F85 /* AT2Bridge.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8D3FC6DB5D0827F168A73277 = {
+			isa = PBXGroup;
+			children = (
+				CE882751F8B3EE4485706ED4 /* AT2Bridge */,
+				1BADDC1D73C1A20F347483E1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		88F56D6A2F90F79D5F551E46 /* AT2Bridge */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EAF116FE40D68E4ABB26094B /* Build configuration list for PBXNativeTarget "AT2Bridge" */;
+			buildPhases = (
+				F680599402C0D80E245DE801 /* Sources */,
+				6BC9136C2E1B992EF374A2EA /* Frameworks */,
+				781C774F390DF12CD292A30B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AT2Bridge;
+			productName = AT2Bridge;
+			productReference = A3661A396C1E6F43E1304F85 /* AT2Bridge.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
+				TargetAttributes = {
+					88F56D6A2F90F79D5F551E46 = {
+						CreatedOnToolsVersion = 15.2;
+					};
+				};
+			};
+			buildConfigurationList = ADD3EDE971004D3249A2A24C /* Build configuration list for PBXProject "AT2Bridge" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 8D3FC6DB5D0827F168A73277;
+			productRefGroup = 1BADDC1D73C1A20F347483E1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				88F56D6A2F90F79D5F551E46 /* AT2Bridge */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		781C774F390DF12CD292A30B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC60DAF39C11FC2BC626B19C /* Preview Assets.xcassets in Resources */,
+				66821BA1DEFC164DE6A8497F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F680599402C0D80E245DE801 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				59AA45D10EA24332D244988F /* AT2BridgeApp.swift in Sources */,
+				D8F5BAB3BF763A96CEFC736A /* CRC16.swift in Sources */,
+				F1106B510699C4FF73D7A7B0 /* AT2Frame.swift in Sources */,
+				5E3394ED1500D890C1EDBE20 /* AT2Channel.swift in Sources */,
+				672EAAC322AEEA44217B1BAF /* AT2Commands.swift in Sources */,
+				33044C6E2A66F239E4566063 /* AT2BLEManager.swift in Sources */,
+				BF42557C7429AB6E25293E7A /* ContentView.swift in Sources */,
+				7E790EEEE4E0F0BC58C91F6E /* DeviceListView.swift in Sources */,
+				27643EB359C70091C7ED0641 /* ChannelPanelView.swift in Sources */,
+				6F589D1F8585CF59ED179937 /* LogConsoleView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D1EF0CF977292782FA6D586A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		9ECD6ADD3E7656B1A5D32F01 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		6AAB59A3C0BAF710B2045EA5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"AT2Bridge/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AT2Bridge/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.at2bridge.AT2Bridge;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6DDE1771F95A650A2C7249BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"AT2Bridge/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AT2Bridge/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.at2bridge.AT2Bridge;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		ADD3EDE971004D3249A2A24C /* Build configuration list for PBXProject "AT2Bridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1EF0CF977292782FA6D586A /* Debug */,
+				9ECD6ADD3E7656B1A5D32F01 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EAF116FE40D68E4ABB26094B /* Build configuration list for PBXNativeTarget "AT2Bridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6AAB59A3C0BAF710B2045EA5 /* Debug */,
+				6DDE1771F95A650A2C7249BE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}
