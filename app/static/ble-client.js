@@ -43,6 +43,29 @@ const AT2BleClient = (() => {
     };
   }
 
+  // Calls each listener isolated in its own try/catch -- a PLAIN
+  // `listeners.forEach((cb) => cb(arg))` lets one throwing callback abort
+  // the whole forEach, silently skipping every listener registered AFTER
+  // it for that event. This bit real hardware (05/09/2026): once the
+  // audio-decode listener below started actually calling
+  // PttAudio.playPcmFrame() per incoming voice packet, an occasional
+  // throw from it (e.g. audio scheduling edge cases under a rapid ~100ms
+  // burst) silently killed the RX indicator/debug-log listeners
+  // registered after it, for that packet -- audio kept playing (the
+  // throwing call had already produced sound before failing) while the
+  // "someone is talking" indicator stopped lighting up, despite neither
+  // listener having a bug of its own. Mirrors app/device.py's transport
+  // listener dispatch, which already isolates each callback this way.
+  function dispatchToListeners(listeners, arg) {
+    for (const cb of listeners) {
+      try {
+        cb(arg);
+      } catch (e) {
+        console.error("AT2BleClient listener threw:", e);
+      }
+    }
+  }
+
   // -- incoming offline messages (text/voice/image) --------------------------
   // Previously local BLE mode never decoded these at all -- every incoming
   // packet was just logged as raw family/command hex. Reassembly now runs
@@ -65,7 +88,7 @@ const AT2BleClient = (() => {
   // are a different family), so no extra filtering is needed here.
   onPacket((pkt) => {
     const completed = messageAssembler.feed(pkt);
-    if (completed) messageRxListeners.forEach((cb) => cb(completed));
+    if (completed) dispatchToListeners(messageRxListeners, completed);
   });
 
   // -- incoming live-voice audio (passive, no local PTT session needed) -----
@@ -94,7 +117,7 @@ const AT2BleClient = (() => {
       } catch (_) {
         continue; // malformed/misaligned frame (see extractRfActivityAudioFrames's caveat) -- drop, don't crash the whole RX path
       }
-      audioRxListeners.forEach((cb) => cb(pcm));
+      dispatchToListeners(audioRxListeners, pcm);
     }
   });
 
@@ -110,7 +133,7 @@ const AT2BleClient = (() => {
     const pkt = AT2Protocol.decodeFrame(bytes);
 
     if (pkt) {
-      packetListeners.forEach((cb) => cb(pkt));
+      dispatchToListeners(packetListeners, pkt);
     }
   }
 
