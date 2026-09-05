@@ -6,7 +6,8 @@
  * - Connection + notifications
  * - Channel selection
  * - Volume
- * - Offline text messaging
+ * - Offline text messaging, both sending and receiving (text/voice/image
+ *   reception -- see onMessageReceived() below; sending is text-only)
  * - Channel read/write (CPS dialect)
  * - Live PTT (client-side AMR encode/decode -- see startPtt() below;
  *   PTT is confirmed BLE-only, there is no server-side radio path for it
@@ -40,6 +41,31 @@ const AT2BleClient = (() => {
       packetListeners = packetListeners.filter((listener) => listener !== cb);
     };
   }
+
+  // -- incoming offline messages (text/voice/image) --------------------------
+  // Previously local BLE mode never decoded these at all -- every incoming
+  // packet was just logged as raw family/command hex. Reassembly now runs
+  // via the same MessageAssembler used to validate this port against the
+  // server-side (Python) implementation -- see static/protocol.js.
+  let messageAssembler = new AT2Protocol.MessageAssembler();
+  let messageRxListeners = [];
+
+  function onMessageReceived(cb) {
+    messageRxListeners.push(cb);
+    return () => {
+      messageRxListeners = messageRxListeners.filter((listener) => listener !== cb);
+    };
+  }
+
+  // Always-on (not tied to a particular connection's lifetime, same as
+  // the debug packetListeners above): AT2Protocol.decodeMessage() already
+  // rejects anything that isn't an offline-message start/chunk frame
+  // (PTT voice/key/session all have a different first body byte, acks
+  // are a different family), so no extra filtering is needed here.
+  onPacket((pkt) => {
+    const completed = messageAssembler.feed(pkt);
+    if (completed) messageRxListeners.forEach((cb) => cb(completed));
+  });
 
   function handleNotify(event) {
     const value = event.target.value;
@@ -81,6 +107,10 @@ const AT2BleClient = (() => {
     });
 
     device.addEventListener("gattserverdisconnected", handleDisconnected);
+
+    // Fresh reassembly state per connection -- a stale pending chunk from
+    // a previous session/device should never bleed into this one.
+    messageAssembler = new AT2Protocol.MessageAssembler();
 
     const server = await device.gatt.connect();
 
@@ -435,6 +465,7 @@ const AT2BleClient = (() => {
     readAllChannels,
     writeChannel,
     startPtt,
-    onPacket
+    onPacket,
+    onMessageReceived
   };
 })();

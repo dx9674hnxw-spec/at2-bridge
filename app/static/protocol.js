@@ -126,6 +126,206 @@ const AT2Protocol = (() => {
     return frames;
   }
 
+  // -- incoming offline messages: decode + reassembly ------------------------
+  //
+  // Full JS port of app/protocol/messages.py's decode()/MessageAssembler --
+  // see that module for the detailed rationale of every quirk/fix here
+  // (the offset-8-vs-9 chunk divergence from the reference decoder, the
+  // declared-length unit correction for fragmented text, trimming to the
+  // declared length, and orphan-chunk recovery). Needed so local BLE mode
+  // can decode incoming text/voice/image messages at all -- previously
+  // only server mode (Python) did this; local BLE just logged the raw
+  // family/command of every incoming packet and threw the rest away.
+
+  const MSG_TYPE_TEXT_START = 0x01;
+  const MSG_TYPE_TEXT_CHUNK = 0x02;
+  const MSG_TYPE_VOICE_START = 0x03;
+  const MSG_TYPE_VOICE_CHUNK = 0x04;
+  const MSG_TYPE_IMAGE_START = 0x05;
+  const MSG_TYPE_IMAGE_CHUNK = 0x06;
+  const MSG_DEFAULT_USERNAME = "AT2Bridge";
+  const MSG_FRAGMENT_TEXT_CHUNK_BYTES = 131;
+  const MSG_VOICE_CHUNK_BYTES = 132;
+  const MSG_IMAGE_CHUNK_BYTES = 132;
+
+  function decodeSender(bytes) {
+    let text;
+    try {
+      text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    } catch (e) {
+      text = "";
+    }
+    text = text.replace(/^[\s\x00]+/, "").replace(/[\s\x00]+$/, "");
+    return text || MSG_DEFAULT_USERNAME;
+  }
+
+  function readMsgId(p, start) {
+    return ((p[start] << 24) | (p[start + 1] << 16) | (p[start + 2] << 8) | p[start + 3]) >>> 0;
+  }
+  function readBe16(p, start) { return (p[start] << 8) | p[start + 1]; }
+  function readLe16(p, start) { return p[start] | (p[start + 1] << 8); }
+
+  function decodeChunkFrame(msgType, p) {
+    if (p.length < 9) return null;
+    return { kind: "chunk", type: msgType, msgId: readMsgId(p, 2), seq: readBe16(p, 6), data: p.slice(9) };
+  }
+
+  function decodeTextOrVoiceStart(msgType, p) {
+    if (p.length < 26) return null;
+    const inlineData = p.length > 26 ? p.slice(26) : new Uint8Array(0);
+    return {
+      kind: "start", type: msgType, msgId: readMsgId(p, 2), sender: decodeSender(p.slice(7, 23)),
+      declaredLength: readLe16(p, 23), totalParts: p[25], inlineData, durationMs: null,
+    };
+  }
+
+  function decodeVoiceStart(p) {
+    if (p.length < 29) return null;
+    const durationSeconds = Math.max(1, readLe16(p, 27));
+    return {
+      kind: "start", type: MSG_TYPE_VOICE_START, msgId: readMsgId(p, 2), sender: decodeSender(p.slice(7, 23)),
+      declaredLength: readLe16(p, 23), totalParts: readLe16(p, 25), inlineData: new Uint8Array(0),
+      durationMs: durationSeconds * 1000,
+    };
+  }
+
+  function decodeImageStart(p) {
+    if (p.length < 31) return null;
+    return {
+      kind: "start", type: MSG_TYPE_IMAGE_START, msgId: readMsgId(p, 2), sender: decodeSender(p.slice(7, 23)),
+      declaredLength: readLe16(p, 23), totalParts: p[25], inlineData: p.slice(27), durationMs: null,
+    };
+  }
+
+  function decodeMessage(pkt) {
+    if (pkt.family !== 0x02 || pkt.command !== 0x04) return null;
+    const p = pkt.body;
+    if (p.length < 2 || p[0] !== 0x01) return null;
+    const msgType = p[1];
+    if (msgType === MSG_TYPE_IMAGE_START) return decodeImageStart(p);
+    if (msgType === MSG_TYPE_VOICE_START) return decodeVoiceStart(p);
+    if (msgType === MSG_TYPE_TEXT_START) return decodeTextOrVoiceStart(msgType, p);
+    if (msgType === MSG_TYPE_TEXT_CHUNK || msgType === MSG_TYPE_VOICE_CHUNK || msgType === MSG_TYPE_IMAGE_CHUNK) {
+      return decodeChunkFrame(msgType, p);
+    }
+    return null;
+  }
+
+  const MSG_FULL_CHUNK_BYTES = {
+    [MSG_TYPE_TEXT_CHUNK]: MSG_FRAGMENT_TEXT_CHUNK_BYTES,
+    [MSG_TYPE_VOICE_CHUNK]: MSG_VOICE_CHUNK_BYTES,
+    [MSG_TYPE_IMAGE_CHUNK]: MSG_IMAGE_CHUNK_BYTES,
+  };
+  const MSG_CHUNK_KIND = {
+    [MSG_TYPE_TEXT_CHUNK]: "text",
+    [MSG_TYPE_VOICE_CHUNK]: "voice",
+    [MSG_TYPE_IMAGE_CHUNK]: "image",
+  };
+
+  function concatUint8(parts) {
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const p of parts) { out.set(p, offset); offset += p.length; }
+    return out;
+  }
+
+  function trimToDeclared(data, declaredLength) {
+    if (!declaredLength || declaredLength <= 0 || data.length === 0) return data;
+    return data.slice(0, declaredLength);
+  }
+
+  class MessageAssembler {
+    constructor() {
+      this._pending = new Map(); // msgId -> entry
+    }
+
+    /** `pkt`: {family, command, body} as produced by decodeFrame(). Returns
+     * a completed {kind, sender, msgId, text?|data?, durationMs?, width?,
+     * height?} once every part of a message has arrived, else null. */
+    feed(pkt) {
+      const parsed = decodeMessage(pkt);
+      if (parsed === null) return null;
+      return parsed.kind === "start" ? this._onStart(parsed) : this._onChunk(parsed);
+    }
+
+    _onStart(f) {
+      if (f.type === MSG_TYPE_TEXT_START) {
+        if (f.totalParts <= 1) {
+          const data = (f.inlineData.length > 0 && f.inlineData[0] === 0x00) ? f.inlineData.slice(1) : f.inlineData;
+          const text = new TextDecoder("utf-8", { fatal: false }).decode(trimToDeclared(data, f.declaredLength));
+          return { kind: "text", sender: f.sender, msgId: f.msgId, text };
+        }
+        // See app/protocol/messages.py::_on_start for why total_parts is
+        // subtracted here (declared_length bakes in one pad byte per chunk
+        // that this decoder's chunk offset -- offset 9, not 8 -- excludes).
+        const declaredLength = f.declaredLength ? f.declaredLength - f.totalParts : f.declaredLength;
+        this._pending.set(f.msgId, { kind: "text", sender: f.sender, total: f.totalParts, declaredLength, chunks: new Map() });
+        return null;
+      }
+      if (f.type === MSG_TYPE_VOICE_START) {
+        this._pending.set(f.msgId, {
+          kind: "voice", sender: f.sender, total: f.totalParts, declaredLength: f.declaredLength,
+          chunks: new Map(), durationMs: f.durationMs,
+        });
+        return null;
+      }
+      if (f.type === MSG_TYPE_IMAGE_START) {
+        const width = f.inlineData.length >= 2 ? readLe16(f.inlineData, 0) : null;
+        const height = f.inlineData.length >= 4 ? readLe16(f.inlineData, 2) : null;
+        this._pending.set(f.msgId, {
+          kind: "image", sender: f.sender, total: f.totalParts, declaredLength: f.declaredLength,
+          chunks: new Map(), width, height,
+        });
+        return null;
+      }
+      return null;
+    }
+
+    _onChunk(c) {
+      let entry = this._pending.get(c.msgId);
+      if (!entry) {
+        // Chunk for a start frame we never saw -- track it under a
+        // synthetic entry and fall back to a "contiguous from 0, last one
+        // shorter than a full chunk" heuristic below, instead of losing
+        // it forever.
+        const kind = MSG_CHUNK_KIND[c.type];
+        if (!kind) return null;
+        entry = { kind, sender: null, total: null, declaredLength: null, chunks: new Map() };
+        this._pending.set(c.msgId, entry);
+      }
+      entry.chunks.set(c.seq, c.data);
+
+      const keys = Array.from(entry.chunks.keys()).sort((a, b) => a - b);
+      if (entry.total !== null) {
+        // Strict: exactly the expected contiguous set 0..total-1, not
+        // just "enough chunks" -- guards against a duplicate/out-of-range
+        // seq silently reassembling the wrong bytes.
+        if (keys.length !== entry.total || !keys.every((k, i) => k === i)) return null;
+      } else {
+        if (!keys.every((k, i) => k === i)) return null; // not contiguous from 0 yet
+        const fullSize = MSG_FULL_CHUNK_BYTES[c.type];
+        const lastSize = entry.chunks.get(keys[keys.length - 1]).length;
+        if (!fullSize || !(lastSize > 0 && lastSize < fullSize)) return null;
+      }
+
+      const ordered = trimToDeclared(concatUint8(keys.map((k) => entry.chunks.get(k))), entry.declaredLength);
+      this._pending.delete(c.msgId);
+      const sender = entry.sender || MSG_DEFAULT_USERNAME;
+
+      if (entry.kind === "text") {
+        return { kind: "text", sender, msgId: c.msgId, text: new TextDecoder("utf-8", { fatal: false }).decode(ordered) };
+      }
+      if (entry.kind === "voice") {
+        return { kind: "voice", sender, msgId: c.msgId, data: ordered, durationMs: entry.durationMs || null };
+      }
+      if (entry.kind === "image") {
+        return { kind: "image", sender, msgId: c.msgId, data: ordered, width: entry.width || null, height: entry.height || null };
+      }
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------
   // "CPS-style" frame dialect -- confirmed on real hardware 27-28/08/2026
   // for per-channel read/write (opcode 0x11 read / 0x12 write). See
@@ -317,7 +517,7 @@ const AT2Protocol = (() => {
   }
 
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
-    isMessageAck, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
+    isMessageAck, MessageAssembler, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
     buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();

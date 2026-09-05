@@ -266,21 +266,43 @@
     </section>
 
     <section id="tab-messages" class="tab-panel">
-      <div class="card message-form">
-        <input id="msg-username" type="text" data-i18n-placeholder="msg.usernamePlaceholder" placeholder="Pseudo" value="elyha" />
-        <textarea id="msg-text" rows="3" data-i18n-placeholder="msg.textPlaceholder" placeholder="Message hors-réseau à envoyer sur le canal actif…"></textarea>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn-ghost" id="btn-attach-image" data-i18n-title="msg.attachImage" title="Joindre une image" data-i18n="msg.attachImageBtn">Image</button>
-          <input type="file" id="image-file-input" accept="image/*" hidden />
-          <button class="btn-ghost" id="btn-record-voice" data-i18n-title="msg.recordVoice" title="Message vocal" data-i18n="msg.recordVoiceBtn">Vocal</button>
-          <button id="btn-send-message" class="btn-primary" data-i18n="msg.send">Envoyer</button>
+      <div class="msg-layout">
+        <div class="group-list" id="group-list"></div>
+
+        <div class="msg-panel">
+          <div class="device-row">
+            <div class="device-icon">📻</div>
+            <div class="device-info">
+              <div class="device-title" id="active-group-name">—</div>
+              <div class="device-sub" id="active-group-sub">—</div>
+            </div>
+            <div class="device-eject" id="btn-clear-channel-history" data-i18n-title="msg.clearHistoryTitle" title="Effacer l'historique de ce canal">🗑</div>
+          </div>
+
+          <div class="status-grid" id="msg-status-grid"></div>
+
+          <div class="msg-vol-row">
+            <span class="vol-icon">🔈</span>
+            <input type="range" id="msg-volume-slider" min="1" max="8" value="4" data-i18n-title="settings.volume" title="Volume (1–8)" />
+            <span class="vol-icon">🔊</span>
+          </div>
+
+          <div class="msg-compose-username">
+            <input id="msg-username" type="text" data-i18n-placeholder="msg.usernamePlaceholder" placeholder="Pseudo" value="elyha" />
+          </div>
+
+          <div class="msg-thread" id="msg-thread"></div>
+
+          <div class="compose-row">
+            <button class="icon-btn" id="btn-attach-image" data-i18n-title="msg.attachImage" title="Joindre une image">🖼️</button>
+            <input type="file" id="image-file-input" accept="image/*" hidden />
+            <button class="icon-btn record" id="btn-record-voice" data-i18n-title="msg.recordVoice" title="Message vocal">🎙️</button>
+            <input type="text" id="msg-text" data-i18n-placeholder="msg.textPlaceholder" placeholder="Message hors-réseau…" />
+            <button class="send-btn" id="btn-send-message" data-i18n-title="msg.send" title="Envoyer">➤</button>
+          </div>
         </div>
-        <span class="hint" id="voice-record-status"></span>
-        <span class="hint" data-i18n="msg.hint">Texte hors-réseau câblé de bout en bout. Image/vocal : format du protocole implémenté, boutons pas encore reliés à l'envoi (voir README).</span>
       </div>
-      <div class="card">
-        <div class="msg-thread" id="msg-thread"></div>
-      </div>
+      <p class="hint" style="margin-top:14px;" data-i18n="msg.hint">Groupes = canaux radio utilisés comme salons de discussion hors-réseau (sélectionner un groupe change le canal actif de la radio). Image/vocal : mode Serveur uniquement pour l'instant.</p>
     </section>
 
     <section id="tab-log" class="tab-panel">
