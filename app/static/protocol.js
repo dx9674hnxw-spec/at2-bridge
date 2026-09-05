@@ -612,9 +612,38 @@ const AT2Protocol = (() => {
     return frames;
   }
 
+  // Best-effort audio extraction for the real-hardware incoming-voice
+  // signature confirmed 05/09/2026 (see isIncomingRfActivity() above) --
+  // UNCONFIRMED against actual captured bytes, unlike extractAmrFrames()
+  // above (which mirrors the reference app's own build/parse of the
+  // frames WE send, byte-exact-tested). Reasoning: this family=0x91/
+  // command=0x02 signature is decodeFrame()'s legacy-dialect misparse of
+  // a genuine CPS-dialect frame, and every other CPS-dialect message this
+  // project knows the real shape of (channel read/write) carries its own
+  // [opcode, group, param, ...body] header (see decodeCpsFrame()) --
+  // decodeFrame() only ever strips the outer 3-byte [pad, opcode, group],
+  // so pkt.body here = [param, ...real CPS body]. Assumes that same
+  // [opcode, group, param, ...] shape also holds for this traffic (with
+  // whatever `param` means for it left unused) and that the rest is
+  // concatenated 12-byte MR475 frames, same convention as
+  // extractAmrFrames(). If this turns out to be wrong, decode will just
+  // fail to produce speech-shaped audio -- capture a packet's raw body
+  // hex from the Journal tab (now logged for every RX line) to correct
+  // the offset.
+  function extractRfActivityAudioFrames(pkt) {
+    if (isPttVoicePacket(pkt)) return extractAmrFrames(pkt.body);
+    if (pkt.family === 0x91 && pkt.command === 0x02) {
+      const data = pkt.body.slice(1);
+      const frames = [];
+      for (let i = 0; i + 12 <= data.length; i += 12) frames.push(data.slice(i, i + 12));
+      return frames;
+    }
+    return [];
+  }
+
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
     buildVoiceMessageFrames, buildImageMessageFrames,
     isMessageAck, MessageAssembler, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
-    buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, isIncomingRfActivity, extractAmrFrames,
+    buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, isIncomingRfActivity, extractAmrFrames, extractRfActivityAudioFrames,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();

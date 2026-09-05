@@ -68,6 +68,36 @@ const AT2BleClient = (() => {
     if (completed) messageRxListeners.forEach((cb) => cb(completed));
   });
 
+  // -- incoming live-voice audio (passive, no local PTT session needed) -----
+  // Previously the only way to actually HEAR incoming voice at all was to
+  // already be transmitting yourself (startPtt()'s own internal RX decode,
+  // now removed in favor of this): connecting alone never decoded/played
+  // anything. Always-on like the message listener above -- created here
+  // (not lazily) so a connection with no mic permission granted yet can
+  // still receive and play back audio.
+  let rxAudioCodec = (typeof PttAmr !== "undefined") ? new PttAmr.Codec() : null;
+  let audioRxListeners = [];
+
+  function onIncomingAudio(cb) {
+    audioRxListeners.push(cb);
+    return () => {
+      audioRxListeners = audioRxListeners.filter((listener) => listener !== cb);
+    };
+  }
+
+  onPacket((pkt) => {
+    if (!rxAudioCodec || !AT2Protocol.isIncomingRfActivity(pkt)) return;
+    for (const amrFrame of AT2Protocol.extractRfActivityAudioFrames(pkt)) {
+      let pcm;
+      try {
+        pcm = rxAudioCodec.decode(amrFrame);
+      } catch (_) {
+        continue; // malformed/misaligned frame (see extractRfActivityAudioFrames's caveat) -- drop, don't crash the whole RX path
+      }
+      audioRxListeners.forEach((cb) => cb(pcm));
+    }
+  });
+
   function handleNotify(event) {
     const value = event.target.value;
 
@@ -88,6 +118,7 @@ const AT2BleClient = (() => {
     device = null;
     txChar = null;
     rxChar = null;
+    if (rxAudioCodec) { rxAudioCodec.close(); rxAudioCodec = null; }
   }
 
   async function connect() {
@@ -112,6 +143,11 @@ const AT2BleClient = (() => {
     // Fresh reassembly state per connection -- a stale pending chunk from
     // a previous session/device should never bleed into this one.
     messageAssembler = new AT2Protocol.MessageAssembler();
+
+    // Fresh AMR decoder state too (encoder/decoder internal history
+    // shouldn't carry over from a previous connection/device either).
+    if (rxAudioCodec) rxAudioCodec.close();
+    rxAudioCodec = (typeof PttAmr !== "undefined") ? new PttAmr.Codec() : null;
 
     const server = await device.gatt.connect();
 
@@ -160,6 +196,7 @@ const AT2BleClient = (() => {
     device = null;
     txChar = null;
     rxChar = null;
+    if (rxAudioCodec) { rxAudioCodec.close(); rxAudioCodec = null; }
   }
 
   function connected() {
@@ -408,7 +445,7 @@ const AT2BleClient = (() => {
   // constants, from AT2Protocol.PTT_*), except encode/decode both
   // happen in the browser via ptt-amr-codec.js instead of server-side.
 
-  async function startPtt(onRxPcm, onLog) {
+  async function startPtt(onLog) {
     const log = onLog || (() => {});
     if (typeof PttAmr === "undefined") {
       throw new Error("ptt-amr-codec.js (and amrnb.js) must be loaded for live PTT");
@@ -445,13 +482,12 @@ const AT2BleClient = (() => {
 
     log("PTT BLE: clé radio activée, session démarrée (attente de frames audio du navigateur)");
 
-    const rxUnsubscribe = onPacket((pkt) => {
-      if (!AT2Protocol.isPttVoicePacket(pkt)) return;
-      for (const amrFrame of AT2Protocol.extractAmrFrames(pkt.body)) {
-        const pcm = codec.decode(amrFrame);
-        if (onRxPcm) onRxPcm(pcm);
-      }
-    });
+    // Incoming audio during this session is handled by the always-on
+    // passive decoder above (onIncomingAudio()) now, not a session-local
+    // listener here -- that decoder also fixes hearing the OTHER
+    // signature real hardware actually sends (see
+    // AT2Protocol.isIncomingRfActivity()'s comment), which this session-
+    // scoped listener never recognized.
 
     async function flush(count) {
       if (pending.length < count) return;
@@ -522,7 +558,6 @@ const AT2BleClient = (() => {
         if (pending.length >= AT2Protocol.PTT_TAIL_MIN_FRAMES) {
           await flush(pending.length);
         }
-        rxUnsubscribe();
         codec.close();
         try {
           await sendFrame(AT2Protocol.encodeFrame(AT2Protocol.buildPttKeyPayload(false)));
@@ -554,6 +589,7 @@ const AT2BleClient = (() => {
     writeChannel,
     startPtt,
     onPacket,
-    onMessageReceived
+    onMessageReceived,
+    onIncomingAudio
   };
 })();

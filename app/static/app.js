@@ -518,7 +518,13 @@ $("#btn-local-disconnect").addEventListener("click", async () => {
   await AT2BleClient.disconnect();
   updateLocalStatusUi();
 });
-AT2BleClient.onPacket((pkt) => appendLog(`RX local [${pkt.family.toString(16)}/${pkt.command.toString(16)}]`));
+// Body hex included (not just family/command) since this is the only
+// window we have into traffic this app doesn't fully understand yet --
+// see AT2Protocol.isIncomingRfActivity()'s comment on the incoming-voice
+// signature confirmed live 05/09/2026, itself found this way.
+AT2BleClient.onPacket((pkt) => appendLog(
+  `RX local [${pkt.family.toString(16)}/${pkt.command.toString(16)}] body=${Array.from(pkt.body).map((b) => b.toString(16).padStart(2, "0")).join("")}`
+));
 
 // ---------------------------------------------------------------------------
 // Devices tab: known devices list
@@ -729,13 +735,11 @@ async function startPtt() {
     // (see static/ptt-amr-codec.js + static/amrnb.js) since PTT has been
     // confirmed BLE-only -- see CONSIGNES_PROJET.md.
     try {
-      pttSession = await AT2BleClient.startPtt(
-        (pcm) => {
-          PttAudio.playPcmFrame(pcm);
-          $("#rf-indicator").classList.add("rx");
-        },
-        appendLog
-      );
+      // Incoming audio playback + the RX indicator are both driven by the
+      // always-on AT2BleClient.onIncomingAudio()/onPacket() listeners
+      // registered once at startup (see below) -- not passed in here --
+      // so they also work while just standing by, not only mid-session.
+      pttSession = await AT2BleClient.startPtt(appendLog);
       // startPtt() now awaits a radio key-on handshake before returning
       // (see ble-client.js), so a very short tap can release the button
       // before it resolves -- mirror the reference app (PttUiController.kt)
@@ -814,6 +818,14 @@ function connectPttRxSocket() {
 AT2BleClient.onPacket((pkt) => {
   if (AT2Protocol.isIncomingRfActivity(pkt)) markIncomingRfActivity();
 });
+
+// Actual playback of that incoming voice -- previously nothing decoded or
+// played this traffic at all, indicator or not (see ble-client.js's
+// onIncomingAudio()/rxAudioCodec). Best-effort: the exact byte layout of
+// the real-hardware signature is unconfirmed (see
+// AT2Protocol.extractRfActivityAudioFrames()'s comment) -- if it still
+// sounds wrong, the Journal's "RX local" lines now include the body hex.
+AT2BleClient.onIncomingAudio((pcm) => PttAudio.playPcmFrame(pcm));
 
 // ---------------------------------------------------------------------------
 // GPS position + SOS
