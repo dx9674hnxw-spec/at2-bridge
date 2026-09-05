@@ -14,7 +14,7 @@
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
   
   <!-- Tests -->
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-53_passed-success.svg?logo=pytest" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-60_passed-success.svg?logo=pytest" />
   
   <!-- Hardware -->
   <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
@@ -43,7 +43,7 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >- **Offline text/voice/image messaging** (server mode) — construction, decoding, and reassembly of all three formats.
 >- **Local BLE mode (Web Bluetooth)** — direct browser↔radio connection with no intermediate server: channel selection, volume, text messaging, channel read/write.
 >- **Frame codec** (both protocol dialects, see below), AMR-NB codec (native binding server-side, JS/WebAssembly port client-side), HMAC token authentication, local storage (channel names, known devices), clean error handling (no traceback exposed to the client).
->- **53 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference, and byte-exact tests transcribed directly from the reference Android app's `At2Commands.kt` for every device-setting command below.
+>- **60 unit tests** — `app/tests/test_protocol.py`, including dedicated tests using byte sequences actually exchanged with the hardware as reference, byte-exact tests transcribed directly from the reference Android app's `At2Commands.kt` for every device-setting command below, and tests for the ack-retry message-sending logic and the reassembly edge cases (padded last chunk, missing start frame, out-of-range seq) described below.
 
 > [!WARNING]
 >###  Implemented, pending hardware confirmation
@@ -55,7 +55,9 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 >- **Dual Watch, prompt language (Chinese/English), TX interval ("hop")** — newly added (`app/protocol/commands.py`, exposed as `PUT /api/device/dual-watch(/channel|/focus)`, `/prompt-language`, `/tx-interval`, server mode only), ported byte-for-byte from the reference app. Like every other advanced setting below, never verified by independent read-back.
 >- **Device settings other than volume** (squelch, VOX, VOX sensitivity, TX timeout, TX interval, TX inhibit, noise reduction, prompt tone, prompt language, device name, Smart Link, Dual Watch) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back. There is currently no "read settings back from the radio" feature at all (the `query_*` builders in `commands.py` exist but aren't wired to any endpoint yet).
 >- **Real-time PTT in server mode** — same missing key-on/key-off commands as above, now added to `app/device.py::PttSession`; never verified end-to-end on hardware.
->- **Receiving offline messages** — the reception pipeline (decoding + WebSocket + display) is wired up client-side, but no real incoming frame has been received in testing yet.
+>- **Offline messaging reliability** — sending was fire-and-forget (each frame sent with a fixed delay, no check that the radio actually got it); now every frame is sent and its ack awaited before the next one goes out, with up to 3 retries on a dropped frame (`app/device.py::_send_message_frames_with_ack`, `app/static/ble-client.js::sendFramesWithAck`) — ported from `At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck`. A send that ultimately fails now raises a clear error instead of silently losing frames.
+>- **Receiving offline messages** — the reassembly logic had two real bugs, fixed by comparing against `OfflineMessageAssembler.kt`: it never trimmed a reassembled message to its self-declared length (risking trailing garbage if the radio pads its last chunk, which neither software encoder does but nothing guarantees the radio doesn't), and a chunk arriving without its start frame having been seen (a dropped first packet, or joining mid-transmission) was silently discarded forever instead of still being reassembled once enough of them arrive. Both fixed in `app/protocol/messages.py`, still no real incoming frame has been received in testing yet.
+>- **Voice message playback** (received messages) — now decoded (AMR → PCM, client-side) and playable via a button on the message bubble; was previously text-only ("message received, no player").
 >- **Position/SOS** — relies on the text messaging channel (no structured "Position" type exists in the real protocol).
 >- **Reconnecting to known devices.**
 
@@ -67,7 +69,6 @@ Self-hosted web application (Docker) to control a bidirectional **Alervites/Baof
 > [!CAUTION]
 >###  Not implemented / Roadmap
 >
->- **Voice message playback** — the message arrives and displays, but no audio player is wired up in the browser yet.
 >- **Structured "Position" message type** — currently formatted text.
 >- **Managing multiple radios simultaneously** — only one active connection at a time server-side.
 >- **Video streaming / periodic photos** — not implemented; the protocol's throughput (≈330 bytes/s for messaging, 4.8 kbps for PTT) makes real video unrealistic.

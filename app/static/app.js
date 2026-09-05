@@ -1033,8 +1033,10 @@ $$("[data-action]").forEach((btn) => {
 });
 
 // ---------------------------------------------------------------------------
-// Messaging (single thread tied to the active channel; outgoing only for
-// now -- inbound offline-message decoding isn't wired yet, see README)
+// Messaging (single thread tied to the active channel). Outgoing send
+// helpers are below; incoming text/voice/image messages arrive over
+// /ws/messages and are rendered by pushReceivedBubble() further down
+// this file -- see connectMessagesSocket().
 // ---------------------------------------------------------------------------
 function pushSentBubble(text) {
   const thread = $("#msg-thread");
@@ -1174,6 +1176,58 @@ $("#btn-send-raw-frame").addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 // Incoming offline messages (text/voice/image) -- /ws/messages
 // ---------------------------------------------------------------------------
+
+// Decodes a received voice message's AMR bytes (base64, concatenated
+// 12-byte MR475 frames -- same codec/format as live PTT, see
+// ptt-amr-codec.js) and plays it back via Web Audio. There's no WAV
+// encoder here on purpose: an AudioBufferSourceNode playing a manually
+// filled AudioBuffer needs neither a container format nor an <audio>
+// element.
+let voicePlaybackCtx = null;
+
+async function playReceivedVoiceMessage(base64Amr, btn) {
+  if (typeof PttAmr === "undefined" || typeof AMR === "undefined") {
+    return showToast(t("msg.voicePlaybackUnavailable"), "error");
+  }
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("msg.voicePlaying");
+  try {
+    const binary = atob(base64Amr);
+    const amrBytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) amrBytes[i] = binary.charCodeAt(i);
+
+    const codec = new PttAmr.Codec();
+    const frameCount = Math.floor(amrBytes.length / PttAmr.ENCODED_FRAME_BYTES);
+    const pcm = new Int16Array(frameCount * PttAmr.FRAME_SAMPLES);
+    try {
+      for (let i = 0; i < frameCount; i++) {
+        const amrFrame = amrBytes.subarray(i * PttAmr.ENCODED_FRAME_BYTES, (i + 1) * PttAmr.ENCODED_FRAME_BYTES);
+        pcm.set(codec.decode(amrFrame), i * PttAmr.FRAME_SAMPLES);
+      }
+    } finally {
+      codec.close();
+    }
+
+    if (!voicePlaybackCtx) voicePlaybackCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const buffer = voicePlaybackCtx.createBuffer(1, pcm.length, 8000);
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < pcm.length; i++) channelData[i] = pcm[i] / 0x8000;
+    const src = voicePlaybackCtx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(voicePlaybackCtx.destination);
+    src.onended = () => {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    };
+    src.start();
+  } catch (e) {
+    showToast(t("msg.voicePlaybackError", { error: e.message }), "error");
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
 function pushReceivedBubble(msg) {
   const thread = $("#msg-thread");
   const el = document.createElement("div");
@@ -1184,12 +1238,20 @@ function pushReceivedBubble(msg) {
     body = `<div class="msg-body">${escapeHtml(msg.text ?? "")}</div>`;
   } else if (msg.kind === "image" && msg.data_base64) {
     body = `<div class="msg-body"><img src="data:image/jpeg;base64,${msg.data_base64}" style="max-width:220px; border-radius:6px; display:block;" /></div>`;
+  } else if (msg.kind === "voice" && msg.data_base64) {
+    const seconds = Math.round((msg.duration_ms || 0) / 1000);
+    body = `<div class="msg-body"><button class="btn-primary voice-play-btn">${t("msg.voiceReceived", { seconds })}</button></div>`;
   } else if (msg.kind === "voice") {
     body = `<div class="msg-body">${t("msg.voiceReceived", { seconds: Math.round((msg.duration_ms || 0) / 1000) })}</div>`;
   } else {
     body = `<div class="msg-body">${t("msg.unknownKind", { kind: msg.kind })}</div>`;
   }
   el.innerHTML = `<div class="meta">${escapeHtml(msg.sender || "?")} · ${time}</div>${body}`;
+  if (msg.kind === "voice" && msg.data_base64) {
+    el.querySelector(".voice-play-btn").addEventListener("click", (e) => {
+      playReceivedVoiceMessage(msg.data_base64, e.currentTarget);
+    });
+  }
   thread.appendChild(el);
   thread.scrollTop = thread.scrollHeight;
 }

@@ -189,6 +189,37 @@ const AT2BleClient = (() => {
     await sendFrame(frame);
   }
 
+  // Send each frame of a multi-frame message and wait for the radio's
+  // ack before sending the next one, retrying a dropped frame instead
+  // of the old fixed-delay fire-and-forget (which never noticed a
+  // dropped frame at all) -- mirrors app/device.py's
+  // _send_message_frames_with_ack(), itself ported from
+  // At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck.
+  const MESSAGE_ACK_TIMEOUT_MS = 1500;
+  const MESSAGE_ACK_RETRIES = 3;
+  const MESSAGE_ACK_RETRY_BACKOFF_MS = 220;
+
+  async function sendFramesWithAck(frames, tag) {
+    for (let index = 0; index < frames.length; index++) {
+      const f = frames[index];
+      let acked = false;
+      for (let attempt = 1; attempt <= MESSAGE_ACK_RETRIES && !acked; attempt++) {
+        const waitPromise = waitForPacket(AT2Protocol.isMessageAck, MESSAGE_ACK_TIMEOUT_MS);
+        await sendFrame(f);
+        acked = !!(await waitPromise);
+        if (!acked && attempt < MESSAGE_ACK_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, MESSAGE_ACK_RETRY_BACKOFF_MS));
+        }
+      }
+      if (!acked) {
+        throw new Error(
+          `${tag}: pas d'accusé de réception de la radio pour la trame ${index + 1}/${frames.length} ` +
+          `après ${MESSAGE_ACK_RETRIES} tentatives`
+        );
+      }
+    }
+  }
+
   async function sendText(username, text) {
     const frames = AT2Protocol.buildTextMessageFrames(
       username,
@@ -196,10 +227,7 @@ const AT2BleClient = (() => {
       nextMsgId++
     );
 
-    for (const frame of frames) {
-      await sendFrame(frame);
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    }
+    await sendFramesWithAck(frames, "Message texte");
   }
 
   // -- channel read/write (CPS-style dialect, confirmed on real hardware

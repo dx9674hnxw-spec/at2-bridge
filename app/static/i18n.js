@@ -193,7 +193,10 @@ const I18N_DICT = {
     "msg.serverModeRequiredImage": "L'envoi d'image nécessite le mode Serveur.",
     "msg.serverModeRequiredVoice": "L'envoi vocal nécessite le mode Serveur.",
     "msg.unreadable": "Message entrant illisible: {error}",
-    "msg.voiceReceived": "🎙️ Message vocal ({seconds}s) — lecture non câblée côté navigateur pour les messages reçus.",
+    "msg.voiceReceived": "▶ Écouter ({seconds}s)",
+    "msg.voicePlaying": "🔊 Lecture…",
+    "msg.voicePlaybackUnavailable": "Lecture impossible : le décodeur AMR (amrnb.js) n'est pas chargé.",
+    "msg.voicePlaybackError": "Erreur de lecture du message vocal : {error}",
     "msg.unknownKind": "Message de type inconnu ({kind})",
     "msg.me": "Moi",
 
@@ -376,7 +379,10 @@ const I18N_DICT = {
     "msg.serverModeRequiredImage": "Sending images requires Server mode.",
     "msg.serverModeRequiredVoice": "Sending voice requires Server mode.",
     "msg.unreadable": "Unreadable incoming message: {error}",
-    "msg.voiceReceived": "Voice message ({seconds}s) — playback not wired for received messages yet.",
+    "msg.voiceReceived": "▶ Play ({seconds}s)",
+    "msg.voicePlaying": "🔊 Playing…",
+    "msg.voicePlaybackUnavailable": "Can't play: the AMR decoder (amrnb.js) isn't loaded.",
+    "msg.voicePlaybackError": "Error playing voice message: {error}",
     "msg.unknownKind": "Unknown message type ({kind})",
     "msg.me": "Me",
 

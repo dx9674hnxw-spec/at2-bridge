@@ -65,6 +65,17 @@ const AT2Protocol = (() => {
 
   // -- text messaging (mirrors app/protocol/messages.py) --------------------
 
+  // True for the radio's acknowledgment of an offline-message frame
+  // (text/voice/image start or chunk) -- mirrors
+  // app/protocol/messages.py::is_message_ack(). Used to send each frame
+  // of a multi-frame message and wait for this ack before sending the
+  // next one (with retry), instead of the old fixed-delay
+  // fire-and-forget approach that never noticed a dropped frame.
+  function isMessageAck(pkt) {
+    return pkt.family === 0x82 && pkt.command === 0x04
+      && pkt.body.length >= 2 && pkt.body[0] === 0x01 && pkt.body[1] === 0x00;
+  }
+
   function encodeSender(username) {
     const out = new Array(16).fill(0x20); // ASCII space padding
     const bytes = new TextEncoder().encode((username || "AT2Bridge").slice(0, 16));
@@ -306,7 +317,7 @@ const AT2Protocol = (() => {
   }
 
   return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
-    encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
-    buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
+    isMessageAck, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
+    buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, extractAmrFrames,
     PTT_FRAMES_PER_PACKET, PTT_TAIL_MIN_FRAMES, PTT_PACKET_PACING_MS };
 })();
