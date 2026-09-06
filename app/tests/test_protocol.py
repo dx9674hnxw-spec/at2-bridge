@@ -418,6 +418,71 @@ def test_message_assembler_recovers_message_missing_its_start_frame():
     assert result.sender == messages.DEFAULT_USERNAME
 
 
+def _orphan_chunk_packet(msg_id: int, chunk_len: int) -> frame.At2Packet:
+    """A single VOICE_CHUNK-shaped packet for msg_id/seq=0, with a
+    `chunk_len`-byte body. A body shorter than the full chunk size
+    (`messages.VOICE_CHUNK_BYTES`) completes instantly under the
+    "contiguous from 0, last one short" heuristic; a full-size body
+    stays pending indefinitely (it looks like more is still coming) --
+    used below to exercise the _pending cap/TTL without every synthetic
+    entry immediately resolving and deleting itself.
+    """
+    body = (
+        bytes([0x01, messages.TYPE_VOICE_CHUNK]) + msg_id.to_bytes(4, "big")
+        + (0).to_bytes(2, "big") + bytes([0x00]) + bytes([0xAA] * chunk_len)
+    )
+    return frame.At2Packet(family=messages.FAMILY_MSG, command=messages.CMD_MSG, body=body)
+
+
+def test_message_assembler_caps_pending_orphan_entries():
+    # A flood of orphan chunks with distinct, never-completing msg_ids
+    # (full-size bodies -- see _orphan_chunk_packet) must not grow
+    # `_pending` without bound: this is directly reachable by any
+    # RF/BLE transmitter in range, with no authentication possible at
+    # that layer.
+    assembler = messages.MessageAssembler()
+    for msg_id in range(500):
+        assembler.feed(_orphan_chunk_packet(msg_id, messages.VOICE_CHUNK_BYTES))
+    assert len(assembler._pending) <= messages._MAX_PENDING_MESSAGES
+
+
+def test_message_assembler_evicts_stale_pending_entries_by_ttl(monkeypatch):
+    assembler = messages.MessageAssembler()
+    fake_now = [1000.0]
+    monkeypatch.setattr(messages.time, "monotonic", lambda: fake_now[0])
+
+    assembler.feed(_orphan_chunk_packet(1, messages.VOICE_CHUNK_BYTES))
+    assert 1 in assembler._pending
+
+    # Well past the TTL: the next insertion must evict the stale entry.
+    fake_now[0] += messages._PENDING_MESSAGE_TTL_SECONDS + 1
+    assembler.feed(_orphan_chunk_packet(2, messages.VOICE_CHUNK_BYTES))
+    assert 1 not in assembler._pending
+    assert 2 in assembler._pending
+
+
+def test_message_assembler_cap_does_not_disturb_legitimate_reassembly():
+    # The cap/TTL eviction must never interfere with an in-progress
+    # legitimate multi-chunk message as long as it stays under the cap --
+    # only ever evicts the OLDEST entries, and only once at/over the limit.
+    assembler = messages.MessageAssembler()
+    text = "F" * 400
+    frames = messages.build_text_message_frames("elyha", text, msg_id=7)
+    # Feed the start frame and all but the last chunk.
+    for f in frames[:-1]:
+        payload, _ = frame.try_decode_frame(f)
+        assert assembler.feed(frame.decode_packet(payload)) is None
+    # A modest number of unrelated orphan chunks shouldn't evict it.
+    for msg_id in range(10):
+        assembler.feed(_orphan_chunk_packet(1000 + msg_id, messages.VOICE_CHUNK_BYTES))
+    assert 7 in assembler._pending
+    # Finishing the original message must still work.
+    payload, _ = frame.try_decode_frame(frames[-1])
+    result = assembler.feed(frame.decode_packet(payload))
+    assert result is not None
+    assert result.text == text
+
+
 def test_message_assembler_out_of_range_seq_does_not_corrupt_reassembly():
     # A chunk with a seq outside 0..total-1 (duplicate/reordering glitch)
     # must not be silently spliced into the reassembled bytes in the

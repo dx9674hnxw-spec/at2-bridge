@@ -34,6 +34,15 @@ class DeviceManager:
         self._message_rx_listeners: list = []
         self._rx_codec = None
         self._message_ack_event = asyncio.Event()
+        # Guards the whole send+ack-wait cycle in _send_message_frames_with_ack:
+        # _message_ack_event is a single instance shared across every call,
+        # so two concurrent sends (e.g. two browser tabs, or two overlapping
+        # API requests) would otherwise race on it and interleave their
+        # frames on the wire -- an ack meant for one message could satisfy
+        # the other's wait, and their raw frames could physically interleave
+        # on the transport, silently corrupting/truncating both messages on
+        # the receiving radio with no error surfaced anywhere.
+        self._message_send_lock = asyncio.Lock()
 
     # -- connection lifecycle -------------------------------------------------
 
@@ -397,44 +406,51 @@ class DeviceManager:
         first_chunk_delay_seconds: float = 0.0,
         chunk_period_seconds: float = 0.0,
     ) -> None:
-        loop = asyncio.get_event_loop()
-        next_chunk_at: float | None = None
-        for index, f in enumerate(frames):
-            if index >= 1 and next_chunk_at is not None:
-                wait = next_chunk_at - loop.time()
-                if wait > 0:
-                    await asyncio.sleep(wait)
-            for attempt in range(1, self.MESSAGE_ACK_RETRIES + 1):
-                self._message_ack_event.clear()
-                await transport.send_raw_frame(f)
-                try:
-                    await asyncio.wait_for(
-                        self._message_ack_event.wait(), timeout=self.MESSAGE_ACK_TIMEOUT_SECONDS
-                    )
-                    break
-                except asyncio.TimeoutError:
-                    if attempt == self.MESSAGE_ACK_RETRIES:
-                        # RuntimeError, not TimeoutError: app/main.py has a
-                        # dedicated handler that surfaces a RuntimeError's
-                        # message to the client (409) -- any other
-                        # exception type is caught by the generic handler
-                        # and flattened to a content-free "internal server
-                        # error", which would defeat the point of this
-                        # error message (see app/main.py's exception
-                        # handlers section).
-                        raise RuntimeError(
-                            f"{tag}: pas d'accusé de réception de la radio pour la trame "
-                            f"{index + 1}/{len(frames)} après {self.MESSAGE_ACK_RETRIES} tentatives"
+        # Serializes the whole send+ack-wait cycle across concurrent calls
+        # (two overlapping API requests, two browser tabs, ...) -- see
+        # _message_send_lock's docstring in __init__ for why this is
+        # needed: _message_ack_event is one shared instance, and without
+        # this lock two concurrent messages could interleave their frames
+        # on the wire and steal each other's acks.
+        async with self._message_send_lock:
+            loop = asyncio.get_event_loop()
+            next_chunk_at: float | None = None
+            for index, f in enumerate(frames):
+                if index >= 1 and next_chunk_at is not None:
+                    wait = next_chunk_at - loop.time()
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                for attempt in range(1, self.MESSAGE_ACK_RETRIES + 1):
+                    self._message_ack_event.clear()
+                    await transport.send_raw_frame(f)
+                    try:
+                        await asyncio.wait_for(
+                            self._message_ack_event.wait(), timeout=self.MESSAGE_ACK_TIMEOUT_SECONDS
                         )
-                    self._log_line(
-                        f"{tag}: pas d'accusé pour la trame {index + 1}/{len(frames)}, "
-                        f"nouvelle tentative ({attempt}/{self.MESSAGE_ACK_RETRIES})"
-                    )
-                    await asyncio.sleep(self.MESSAGE_ACK_RETRY_BACKOFF_SECONDS)
-            if index == 0:
-                next_chunk_at = loop.time() + first_chunk_delay_seconds
-            elif next_chunk_at is not None:
-                next_chunk_at += chunk_period_seconds
+                        break
+                    except asyncio.TimeoutError:
+                        if attempt == self.MESSAGE_ACK_RETRIES:
+                            # RuntimeError, not TimeoutError: app/main.py has a
+                            # dedicated handler that surfaces a RuntimeError's
+                            # message to the client (409) -- any other
+                            # exception type is caught by the generic handler
+                            # and flattened to a content-free "internal server
+                            # error", which would defeat the point of this
+                            # error message (see app/main.py's exception
+                            # handlers section).
+                            raise RuntimeError(
+                                f"{tag}: pas d'accusé de réception de la radio pour la trame "
+                                f"{index + 1}/{len(frames)} après {self.MESSAGE_ACK_RETRIES} tentatives"
+                            )
+                        self._log_line(
+                            f"{tag}: pas d'accusé pour la trame {index + 1}/{len(frames)}, "
+                            f"nouvelle tentative ({attempt}/{self.MESSAGE_ACK_RETRIES})"
+                        )
+                        await asyncio.sleep(self.MESSAGE_ACK_RETRY_BACKOFF_SECONDS)
+                if index == 0:
+                    next_chunk_at = loop.time() + first_chunk_delay_seconds
+                elif next_chunk_at is not None:
+                    next_chunk_at += chunk_period_seconds
 
     # -- live PTT (real-time voice) -----------------------------------------
 

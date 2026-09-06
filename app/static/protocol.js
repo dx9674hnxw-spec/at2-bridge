@@ -303,6 +303,16 @@ const AT2Protocol = (() => {
     return data.slice(0, declaredLength);
   }
 
+  // Bounds on MessageAssembler's pending map -- mirrors
+  // app/protocol/messages.py's _MAX_PENDING_MESSAGES/_PENDING_MESSAGE_TTL_SECONDS.
+  // Without these, a flood of bogus start/chunk frames (anything any
+  // RF/BLE transmitter in range can send) grows this map without limit in
+  // the browser tab, since nothing previously expired an entry that never
+  // completed. A real connection normally has at most ~1 message in
+  // flight, so both limits are generous headroom against a hostile flood.
+  const MSG_MAX_PENDING_MESSAGES = 64;
+  const MSG_PENDING_TTL_MS = 120000;
+
   class MessageAssembler {
     constructor() {
       this._pending = new Map(); // msgId -> entry
@@ -317,6 +327,21 @@ const AT2Protocol = (() => {
       return parsed.kind === "start" ? this._onStart(parsed) : this._onChunk(parsed);
     }
 
+    // Called right before inserting a new pending entry -- see the
+    // Python-side twin (_evict_stale_and_excess) for the full rationale.
+    _evictStaleAndExcess() {
+      if (this._pending.size === 0) return;
+      const now = performance.now();
+      for (const [msgId, entry] of this._pending) {
+        if (now - entry.createdAt > MSG_PENDING_TTL_MS) this._pending.delete(msgId);
+      }
+      if (this._pending.size >= MSG_MAX_PENDING_MESSAGES) {
+        const oldestFirst = Array.from(this._pending.entries()).sort((a, b) => a[1].createdAt - b[1].createdAt);
+        const evictCount = this._pending.size - MSG_MAX_PENDING_MESSAGES + 1;
+        for (const [msgId] of oldestFirst.slice(0, evictCount)) this._pending.delete(msgId);
+      }
+    }
+
     _onStart(f) {
       if (f.type === MSG_TYPE_TEXT_START) {
         if (f.totalParts <= 1) {
@@ -328,22 +353,28 @@ const AT2Protocol = (() => {
         // subtracted here (declared_length bakes in one pad byte per chunk
         // that this decoder's chunk offset -- offset 9, not 8 -- excludes).
         const declaredLength = f.declaredLength ? f.declaredLength - f.totalParts : f.declaredLength;
-        this._pending.set(f.msgId, { kind: "text", sender: f.sender, total: f.totalParts, declaredLength, chunks: new Map() });
+        this._evictStaleAndExcess();
+        this._pending.set(f.msgId, {
+          kind: "text", sender: f.sender, total: f.totalParts, declaredLength, chunks: new Map(),
+          createdAt: performance.now(),
+        });
         return null;
       }
       if (f.type === MSG_TYPE_VOICE_START) {
+        this._evictStaleAndExcess();
         this._pending.set(f.msgId, {
           kind: "voice", sender: f.sender, total: f.totalParts, declaredLength: f.declaredLength,
-          chunks: new Map(), durationMs: f.durationMs,
+          chunks: new Map(), durationMs: f.durationMs, createdAt: performance.now(),
         });
         return null;
       }
       if (f.type === MSG_TYPE_IMAGE_START) {
         const width = f.inlineData.length >= 2 ? readLe16(f.inlineData, 0) : null;
         const height = f.inlineData.length >= 4 ? readLe16(f.inlineData, 2) : null;
+        this._evictStaleAndExcess();
         this._pending.set(f.msgId, {
           kind: "image", sender: f.sender, total: f.totalParts, declaredLength: f.declaredLength,
-          chunks: new Map(), width, height,
+          chunks: new Map(), width, height, createdAt: performance.now(),
         });
         return null;
       }
@@ -359,7 +390,8 @@ const AT2Protocol = (() => {
         // it forever.
         const kind = MSG_CHUNK_KIND[c.type];
         if (!kind) return null;
-        entry = { kind, sender: null, total: null, declaredLength: null, chunks: new Map() };
+        this._evictStaleAndExcess();
+        entry = { kind, sender: null, total: null, declaredLength: null, chunks: new Map(), createdAt: performance.now() };
         this._pending.set(c.msgId, entry);
       }
       entry.chunks.set(c.seq, c.data);

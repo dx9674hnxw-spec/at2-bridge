@@ -26,6 +26,7 @@ a real radio's actual output, only against this project's own encoder.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 from .frame import At2Packet, build_payload, encode_frame
@@ -321,6 +322,19 @@ _FULL_CHUNK_BYTES = {
 }
 _CHUNK_KIND = {TYPE_TEXT_CHUNK: "text", TYPE_VOICE_CHUNK: "voice", TYPE_IMAGE_CHUNK: "image"}
 
+# Bounds on MessageAssembler._pending -- without these, a flood of bogus
+# start/chunk frames (anything any RF/BLE transmitter in range can send,
+# no auth possible at that layer) grows _pending without limit, since
+# nothing here previously expired an entry that never got completed
+# (a start frame whose chunks never arrive, or -- since the orphan-chunk
+# recovery below was added -- an orphan chunk with a msg_id that never
+# gets a matching start frame either). A real connection normally has at
+# most ~1 message in flight at a time (see device.py's ack-gated,
+# one-frame-at-a-time sender), so both limits are generous headroom
+# against a hostile flood, not a normal-usage constraint.
+_MAX_PENDING_MESSAGES = 64
+_PENDING_MESSAGE_TTL_SECONDS = 120.0
+
 
 def _trim_to_declared(data: bytes, declared_length: int | None) -> bytes:
     """Ported from `OfflineMessageAssembler.kt::trimToDeclared`. The radio's
@@ -342,10 +356,12 @@ class MessageAssembler:
     """Buffers start + chunk frames per msg_id and yields a
     `CompletedMessage` once every declared part has arrived.
 
-    One instance should be reused per connection (it has no timeout /
-    cleanup logic for abandoned partial messages yet -- fine for now
-    given messages are small and connections are short-lived in
-    practice, but worth revisiting if this sees heavy use).
+    One instance should be reused per connection. Abandoned partial
+    messages (a start frame whose chunks never arrive, or an orphan
+    chunk that never gets a matching start) are bounded by
+    `_MAX_PENDING_MESSAGES` / `_PENDING_MESSAGE_TTL_SECONDS` above --
+    see `_evict_stale_and_excess()` -- rather than left to accumulate
+    forever.
     """
 
     def __init__(self) -> None:
@@ -358,6 +374,28 @@ class MessageAssembler:
         if isinstance(parsed, OfflineStartFrame):
             return self._on_start(parsed)
         return self._on_chunk(parsed)
+
+    def _evict_stale_and_excess(self) -> None:
+        """Called right before inserting a new pending entry, so the caps
+        hold even under a sustained flood rather than only being checked
+        once memory has already grown. First drops anything older than
+        the TTL (a real multi-chunk message completes in well under
+        that); if still at/over the cap, drops the oldest remaining
+        entries -- a real device only ever has ~1 message in flight, so
+        anything pushing past the cap is far more likely to be junk than
+        a legitimate backlog."""
+        if not self._pending:
+            return
+        now = time.monotonic()
+        stale_ids = [msg_id for msg_id, entry in self._pending.items()
+                     if now - entry["created_at"] > _PENDING_MESSAGE_TTL_SECONDS]
+        for msg_id in stale_ids:
+            del self._pending[msg_id]
+        if len(self._pending) >= _MAX_PENDING_MESSAGES:
+            oldest_first = sorted(self._pending.items(), key=lambda kv: kv[1]["created_at"])
+            evict_count = len(self._pending) - _MAX_PENDING_MESSAGES + 1
+            for msg_id, _entry in oldest_first[:evict_count]:
+                del self._pending[msg_id]
 
     def _on_start(self, f: OfflineStartFrame) -> CompletedMessage | None:
         if f.type == TYPE_TEXT_START:
@@ -386,25 +424,30 @@ class MessageAssembler:
             # the right target instead of leaving `total_parts` stray
             # bytes behind.
             declared_length = f.declared_length - f.total_parts if f.declared_length else f.declared_length
+            self._evict_stale_and_excess()
             self._pending[f.msg_id] = {
                 "kind": "text", "sender": f.sender, "total": f.total_parts,
-                "declared_length": declared_length, "chunks": {},
+                "declared_length": declared_length, "chunks": {}, "created_at": time.monotonic(),
             }
             return None
 
         if f.type == TYPE_VOICE_START:
+            self._evict_stale_and_excess()
             self._pending[f.msg_id] = {
                 "kind": "voice", "sender": f.sender, "total": f.total_parts,
                 "declared_length": f.declared_length, "chunks": {}, "duration_ms": f.duration_ms,
+                "created_at": time.monotonic(),
             }
             return None
 
         if f.type == TYPE_IMAGE_START:
             width = int.from_bytes(f.inline_data[0:2], "little") if len(f.inline_data) >= 2 else None
             height = int.from_bytes(f.inline_data[2:4], "little") if len(f.inline_data) >= 4 else None
+            self._evict_stale_and_excess()
             self._pending[f.msg_id] = {
                 "kind": "image", "sender": f.sender, "total": f.total_parts,
                 "declared_length": f.declared_length, "chunks": {}, "width": width, "height": height,
+                "created_at": time.monotonic(),
             }
             return None
         return None
@@ -427,8 +470,10 @@ class MessageAssembler:
             kind = _CHUNK_KIND.get(c.type)
             if kind is None:
                 return None
+            self._evict_stale_and_excess()
             entry = self._pending[c.msg_id] = {
                 "kind": kind, "sender": None, "total": None, "declared_length": None, "chunks": {},
+                "created_at": time.monotonic(),
             }
         entry["chunks"][c.seq] = c.data
 
