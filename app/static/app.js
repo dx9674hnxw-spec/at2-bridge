@@ -1099,44 +1099,15 @@ SETTINGS_SLIDERS.forEach(([sliderId]) => {
   refreshSettingValue(sliderId);
 });
 
+// Dual Watch's focus A/B remain individual, immediate actions (there's no
+// "current value" sitting in a field to batch -- clicking one just tells
+// the radio which side to key up on right now), unlike every other
+// setting below which is now sent as one batch via "Appliquer tout".
 $$("[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const action = btn.dataset.action;
+    if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
     try {
-      if (action === "set-volume") {
-        await applyVolumeLevel(parseInt($("#volume-slider").value, 10));
-        showToast(t("settings.applied"), "success");
-        return;
-      }
-      // Les autres réglages ne sont pas encore câblés côté client BLE
-      // (ble-client.js ne supporte pour l'instant que connect/selectChannel/
-      // setVolume/sendText/PTT) -- éviter un appel serveur voué à échouer
-      // avec un 409 confus quand aucune connexion serveur n'est active.
-      if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
-      if (action === "set-squelch") await api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) });
-      if (action === "set-vox") await api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked });
-      if (action === "set-vox-sensitivity") await api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) });
-      if (action === "set-tot") await api("PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) });
-      if (action === "set-tx-inhibit") await api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked });
-      if (action === "set-noise-reduction") await api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked });
-      if (action === "set-prompt-tone") await api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked });
-      if (action === "set-prompt-language") await api("PUT", "/api/device/prompt-language", { english: $("#prompt-language-toggle").checked });
-      if (action === "set-tx-interval") await api("PUT", "/api/device/tx-interval", { seconds: parseInt($("#tx-interval-slider").value, 10) });
-      if (action === "set-device-name") {
-        const name = $("#device-name-input").value.trim();
-        if (!name) return showToast(t("settings.deviceNameRequired"), "info");
-        await api("PUT", "/api/device/name", { name });
-      }
-      if (action === "set-smart-link") await api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked });
-      if (action === "set-dual-watch") await api("PUT", "/api/device/dual-watch", { enabled: $("#dual-watch-toggle").checked });
-      if (action === "set-dual-watch-channel-a") {
-        const channel = parseInt($("#dual-watch-channel-a").value, 10);
-        await api("PUT", "/api/device/dual-watch/channel", { side: "A", channel });
-      }
-      if (action === "set-dual-watch-channel-b") {
-        const channel = parseInt($("#dual-watch-channel-b").value, 10);
-        await api("PUT", "/api/device/dual-watch/channel", { side: "B", channel });
-      }
       if (action === "set-dual-watch-focus-a") await api("PUT", "/api/device/dual-watch/focus", { side: "A" });
       if (action === "set-dual-watch-focus-b") await api("PUT", "/api/device/dual-watch/focus", { side: "B" });
       showToast(t("settings.applied"), "success");
@@ -1144,13 +1115,19 @@ $$("[data-action]").forEach((btn) => {
   });
 });
 
+function setSettingsReadStatus(text) {
+  const el = $("#settings-read-status");
+  el.textContent = text;
+  el.hidden = !text;
+}
+
 // Read-back: confirmed on real hardware (07/09/2026, see README) that the
 // radio DOES answer these queries -- contrary to what this project assumed
 // until then. Server mode only (no BLE-local client support for these
-// yet, same limitation as the "Appliquer" buttons above). Reads happen
-// one at a time and independently: a setting the radio doesn't answer
-// (e.g. an unconfirmed one, or a flaky link) just doesn't update its
-// control instead of aborting the whole batch.
+// yet, same limitation as "Appliquer tout" below). Reads happen one at a
+// time and independently: a setting the radio doesn't answer (e.g. an
+// unconfirmed one, or a flaky link) just doesn't update its control
+// instead of aborting the whole batch.
 $("#btn-read-settings").addEventListener("click", async () => {
   if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
   const btn = $("#btn-read-settings");
@@ -1181,22 +1158,78 @@ $("#btn-read-settings").addEventListener("click", async () => {
   }
   btn.disabled = false;
   btn.textContent = originalLabel;
-  $("#settings-read-status").textContent = t("settings.readAt", { time: new Date().toLocaleTimeString() });
+  setSettingsReadStatus(t("settings.readAt", { time: new Date().toLocaleTimeString() }));
   showToast(t("settings.readResult", { ok, fail }), fail ? "info" : "success");
+});
+
+// Apply all: one button sends every setting on this tab to the radio in a
+// single pass, instead of a separate "Appliquer" per card. In local BLE
+// mode only Volume is wired up client-side (see applyVolumeLevel above),
+// so that's the only one sent there.
+$("#btn-apply-settings").addEventListener("click", async () => {
+  const transport = activeTransport();
+  if (transport === "local") {
+    try {
+      await applyVolumeLevel(parseInt($("#volume-slider").value, 10));
+      showToast(t("settings.applyAllLocalOnly"), "info");
+    } catch (e) { showToast(e.message, "error"); }
+    return;
+  }
+  if (transport !== "server") return showToast(t("gps.noActiveConnection"), "info");
+
+  const btn = $("#btn-apply-settings");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("settings.applying");
+
+  const tasks = [
+    ["PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) }],
+    ["PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) }],
+    ["PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked }],
+    ["PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) }],
+    ["PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) }],
+    ["PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked }],
+    ["PUT", "/api/device/tx-interval", { seconds: parseInt($("#tx-interval-slider").value, 10) }],
+    ["PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked }],
+    ["PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked }],
+    ["PUT", "/api/device/prompt-language", { english: $("#prompt-language-toggle").checked }],
+    ["PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked }],
+    ["PUT", "/api/device/dual-watch", { enabled: $("#dual-watch-toggle").checked }],
+    ["PUT", "/api/device/dual-watch/channel", { side: "A", channel: parseInt($("#dual-watch-channel-a").value, 10) }],
+    ["PUT", "/api/device/dual-watch/channel", { side: "B", channel: parseInt($("#dual-watch-channel-b").value, 10) }],
+  ];
+  // Device name is skipped when left blank, same guard the old per-field
+  // handler had -- never overwrite the radio's name with an empty string
+  // just because the field wasn't touched.
+  const deviceName = $("#device-name-input").value.trim();
+  if (deviceName) tasks.push(["PUT", "/api/device/name", { name: deviceName }]);
+
+  let ok = 0, fail = 0;
+  for (const [method, path, body] of tasks) {
+    try {
+      await api(method, path, body);
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+  showToast(t("settings.applyAllResult", { ok, fail }), fail ? "info" : "success");
 });
 
 // Reset: purely a form reset (back to each field's HTML default value) --
 // does NOT send anything to the radio. Useful to clear a form full of
 // values just read back from the radio, or abandon in-progress edits,
-// without hunting down each control by hand. Still requires clicking the
-// usual "Appliquer" buttons afterward to actually apply anything.
+// without hunting down each control by hand. Still requires clicking
+// "Appliquer tout" afterward to actually apply anything.
 $("#btn-reset-settings").addEventListener("click", () => {
   $$("#tab-device input").forEach((el) => {
     if (el.type === "checkbox") el.checked = el.defaultChecked;
     else el.value = el.defaultValue;
   });
   SETTINGS_SLIDERS.forEach(([sliderId]) => refreshSettingValue(sliderId));
-  $("#settings-read-status").textContent = "";
+  setSettingsReadStatus("");
   showToast(t("settings.resetDone"), "info");
 });
 

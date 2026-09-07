@@ -403,9 +403,11 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .dual-watch-focus-btns { display: flex; gap: 6px; }
 .dual-watch-focus-btns button { flex: 1; }
 
+.settings-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
 .settings-read-status {
   font-family: var(--font-mono); font-size: 11px; color: var(--color-text-subtle);
-  margin-top: 4px; text-align: right;
+  margin-bottom: 14px; text-align: right;
 }
 
 /* -- Off-grid messaging (ATAK VX-inspired, ported from Demo/at2-bridge-demo-v6.html)
