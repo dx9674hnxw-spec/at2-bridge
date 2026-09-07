@@ -47,6 +47,7 @@ const I18N_DICT = {
     "tab.channels": "Canaux",
     "tab.settings": "Réglages",
     "tab.messages": "Messagerie",
+    "tab.map": "Carte",
     "tab.log": "Journal",
 
     // Debug: envoi de trame brute (expérimental)
@@ -202,6 +203,23 @@ const I18N_DICT = {
     "msg.recordVoice": "Message vocal",
     "msg.send": "Envoyer",
     "msg.hint": "Groupes = canaux radio utilisés comme salons de discussion hors-réseau (sélectionner un groupe change le canal actif de la radio).",
+
+    // Map tab
+    "map.title": "Carte",
+    "map.viewRadar": "Vue radar",
+    "map.viewMap": "Vue carte",
+    "map.centerOnMe": "Centrer sur moi",
+    "map.knownCount": "{n} position(s) connue(s)",
+    "map.empty": "Aucune balise reçue pour l'instant — envoie ta position ou attends celle d'un autre poste.",
+    "map.you": "Toi",
+    "map.hint": "Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).",
+    "map.leafletUnavailable": "Carte OpenStreetMap indisponible (pas de connexion Internet ?) — vue radar utilisée.",
+    "map.locating": "Localisation en cours…",
+    "map.distanceKm": "{km} km",
+    "map.secondsAgo": "il y a {n} s",
+    "map.minutesAgo": "il y a {n} min",
+    "map.hoursAgo": "il y a {n} h",
+    "map.daysAgo": "il y a {n} j",
     "msg.channelFallback": "Canal {n}",
     "msg.messageCount": "{n} message(s)",
     "msg.statusFreq": "MHz",
@@ -259,6 +277,7 @@ const I18N_DICT = {
     "tab.channels": "Channels",
     "tab.settings": "Settings",
     "tab.messages": "Messaging",
+    "tab.map": "Map",
     "tab.log": "Log",
 
     // Debug: raw frame send (experimental)
@@ -407,6 +426,23 @@ const I18N_DICT = {
     "msg.recordVoice": "Voice message",
     "msg.send": "Send",
     "msg.hint": "Groups = radio channels used as off-grid chat rooms (selecting a group switches the radio's active channel).",
+
+    // Map tab
+    "map.title": "Map",
+    "map.viewRadar": "Radar view",
+    "map.viewMap": "Map view",
+    "map.centerOnMe": "Center on me",
+    "map.knownCount": "{n} known position(s)",
+    "map.empty": "No beacons received yet — send your position or wait for one from another radio.",
+    "map.you": "You",
+    "map.hint": "Positions extracted from received offline beacons (see README: no structured GPS addressing in the protocol, only formatted 📍/🆘 text).",
+    "map.leafletUnavailable": "OpenStreetMap unavailable (no Internet connection?) — using the radar view instead.",
+    "map.locating": "Locating…",
+    "map.distanceKm": "{km} km",
+    "map.secondsAgo": "{n}s ago",
+    "map.minutesAgo": "{n}m ago",
+    "map.hoursAgo": "{n}h ago",
+    "map.daysAgo": "{n}d ago",
     "msg.channelFallback": "Channel {n}",
     "msg.messageCount": "{n} message(s)",
     "msg.statusFreq": "MHz",

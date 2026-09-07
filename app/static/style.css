@@ -441,6 +441,48 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .msg-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
 @media (max-width: 860px) { .msg-layout { grid-template-columns: 1fr; } }
 
+/* -- Map tab: last known position of every sender who has shared a GPS
+   beacon (see app.js's beacon-parsing block for how these are extracted
+   from plain-text position/SOS messages -- no structured location type
+   exists in the real protocol). Leaflet + OSM tiles when available; a
+   dependency-free SVG "radar" (distance/bearing from your own fix, no
+   basemap) when Leaflet didn't load, since this app is meant to work
+   fully off-grid and tiles need Internet. ---------------------------- */
+.map-layout { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; margin-bottom: 12px; }
+@media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
+
+.map-canvas-wrap {
+  position: relative; height: 420px; border-radius: var(--radius-lg);
+  overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt);
+}
+#map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Leaflet's own chrome (zoom control, attribution) is a light-mode design
+   by default -- round its corners just enough to not clash with the
+   app's otherwise square-free surfaces, without reskinning it entirely. */
+.leaflet-control-zoom a { border-radius: var(--radius-sm) !important; }
+.leaflet-bar { border-radius: var(--radius-sm) !important; overflow: hidden; }
+
+.radar-ring { fill: none; stroke: var(--color-border); stroke-width: 1; }
+.radar-axis { stroke: var(--color-border); stroke-width: 1; }
+.radar-self { fill: var(--color-primary); stroke: var(--color-bg); stroke-width: 2; }
+.radar-point { fill: var(--status-up); stroke: var(--color-bg); stroke-width: 2; }
+.radar-point.sos { fill: var(--status-down); }
+.radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
+
+.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.map-beacon-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  border-radius: var(--radius-md); background-color: rgba(18, 18, 18, 0.92);
+  border: 1px solid var(--color-border); cursor: pointer;
+}
+.map-beacon-row:hover { border-color: var(--color-border-strong); }
+.map-beacon-row.sos { border-color: var(--status-down-border); background: var(--status-down-bg); }
+.map-beacon-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--status-up); flex: none; }
+.map-beacon-row.sos .map-beacon-dot { background: var(--status-down); }
+.map-beacon-info { min-width: 0; }
+.map-beacon-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
+.map-beacon-sub { font-size: 11px; color: var(--color-text-subtle); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .group-list {
   background-color: rgba(18, 18, 18, 0.92);
   border: 1px solid var(--color-border);

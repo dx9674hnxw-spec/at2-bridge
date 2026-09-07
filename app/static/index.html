@@ -6,6 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AT2 Bridge</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -34,6 +35,7 @@
       <button class="tab" data-tab="channels" data-i18n="tab.channels">Canaux</button>
       <button class="tab" data-tab="device" data-i18n="tab.settings">Réglages</button>
       <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
+      <button class="tab" data-tab="map" data-i18n="tab.map">Carte</button>
       <button class="tab" data-tab="log" data-i18n="tab.log">Journal</button>
     </nav>
   </div>
@@ -359,6 +361,29 @@
       <p class="hint" style="margin-top:14px;" data-i18n="msg.hint">Groupes = canaux radio utilisés comme salons de discussion hors-réseau (sélectionner un groupe change le canal actif de la radio).</p>
     </section>
 
+    <section id="tab-map" class="tab-panel">
+      <div class="card">
+        <div class="ptt-header">
+          <div>
+            <div class="ptt-device-name" data-i18n="map.title">Carte</div>
+            <div class="ptt-device-sub" id="map-sub">—</div>
+          </div>
+          <div class="settings-toolbar">
+            <button class="btn-ghost" id="map-view-toggle" data-i18n="map.viewRadar">Vue radar</button>
+            <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
+          </div>
+        </div>
+        <div class="map-layout">
+          <div class="map-canvas-wrap">
+            <div id="map-canvas"></div>
+            <svg id="map-radar" hidden></svg>
+          </div>
+          <div class="map-beacon-list" id="map-beacon-list"></div>
+        </div>
+        <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
+      </div>
+    </section>
+
     <section id="tab-log" class="tab-panel">
       <div class="card" style="margin-bottom:14px;">
         <div class="ptt-device-sub" style="margin-bottom:6px; font-weight:600;" data-i18n="debug.rawFrameTitle">🧪 Debug — Envoi de trame brute (expérimental)</div>
@@ -408,6 +433,12 @@
   <script src="/static/ptt-amr-codec.js"></script>
   <script src="/static/ble-client.js"></script>
   <script src="/static/ptt-audio.js"></script>
+  <!-- No network access needed for the radio features above -- this is the
+       one exception: OpenStreetMap tiles for the Carte tab need Internet.
+       If this fails to load (offline server, no Internet at the client),
+       `L` stays undefined and app.js falls back to the dependency-free
+       radar view -- see its "GPS beacons / Map tab" section. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

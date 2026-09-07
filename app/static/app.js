@@ -867,6 +867,7 @@ function requestLocation() {
       $("#gps-coords").textContent = formatCoords(lastCoords.lat, lastCoords.lon);
       $("#gps-accuracy").textContent = t("gps.accuracy", { meters: Math.round(lastCoords.acc) });
       updateGpsFix(true, t("gps.fixAcquired"));
+      renderMapIfActive(); // distances/bearings on the Map tab depend on lastCoords
     },
     () => updateGpsFix(false, t("gps.denied")),
     { enableHighAccuracy: true, timeout: 8000 }
@@ -881,7 +882,14 @@ async function sendPositionPayload(url, note) {
   if (transport === "server") {
     await api("POST", url, { username, lat: lastCoords.lat, lon: lastCoords.lon, note });
   } else if (transport === "local") {
-    await AT2BleClient.sendText(username, `${note} 📍 ${formatCoords(lastCoords.lat, lastCoords.lon)}`);
+    // Same wire format as device.py::send_position (bare "lat,lon", 5
+    // decimals, no ° symbol) -- was previously built from formatCoords()
+    // (meant for the on-screen readout only, "48.88800° , 2.38453°"),
+    // making local-BLE position messages a different shape than server
+    // mode's for no protocol reason. Matters now that the Map tab parses
+    // this text back out to plot beacons.
+    const posText = `${note ? note + " " : ""}📍 ${lastCoords.lat.toFixed(5)},${lastCoords.lon.toFixed(5)}`;
+    await AT2BleClient.sendText(username, posText);
   } else {
     showToast(t("gps.noActiveConnection"), "info");
   }
@@ -923,6 +931,249 @@ $("#sos-btn").addEventListener("click", async () => {
     btn.textContent = t("gps.sosSent");
     setTimeout(() => { btn.classList.remove("sent"); btn.textContent = t("gps.sos"); }, 2200);
   } catch (e) { showToast(e.message, "error"); }
+});
+
+// ---------------------------------------------------------------------------
+// Map tab: last known position of every sender who has shared a GPS
+// beacon. There's no structured "Position" message type in the real
+// protocol (see README) -- device.py::send_position/send_sos just format
+// it as plain text prefixed with 📍/🆘, so this mirrors every completed
+// text message (see addMessage() above) through the same parser used for
+// the chat bubbles, and keeps a dedicated store of whatever matches.
+// ---------------------------------------------------------------------------
+
+const BEACON_STORE_KEY = "at2_beacons";
+const BEACON_MAX = 300;
+
+// Tolerates two shapes: server mode's bare "lat,lon" (5 decimals, no °,
+// see device.py::send_position) and local BLE mode's previous "lat° ,
+// lon°" (fixed above to match server mode, but old messages already
+// sitting in a browser's localStorage may still be in that shape).
+const POSITION_RE = /📍\s*(-?\d{1,3}(?:\.\d+)?)°?\s*,\s*(-?\d{1,3}(?:\.\d+)?)°?/;
+
+function parsePositionText(text) {
+  if (!text) return null;
+  const m = POSITION_RE.exec(text);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lon = parseFloat(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const note = text.slice(0, m.index).replace(/^🆘\s*/, "").trim();
+  return { lat, lon, note, sos: text.includes("🆘") };
+}
+
+function loadBeacons() {
+  try {
+    const raw = localStorage.getItem(BEACON_STORE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveBeacons() {
+  try { localStorage.setItem(BEACON_STORE_KEY, JSON.stringify(beacons)); } catch (e) {}
+}
+let beacons = loadBeacons();
+let nextBeaconId = 1;
+
+// `msg`: the same object addMessage() just stored (kind, sender, mine,
+// text). Shown app-wide on the map regardless of which channel it arrived
+// on -- a GPS fix means the same thing everywhere, and the protocol has
+// no real per-channel addressing anyway (see README), so the chat tab's
+// channel bucketing isn't meaningful here.
+function recordBeaconFromMessage(msg) {
+  if (msg.kind !== "text") return;
+  const parsed = parsePositionText(msg.text);
+  if (!parsed) return;
+  beacons.push({
+    id: nextBeaconId++, sender: msg.sender, mine: !!msg.mine,
+    lat: parsed.lat, lon: parsed.lon, note: parsed.note, sos: parsed.sos,
+    time: Date.now(),
+  });
+  if (beacons.length > BEACON_MAX) beacons.splice(0, beacons.length - BEACON_MAX);
+  saveBeacons();
+  renderMapIfActive();
+}
+
+// One marker per sender (the most recent beacon they've sent), not a full
+// trail -- keeps both the list and the map legible with more than a
+// handful of people. Sorted most-recent-first.
+function latestBeaconsBySender() {
+  const bySender = new Map();
+  for (const b of beacons) {
+    const key = b.mine ? "__mine__" : b.sender;
+    const cur = bySender.get(key);
+    if (!cur || b.time > cur.time) bySender.set(key, b);
+  }
+  return Array.from(bySender.values()).sort((a, b) => b.time - a.time);
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function bearingDegrees(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
+}
+function timeAgoLabel(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return t("map.secondsAgo", { n: s });
+  if (s < 3600) return t("map.minutesAgo", { n: Math.round(s / 60) });
+  if (s < 86400) return t("map.hoursAgo", { n: Math.round(s / 3600) });
+  return t("map.daysAgo", { n: Math.round(s / 86400) });
+}
+
+// Leaflet loaded (see index.html's script tag) only if the client had
+// Internet access to fetch it from cdnjs -- `L` stays undefined otherwise
+// (this app runs off-grid by design, so that's an expected, not
+// exceptional, outcome). Falls back to the dependency-free radar view,
+// user-toggleable rather than auto-detected: there's no reliable, cheap
+// way to tell "the library loaded fine but tiles themselves are
+// unreachable" after the fact.
+const LEAFLET_AVAILABLE = typeof L !== "undefined";
+let leafletMap = null;
+let leafletMarkers = [];
+let mapViewMode = LEAFLET_AVAILABLE ? "map" : "radar";
+if (!LEAFLET_AVAILABLE) {
+  $("#map-view-toggle").disabled = true;
+  $("#map-view-toggle").title = t("map.leafletUnavailable");
+}
+
+function ensureLeafletMap() {
+  if (leafletMap || !LEAFLET_AVAILABLE) return;
+  leafletMap = L.map("map-canvas").setView([0, 0], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap",
+  }).addTo(leafletMap);
+}
+
+function renderMapBeaconList(list) {
+  const el = $("#map-beacon-list");
+  if (!list.length) {
+    el.innerHTML = `<div class="hint" style="padding:16px 4px;">${t("map.empty")}</div>`;
+    return;
+  }
+  el.innerHTML = list.map((b) => {
+    const dist = lastCoords ? t("map.distanceKm", { km: haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon).toFixed(2) }) : "—";
+    const label = b.mine ? t("map.you") : b.sender;
+    return `
+      <div class="map-beacon-row ${b.sos ? "sos" : ""}" data-lat="${b.lat}" data-lon="${b.lon}">
+        <span class="map-beacon-dot"></span>
+        <div class="map-beacon-info">
+          <div class="map-beacon-name">${escapeHtml(label)}${b.sos ? " 🆘" : ""}</div>
+          <div class="map-beacon-sub">${dist} · ${timeAgoLabel(b.time)}${b.note ? " · " + escapeHtml(b.note) : ""}</div>
+        </div>
+      </div>`;
+  }).join("");
+  el.querySelectorAll(".map-beacon-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      const lat = parseFloat(row.dataset.lat);
+      const lon = parseFloat(row.dataset.lon);
+      if (mapViewMode === "map" && leafletMap) leafletMap.setView([lat, lon], 14);
+    });
+  });
+}
+
+function renderRadar(list) {
+  const svg = $("#map-radar");
+  const size = 320;
+  const center = size / 2;
+  const rings = [0.25, 0.5, 0.75, 1]
+    .map((f) => `<circle cx="${center}" cy="${center}" r="${center * f - 4}" class="radar-ring" />`)
+    .join("");
+  let parts = [];
+  if (lastCoords && list.length) {
+    let maxKm = 1;
+    for (const b of list) maxKm = Math.max(maxKm, haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon));
+    const scale = (center - 28) / maxKm;
+    for (const b of list) {
+      const km = haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon);
+      const brg = bearingDegrees(lastCoords.lat, lastCoords.lon, b.lat, b.lon);
+      const rad = ((brg - 90) * Math.PI) / 180; // 0°=North drawn pointing up
+      const r = km * scale;
+      const x = center + r * Math.cos(rad);
+      const y = center + r * Math.sin(rad);
+      const label = b.mine ? t("map.you") : b.sender;
+      parts.push(`<circle cx="${x}" cy="${y}" r="6" class="radar-point ${b.sos ? "sos" : ""}" />`);
+      parts.push(`<text x="${x}" y="${y - 10}" class="radar-label">${escapeHtml(label)}</text>`);
+    }
+  }
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  svg.innerHTML = `
+    ${rings}
+    <line x1="${center}" y1="4" x2="${center}" y2="${size - 4}" class="radar-axis" />
+    <line x1="4" y1="${center}" x2="${size - 4}" y2="${center}" class="radar-axis" />
+    <circle cx="${center}" cy="${center}" r="5" class="radar-self" />
+    ${parts.join("")}
+  `;
+}
+
+function renderMap() {
+  const list = latestBeaconsBySender();
+  $("#map-sub").textContent = t("map.knownCount", { n: list.length });
+  renderMapBeaconList(list);
+
+  if (mapViewMode === "map" && LEAFLET_AVAILABLE) {
+    ensureLeafletMap();
+    $("#map-canvas").hidden = false;
+    $("#map-radar").hidden = true;
+    leafletMarkers.forEach((m) => leafletMap.removeLayer(m));
+    leafletMarkers = [];
+    const bounds = [];
+    if (lastCoords) {
+      const mine = L.circleMarker([lastCoords.lat, lastCoords.lon], {
+        radius: 7, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1, weight: 2,
+      }).addTo(leafletMap).bindTooltip(t("map.you"));
+      leafletMarkers.push(mine);
+      bounds.push([lastCoords.lat, lastCoords.lon]);
+    }
+    for (const b of list) {
+      if (b.mine) continue; // already drawn from lastCoords above (more current than the last beacon sent)
+      const color = b.sos ? "#ef4444" : "#10b981";
+      const marker = L.circleMarker([b.lat, b.lon], {
+        radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 2,
+      }).addTo(leafletMap).bindTooltip(`${b.sender}${b.sos ? " 🆘" : ""}`);
+      leafletMarkers.push(marker);
+      bounds.push([b.lat, b.lon]);
+    }
+    if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    leafletMap.invalidateSize();
+  } else {
+    $("#map-canvas").hidden = true;
+    $("#map-radar").hidden = false;
+    renderRadar(list);
+  }
+}
+
+function renderMapIfActive() {
+  if ($("#tab-map").classList.contains("active")) renderMap();
+}
+
+$("#map-view-toggle").addEventListener("click", () => {
+  if (!LEAFLET_AVAILABLE) return showToast(t("map.leafletUnavailable"), "info");
+  mapViewMode = mapViewMode === "map" ? "radar" : "map";
+  $("#map-view-toggle").textContent = mapViewMode === "map" ? t("map.viewRadar") : t("map.viewMap");
+  renderMap();
+});
+$("#map-center-btn").addEventListener("click", () => {
+  requestLocation();
+  showToast(t("map.locating"), "info");
+});
+// The generic tab switcher (see "Tabs" above) only toggles .active classes;
+// hook the Map tab specifically to (re)render once its panel is actually
+// visible -- Leaflet reports a zero-size map until invalidateSize() runs
+// against a visible container, and the beacon list should reflect
+// anything received while another tab was open.
+$$(".tab").forEach((tabBtn) => {
+  if (tabBtn.dataset.tab === "map") tabBtn.addEventListener("click", () => setTimeout(renderMap, 0));
 });
 
 // ---------------------------------------------------------------------------
@@ -1330,6 +1581,7 @@ function addMessage(channel, msg) {
   list.push({ ...msg, localId: nextLocalMsgId++, time: Date.now() });
   if (list.length > MSG_MAX_PER_CHANNEL) list.splice(0, list.length - MSG_MAX_PER_CHANNEL);
   saveMessageStore();
+  recordBeaconFromMessage(msg);
   renderGroupList();
   if (channel === activeChannel) renderThread();
 }
