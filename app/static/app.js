@@ -1185,6 +1185,21 @@ $("#btn-read-settings").addEventListener("click", async () => {
   showToast(t("settings.readResult", { ok, fail }), fail ? "info" : "success");
 });
 
+// Reset: purely a form reset (back to each field's HTML default value) --
+// does NOT send anything to the radio. Useful to clear a form full of
+// values just read back from the radio, or abandon in-progress edits,
+// without hunting down each control by hand. Still requires clicking the
+// usual "Appliquer" buttons afterward to actually apply anything.
+$("#btn-reset-settings").addEventListener("click", () => {
+  $$("#tab-device input").forEach((el) => {
+    if (el.type === "checkbox") el.checked = el.defaultChecked;
+    else el.value = el.defaultValue;
+  });
+  SETTINGS_SLIDERS.forEach(([sliderId]) => refreshSettingValue(sliderId));
+  $("#settings-read-status").textContent = "";
+  showToast(t("settings.resetDone"), "info");
+});
+
 // ---------------------------------------------------------------------------
 // Off-grid messaging. Groups = radio channels used as chat rooms: the wire
 // protocol has no per-channel addressing at all -- a message just goes out
