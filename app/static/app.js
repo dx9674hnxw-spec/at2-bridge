@@ -445,13 +445,19 @@ async function refreshTargetList() {
   const select = $("#target-select");
   if (selectedServerTransport === "serial") {
     const ports = await api("GET", "/api/connection/serial/ports");
+    // p.path/p.description come from the OS's USB device descriptors
+    // (pyserial's list_ports.comports()) -- a malicious USB device could
+    // report a crafted descriptor string, so escape before display.
     select.innerHTML = ports.length
-      ? ports.map((p) => `<option value="${p.path}">${p.path} — ${p.description}</option>`).join("")
+      ? ports.map((p) => `<option value="${escapeHtml(p.path)}">${escapeHtml(p.path)} — ${escapeHtml(p.description)}</option>`).join("")
       : `<option value="">${t("devices.noPortsFound")}</option>`;
   } else {
     const devices = await api("GET", "/api/connection/ble/scan");
+    // d.name is the BLE advertised name of ANY device in range -- trivially
+    // spoofable by anyone nearby, and shown here before the user even
+    // chooses to connect to anything. Must be escaped.
     select.innerHTML = devices.length
-      ? devices.map((d) => `<option value="${d.address}" data-name="${d.name}">${d.name} (${d.address})</option>`).join("")
+      ? devices.map((d) => `<option value="${escapeHtml(d.address)}" data-name="${escapeHtml(d.name)}">${escapeHtml(d.name)} (${escapeHtml(d.address)})</option>`).join("")
       : `<option value="">${t("devices.noBleFound")}</option>`;
   }
 }
@@ -572,16 +578,30 @@ async function loadDeviceList() {
         <img class="device-thumb" src="/static/at2-icon.png" alt="AT2" />
         <div class="device-card-info">
           <div class="device-card-name">${escapeHtml(d.name)} <span class="transport-badge transport-badge-${d.transport === "serial" ? "serial" : "ble"}">${transportLabel}</span></div>
-          <div class="device-card-model">${d.target}</div>
+          <div class="device-card-model">${escapeHtml(d.target)}</div>
         </div>
-        <div class="device-card-actions">
-          ${isActive ? "" : `<button class="btn-primary" onclick="reconnectKnownDevice('${d.id}', '${d.transport}', '${d.target}')">${t("devices.connect")}</button>`}
-          <button class="btn-ghost" onclick="forgetKnownDevice('${d.id}')">${t("devices.forget")}</button>
+        <div class="device-card-actions" data-id="${escapeHtml(d.id)}" data-transport="${escapeHtml(d.transport)}" data-target="${escapeHtml(d.target)}">
+          ${isActive ? "" : `<button class="btn-primary btn-reconnect-device">${t("devices.connect")}</button>`}
+          <button class="btn-ghost btn-forget-device">${t("devices.forget")}</button>
         </div>
       </div>`;
     }).join("");
+    // Event delegation via data-* attributes instead of inline
+    // onclick="fn('${...}')" -- id/transport/target are user-controlled
+    // (POST /api/known-devices takes them unvalidated, and BLE-scanned
+    // name/address land here too via the remember-device flow) and
+    // interpolating them into an inline onclick attribute let a single
+    // `'` break out of the JS string literal for actual script injection,
+    // not just HTML markup. .dataset reads back the exact original string
+    // (the browser HTML-decodes attribute values on parse), so escapeHtml
+    // above is only needed to embed them safely in the markup itself.
+    list.querySelectorAll(".device-card-actions").forEach((el) => {
+      const { id, transport, target } = el.dataset;
+      el.querySelector(".btn-reconnect-device")?.addEventListener("click", () => reconnectKnownDevice(id, transport, target));
+      el.querySelector(".btn-forget-device")?.addEventListener("click", () => forgetKnownDevice(id));
+    });
   } catch (e) {
-    list.innerHTML = `<div class="card hint">${e.message}</div>`;
+    list.innerHTML = `<div class="card hint">${escapeHtml(e.message)}</div>`;
   }
 }
 

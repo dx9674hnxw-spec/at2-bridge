@@ -15,7 +15,6 @@ from app.protocol.frame import At2Packet
 from app.transport.base import Transport
 from app.transport.ble_transport import BleTransport
 from app.transport.serial_transport import SerialTransport
-from app import store
 
 logger = logging.getLogger("at2.device")
 

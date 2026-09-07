@@ -25,16 +25,22 @@ app = FastAPI(title="AT2 Bridge")
 # ---------------------------------------------------------------------------
 # Exception handling
 #
-# Without this, any RuntimeError raised deep in app/device.py (most
-# commonly `_require_transport()` when no radio is connected) surfaces
-# to the client as a raw 500 with a Python traceback -- confirmed while
-# testing app/static/app.js against a running server with no radio
-# attached. Two handlers:
-#   - RuntimeError: these are deliberate, human-readable messages
-#     raised on purpose by device.py (e.g. "no active connection",
-#     "channel out of range") -- safe to relay directly, mapped to 409
-#     Conflict (the request was valid, but the current state disallows
-#     it right now).
+# Without this, any RuntimeError/ValueError raised deep in app/device.py
+# or app/protocol/*.py surfaces to the client as a raw 500 with a Python
+# traceback -- confirmed while testing app/static/app.js against a
+# running server with no radio attached. Three handlers:
+#   - RuntimeError: deliberate, human-readable messages raised on
+#     purpose by device.py for state issues (e.g. "no active
+#     connection") -- safe to relay directly, mapped to 409 Conflict
+#     (the request was valid, but the current state disallows it now).
+#   - ValueError: deliberate input-validation errors raised on purpose
+#     throughout app/protocol/*.py (e.g. "channel out of range",
+#     "volume out of range (1..8)", "side must be 'A' or 'B'") -- these
+#     are the only range/format checks most of these fields get (the
+#     Pydantic request models mostly don't constrain them), so without
+#     this handler every one of them was falling through to the generic
+#     500 below instead of a proper 400 with the actual reason. Safe to
+#     relay directly, same reasoning as RuntimeError above.
 #   - Anything else unexpected: still logged in full server-side (per
 #     CONSIGNES_PROJET.md: never silently swallow an error), but the
 #     client gets a generic message instead of an internal traceback.
@@ -43,6 +49,11 @@ app = FastAPI(title="AT2 Bridge")
 @app.exception_handler(RuntimeError)
 async def runtime_error_handler(request: Request, exc: RuntimeError):
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)

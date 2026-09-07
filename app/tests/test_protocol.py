@@ -603,7 +603,6 @@ def test_auth_token_rejects_tampered_signature(monkeypatch):
 
 def test_auth_token_rejects_expired(monkeypatch):
     from app import auth
-    import time
     monkeypatch.setenv("AT2_BRIDGE_PASSWORD", "secret123")
     monkeypatch.setattr(auth, "TOKEN_TTL_SECONDS", -1)  # force immediate expiry
     token = auth.issue_token()
