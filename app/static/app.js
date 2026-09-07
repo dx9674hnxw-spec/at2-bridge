@@ -1078,12 +1078,34 @@ async function applyVolumeLevel(level) {
   else return showToast(t("gps.noActiveConnection"), "info");
 }
 
+// Live numeric readout next to each range slider in the Réglages tab --
+// without this, a slider's exact value (e.g. squelch 0-9 on a wide track)
+// was only visible by carefully eyeballing the handle position.
+const SETTINGS_SLIDERS = [
+  ["volume-slider", "volume-value", (v) => v],
+  ["squelch-slider", "squelch-value", (v) => v],
+  ["vox-sensitivity-slider", "vox-sensitivity-value", (v) => v],
+  ["tot-slider", "tot-value", (v) => `${v}s`],
+  ["tx-interval-slider", "tx-interval-value", (v) => `${v}s`],
+];
+function refreshSettingValue(sliderId) {
+  const entry = SETTINGS_SLIDERS.find(([s]) => s === sliderId);
+  if (!entry) return;
+  const [, valueId, format] = entry;
+  $(`#${valueId}`).textContent = format($(`#${sliderId}`).value);
+}
+SETTINGS_SLIDERS.forEach(([sliderId]) => {
+  $(`#${sliderId}`).addEventListener("input", () => refreshSettingValue(sliderId));
+  refreshSettingValue(sliderId);
+});
+
 $$("[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const action = btn.dataset.action;
     try {
       if (action === "set-volume") {
         await applyVolumeLevel(parseInt($("#volume-slider").value, 10));
+        showToast(t("settings.applied"), "success");
         return;
       }
       // Les autres réglages ne sont pas encore câblés côté client BLE
@@ -1117,6 +1139,7 @@ $$("[data-action]").forEach((btn) => {
       }
       if (action === "set-dual-watch-focus-a") await api("PUT", "/api/device/dual-watch/focus", { side: "A" });
       if (action === "set-dual-watch-focus-b") await api("PUT", "/api/device/dual-watch/focus", { side: "B" });
+      showToast(t("settings.applied"), "success");
     } catch (e) { showToast(e.message, "error"); }
   });
 });
@@ -1130,14 +1153,18 @@ $$("[data-action]").forEach((btn) => {
 // control instead of aborting the whole batch.
 $("#btn-read-settings").addEventListener("click", async () => {
   if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+  const btn = $("#btn-read-settings");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("settings.reading");
   const reads = [
-    ["/api/device/volume", (d) => { $("#volume-slider").value = d.level; }],
-    ["/api/device/squelch", (d) => { $("#squelch-slider").value = d.level; }],
+    ["/api/device/volume", (d) => { $("#volume-slider").value = d.level; refreshSettingValue("volume-slider"); }],
+    ["/api/device/squelch", (d) => { $("#squelch-slider").value = d.level; refreshSettingValue("squelch-slider"); }],
     ["/api/device/vox", (d) => { $("#vox-toggle").checked = d.enabled; }],
-    ["/api/device/vox-sensitivity", (d) => { $("#vox-sensitivity-slider").value = d.level; }],
-    ["/api/device/tot", (d) => { $("#tot-slider").value = d.seconds; }],
+    ["/api/device/vox-sensitivity", (d) => { $("#vox-sensitivity-slider").value = d.level; refreshSettingValue("vox-sensitivity-slider"); }],
+    ["/api/device/tot", (d) => { $("#tot-slider").value = d.seconds; refreshSettingValue("tot-slider"); }],
     ["/api/device/tx-inhibit", (d) => { $("#tx-inhibit-toggle").checked = d.enabled; }],
-    ["/api/device/tx-interval", (d) => { $("#tx-interval-slider").value = d.seconds; }],
+    ["/api/device/tx-interval", (d) => { $("#tx-interval-slider").value = d.seconds; refreshSettingValue("tx-interval-slider"); }],
     ["/api/device/noise-reduction", (d) => { $("#noise-reduction-toggle").checked = d.enabled; }],
     ["/api/device/dual-watch", (d) => { $("#dual-watch-toggle").checked = d.enabled; }],
     ["/api/device/prompt-tone", (d) => { $("#prompt-tone-toggle").checked = d.enabled; }],
@@ -1152,6 +1179,9 @@ $("#btn-read-settings").addEventListener("click", async () => {
       fail++;
     }
   }
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+  $("#settings-read-status").textContent = t("settings.readAt", { time: new Date().toLocaleTimeString() });
   showToast(t("settings.readResult", { ok, fail }), fail ? "info" : "success");
 });
 

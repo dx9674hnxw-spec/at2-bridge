@@ -174,92 +174,173 @@
             <div class="ptt-device-name" data-i18n="settings.title">Réglages appareil</div>
             <div class="ptt-device-sub" id="settings-target-sub" data-i18n="settings.noConnection">Aucune connexion active</div>
           </div>
-          <button class="btn-ghost" id="btn-read-settings" data-i18n="settings.readCurrent" data-i18n-title="settings.readCurrentTitle" title="Relit les réglages confirmés par lecture (mode Serveur uniquement, voir README)">Lire les réglages actuels</button>
+          <div style="text-align:right;">
+            <button class="btn-ghost" id="btn-read-settings" data-i18n="settings.readCurrent" data-i18n-title="settings.readCurrentTitle" title="Relit les réglages confirmés par lecture (mode Serveur uniquement, voir README)">Lire les réglages actuels</button>
+            <div class="settings-read-status" id="settings-read-status"></div>
+          </div>
         </div>
         <div class="settings-grid">
           <div class="setting-card">
-            <label for="volume-slider" data-i18n="settings.volume">Volume (1–8)</label>
-            <input id="volume-slider" type="range" min="1" max="8" value="4" />
+            <div class="setting-card-head">
+              <label for="volume-slider" data-i18n="settings.volume">Volume (1–8)</label>
+              <span class="verify-badge confirmed" data-i18n="settings.badgeConfirmed">✅ Confirmé</span>
+            </div>
+            <div class="setting-row">
+              <input id="volume-slider" type="range" min="1" max="8" value="4" />
+              <span class="setting-value" id="volume-value">4</span>
+            </div>
             <button class="btn-primary" data-action="set-volume" data-i18n="settings.apply">Appliquer</button>
           </div>
           <div class="setting-card">
-            <label for="squelch-slider" data-i18n="settings.squelch">Squelch (0–9)</label>
-            <input id="squelch-slider" type="range" min="0" max="9" value="3" />
+            <div class="setting-card-head">
+              <label for="squelch-slider" data-i18n="settings.squelch">Squelch (0–9)</label>
+              <span class="verify-badge confirmed" data-i18n="settings.badgeConfirmed">✅ Confirmé</span>
+            </div>
+            <div class="setting-row">
+              <input id="squelch-slider" type="range" min="0" max="9" value="3" />
+              <span class="setting-value" id="squelch-value">3</span>
+            </div>
             <button class="btn-primary" data-action="set-squelch" data-i18n="settings.apply">Appliquer</button>
           </div>
           <div class="setting-card">
-            <label><input id="vox-toggle" type="checkbox" /> <span data-i18n="settings.vox">VOX activé</span></label>
+            <div class="setting-card-head">
+              <label data-i18n="settings.vox">VOX activé</label>
+              <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+            </div>
+            <div class="toggle-row">
+              <label class="switch"><input id="vox-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
             <button class="btn-primary" data-action="set-vox" data-i18n="settings.apply">Appliquer</button>
           </div>
         </div>
-        <span class="hint" data-i18n="settings.basicHint">Ces trois réglages ont été vérifiés en communication avec le backend (voir README pour le détail testé/non testé sur radio réelle).</span>
+        <span class="hint" data-i18n="settings.basicHint">Volume et Squelch ont été vérifiés par lecture indépendante sur radio réelle ; VOX communique correctement mais son effet réel reste à confirmer (voir README).</span>
 
         <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-border);">
           <div class="ptt-device-sub" style="margin-bottom:10px; text-transform:uppercase; letter-spacing:0.06em; font-size:11px;" data-i18n="settings.advancedTitle">Réglages avancés</div>
           <div class="settings-grid">
             <div class="setting-card">
-              <label for="vox-sensitivity-slider" data-i18n="settings.voxSensitivity">Sensibilité VOX (1–5)</label>
-              <input id="vox-sensitivity-slider" type="range" min="1" max="5" value="3" />
+              <div class="setting-card-head">
+                <label for="vox-sensitivity-slider" data-i18n="settings.voxSensitivity">Sensibilité VOX (1–5)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="setting-row">
+                <input id="vox-sensitivity-slider" type="range" min="1" max="5" value="3" />
+                <span class="setting-value" id="vox-sensitivity-value">3</span>
+              </div>
               <button class="btn-primary" data-action="set-vox-sensitivity" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label for="tot-slider" data-i18n="settings.tot">Temporisation TX — secondes (0 = désactivé, max 240)</label>
-              <input id="tot-slider" type="range" min="0" max="240" step="10" value="120" />
+              <div class="setting-card-head">
+                <label for="tot-slider" data-i18n="settings.tot">Temporisation TX — secondes (0 = désactivé, max 240)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="setting-row">
+                <input id="tot-slider" type="range" min="0" max="240" step="10" value="120" />
+                <span class="setting-value" id="tot-value">120s</span>
+              </div>
               <button class="btn-primary" data-action="set-tot" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label for="tx-interval-slider" data-i18n="settings.txInterval">Intervalle TX ("hop") — secondes (0 = désactivé, max 240)</label>
-              <input id="tx-interval-slider" type="range" min="0" max="240" step="10" value="0" />
+              <div class="setting-card-head">
+                <label for="tx-interval-slider" data-i18n="settings.txInterval">Intervalle TX ("hop") — secondes (0 = désactivé, max 240)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="setting-row">
+                <input id="tx-interval-slider" type="range" min="0" max="240" step="10" value="0" />
+                <span class="setting-value" id="tx-interval-value">0s</span>
+              </div>
               <button class="btn-primary" data-action="set-tx-interval" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="tx-inhibit-toggle" type="checkbox" /> <span data-i18n="settings.txInhibit">Inhibition TX (bloque l'émission)</span></label>
+              <div class="setting-card-head">
+                <label data-i18n="settings.txInhibit">Inhibition TX (bloque l'émission)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="tx-inhibit-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+              </div>
               <button class="btn-primary" data-action="set-tx-inhibit" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="noise-reduction-toggle" type="checkbox" /> <span data-i18n="settings.noiseReduction">Réduction de bruit</span></label>
+              <div class="setting-card-head">
+                <label data-i18n="settings.noiseReduction">Réduction de bruit</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="noise-reduction-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+              </div>
               <button class="btn-primary" data-action="set-noise-reduction" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="prompt-tone-toggle" type="checkbox" /> <span data-i18n="settings.promptTone">Tonalité de confirmation</span></label>
+              <div class="setting-card-head">
+                <label data-i18n="settings.promptTone">Tonalité de confirmation</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="prompt-tone-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+              </div>
               <button class="btn-primary" data-action="set-prompt-tone" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="prompt-language-toggle" type="checkbox" /> <span data-i18n="settings.promptLanguage">Annonces vocales en anglais (décoché = chinois)</span></label>
+              <div class="setting-card-head">
+                <label data-i18n="settings.promptLanguage">Annonces vocales en anglais (décoché = chinois)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="prompt-language-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+              </div>
               <button class="btn-primary" data-action="set-prompt-language" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label for="device-name-input" data-i18n="settings.deviceName">Nom de l'appareil</label>
+              <div class="setting-card-head">
+                <label for="device-name-input" data-i18n="settings.deviceName">Nom de l'appareil</label>
+                <span class="verify-badge" data-i18n="settings.badgeWriteOnly">✍️ Écriture seule</span>
+              </div>
               <input id="device-name-input" type="text" placeholder="AT2_XXXX" />
               <button class="btn-primary" data-action="set-device-name" data-i18n="settings.apply">Appliquer</button>
             </div>
             <div class="setting-card">
-              <label><input id="smart-link-toggle" type="checkbox" /> <span data-i18n="settings.smartLink">Smart Link (pont vers apps tierces)</span></label>
+              <div class="setting-card-head">
+                <label data-i18n="settings.smartLink">Smart Link (pont vers apps tierces)</label>
+                <span class="verify-badge" data-i18n="settings.badgeWriteOnly">✍️ Écriture seule</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="smart-link-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+              </div>
               <button class="btn-primary" data-action="set-smart-link" data-i18n="settings.apply">Appliquer</button>
             </div>
-            <div class="setting-card">
-              <label><input id="dual-watch-toggle" type="checkbox" /> <span data-i18n="settings.dualWatch">Dual Watch (veille sur 2 canaux)</span></label>
-              <button class="btn-primary" data-action="set-dual-watch" data-i18n="settings.apply">Appliquer</button>
-            </div>
-            <div class="setting-card">
-              <label for="dual-watch-channel-a" data-i18n="settings.dualWatchChannelA">Dual Watch — canal A</label>
-              <input id="dual-watch-channel-a" type="number" min="1" max="30" value="1" />
-              <button class="btn-primary" data-action="set-dual-watch-channel-a" data-i18n="settings.apply">Appliquer</button>
-            </div>
-            <div class="setting-card">
-              <label for="dual-watch-channel-b" data-i18n="settings.dualWatchChannelB">Dual Watch — canal B</label>
-              <input id="dual-watch-channel-b" type="number" min="1" max="30" value="1" />
-              <button class="btn-primary" data-action="set-dual-watch-channel-b" data-i18n="settings.apply">Appliquer</button>
-            </div>
-            <div class="setting-card">
-              <label data-i18n="settings.dualWatchFocus">Dual Watch — canal actif pour le PTT</label>
-              <div style="display:flex; gap:8px;">
-                <button class="btn-primary" data-action="set-dual-watch-focus-a" style="flex:1;" data-i18n="settings.dualWatchFocusA">Focus A</button>
-                <button class="btn-primary" data-action="set-dual-watch-focus-b" style="flex:1;" data-i18n="settings.dualWatchFocusB">Focus B</button>
+            <div class="setting-card wide">
+              <div class="setting-card-head">
+                <label data-i18n="settings.dualWatch">Dual Watch (veille sur 2 canaux)</label>
+                <span class="verify-badge" data-i18n="settings.badgePending">⚠️ Non vérifié</span>
+              </div>
+              <div class="toggle-row">
+                <label class="switch"><input id="dual-watch-toggle" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+                <span data-i18n="settings.dualWatchEnable">Activer le Dual Watch</span>
+                <button class="btn-primary" data-action="set-dual-watch" data-i18n="settings.apply" style="margin-left:auto;">Appliquer</button>
+              </div>
+              <div class="dual-watch-body">
+                <div class="dual-watch-field">
+                  <label for="dual-watch-channel-a" data-i18n="settings.dualWatchChannelA">Canal A</label>
+                  <input id="dual-watch-channel-a" type="number" min="1" max="30" value="1" />
+                  <button class="btn-ghost" data-action="set-dual-watch-channel-a" data-i18n="settings.apply">Appliquer</button>
+                </div>
+                <div class="dual-watch-field">
+                  <label for="dual-watch-channel-b" data-i18n="settings.dualWatchChannelB">Canal B</label>
+                  <input id="dual-watch-channel-b" type="number" min="1" max="30" value="1" />
+                  <button class="btn-ghost" data-action="set-dual-watch-channel-b" data-i18n="settings.apply">Appliquer</button>
+                </div>
+                <div class="dual-watch-field">
+                  <label data-i18n="settings.dualWatchFocus">Canal actif pour le PTT</label>
+                  <div class="dual-watch-focus-btns">
+                    <button class="btn-ghost" data-action="set-dual-watch-focus-a" data-i18n="settings.dualWatchFocusA">Focus A</button>
+                    <button class="btn-ghost" data-action="set-dual-watch-focus-b" data-i18n="settings.dualWatchFocusB">Focus B</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <span class="hint" data-i18n="settings.advancedHint">Ces réglages sont câblés au protocole réel mais jamais testés sur radio physique — voir README.</span>
+          <span class="hint" data-i18n="settings.advancedHint">Ces réglages sont câblés au protocole réel. « Non vérifié » : la radio répond à la lecture mais l'effet réel n'a pas encore été confirmé. « Écriture seule » : aucune commande de lecture n'existe pour ce réglage. Voir README.</span>
         </div>
       </div>
     </section>
