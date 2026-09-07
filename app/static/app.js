@@ -1121,6 +1121,40 @@ $$("[data-action]").forEach((btn) => {
   });
 });
 
+// Read-back: confirmed on real hardware (07/09/2026, see README) that the
+// radio DOES answer these queries -- contrary to what this project assumed
+// until then. Server mode only (no BLE-local client support for these
+// yet, same limitation as the "Appliquer" buttons above). Reads happen
+// one at a time and independently: a setting the radio doesn't answer
+// (e.g. an unconfirmed one, or a flaky link) just doesn't update its
+// control instead of aborting the whole batch.
+$("#btn-read-settings").addEventListener("click", async () => {
+  if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+  const reads = [
+    ["/api/device/volume", (d) => { $("#volume-slider").value = d.level; }],
+    ["/api/device/squelch", (d) => { $("#squelch-slider").value = d.level; }],
+    ["/api/device/vox", (d) => { $("#vox-toggle").checked = d.enabled; }],
+    ["/api/device/vox-sensitivity", (d) => { $("#vox-sensitivity-slider").value = d.level; }],
+    ["/api/device/tot", (d) => { $("#tot-slider").value = d.seconds; }],
+    ["/api/device/tx-inhibit", (d) => { $("#tx-inhibit-toggle").checked = d.enabled; }],
+    ["/api/device/tx-interval", (d) => { $("#tx-interval-slider").value = d.seconds; }],
+    ["/api/device/noise-reduction", (d) => { $("#noise-reduction-toggle").checked = d.enabled; }],
+    ["/api/device/dual-watch", (d) => { $("#dual-watch-toggle").checked = d.enabled; }],
+    ["/api/device/prompt-tone", (d) => { $("#prompt-tone-toggle").checked = d.enabled; }],
+    ["/api/device/prompt-language", (d) => { $("#prompt-language-toggle").checked = d.english; }],
+  ];
+  let ok = 0, fail = 0;
+  for (const [path, apply] of reads) {
+    try {
+      apply(await api("GET", path));
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  showToast(t("settings.readResult", { ok, fail }), fail ? "info" : "success");
+});
+
 // ---------------------------------------------------------------------------
 // Off-grid messaging. Groups = radio channels used as chat rooms: the wire
 // protocol has no per-channel addressing at all -- a message just goes out

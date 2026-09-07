@@ -386,6 +386,70 @@ async def set_tx_interval(req: TxIntervalRequest, _: None = Depends(auth.require
 
 
 # ---------------------------------------------------------------------------
+# Device settings: read-back
+#
+# Confirmed on real hardware (07/09/2026) that the radio DOES answer these
+# queries -- see the "device settings: read-back" section of app/device.py
+# for the wire-format details. Each of these can raise a 409 (via the
+# RuntimeError handler above) if the radio doesn't answer in time.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/device/volume")
+async def get_volume(_: None = Depends(auth.require_auth)):
+    return {"level": await device_manager.query_volume()}
+
+
+@app.get("/api/device/squelch")
+async def get_squelch(_: None = Depends(auth.require_auth)):
+    return {"level": await device_manager.query_squelch()}
+
+
+@app.get("/api/device/vox")
+async def get_vox(_: None = Depends(auth.require_auth)):
+    return {"enabled": await device_manager.query_vox()}
+
+
+@app.get("/api/device/vox-sensitivity")
+async def get_vox_sensitivity(_: None = Depends(auth.require_auth)):
+    return {"level": await device_manager.query_vox_sensitivity()}
+
+
+@app.get("/api/device/tot")
+async def get_tot(_: None = Depends(auth.require_auth)):
+    return {"seconds": await device_manager.query_tot_seconds()}
+
+
+@app.get("/api/device/tx-inhibit")
+async def get_tx_inhibit(_: None = Depends(auth.require_auth)):
+    return {"enabled": await device_manager.query_tx_inhibit()}
+
+
+@app.get("/api/device/tx-interval")
+async def get_tx_interval(_: None = Depends(auth.require_auth)):
+    return {"seconds": await device_manager.query_tx_interval_seconds()}
+
+
+@app.get("/api/device/noise-reduction")
+async def get_noise_reduction(_: None = Depends(auth.require_auth)):
+    return {"enabled": await device_manager.query_noise_reduction()}
+
+
+@app.get("/api/device/dual-watch")
+async def get_dual_watch(_: None = Depends(auth.require_auth)):
+    return {"enabled": await device_manager.query_dual_watch()}
+
+
+@app.get("/api/device/prompt-tone")
+async def get_prompt_tone(_: None = Depends(auth.require_auth)):
+    return {"enabled": await device_manager.query_prompt_tone()}
+
+
+@app.get("/api/device/prompt-language")
+async def get_prompt_language(_: None = Depends(auth.require_auth)):
+    return {"english": await device_manager.query_prompt_language()}
+
+
+# ---------------------------------------------------------------------------
 # Messaging: text, voice, image (offline / store-and-forward)
 # ---------------------------------------------------------------------------
 

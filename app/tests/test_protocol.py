@@ -2,12 +2,15 @@
 
 Run with: python -m pytest app/tests -v
 """
+import asyncio
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.protocol import frame, channel, commands, messages
+from app.protocol.frame import At2Packet
+from app.transport.base import Transport
 
 
 def test_crc16_matches_known_vector():
@@ -918,6 +921,130 @@ def test_send_message_frames_with_ack_raises_after_exhausting_retries():
         with pytest.raises(RuntimeError):
             await dm._send_message_frames_with_ack(t, [b"never-acked"], "Test")
         assert t.sent == [b"never-acked"] * dm.MESSAGE_ACK_RETRIES
+
+    asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# Device settings read-back (app/device.py::_query_setting/query_*) --
+# confirmed live on real hardware 07/09/2026 (USB serial): the radio DOES
+# answer a family=0x01 query with family=0x81, same command byte, body =
+# [subtype echoed][value, little-endian]. See app/device.py's "device
+# settings: read-back" section for the full write-up.
+# ---------------------------------------------------------------------------
+
+class _FakeQueryTransport(Transport):
+    """Minimal Transport double for query_*() tests. If built with a canned
+    `response` At2Packet, delivers it to packet listeners right after
+    send_payload -- close enough to the real async request/response cycle
+    for these tests. With `response=None`, the radio simply never answers
+    (e.g. the real Smart Link query, confirmed unanswered on hardware)."""
+
+    def __init__(self, response: At2Packet | None = None):
+        super().__init__()
+        self._connected = True
+        self._response = response
+        self.sent: list[bytes] = []
+
+    async def connect(self, target, **kwargs) -> None:
+        pass
+
+    async def disconnect(self) -> None:
+        pass
+
+    async def send_payload(self, payload: bytes) -> None:
+        self.sent.append(payload)
+        if self._response is not None:
+            # Deliver on the next loop iteration, not synchronously here --
+            # _query_setting() calls wait_for_packet() (which registers the
+            # listener that would catch this) only *after* send_payload
+            # returns, exactly like the real request/response cycle over a
+            # real transport. Firing synchronously would deliver the
+            # response before anyone is listening for it.
+            asyncio.get_event_loop().create_task(self._deliver_response())
+
+    async def _deliver_response(self) -> None:
+        await asyncio.sleep(0)
+        for cb in list(self._packet_listeners):
+            cb(self._response)
+
+    async def send_raw_frame(self, frame_bytes: bytes) -> None:
+        self.sent.append(frame_bytes)
+
+
+def test_query_squelch_matches_live_hardware_capture():
+    # Real capture: squelch set to 6, query response body was 04 06
+    # (subtype 0x04 echoed + value 6).
+    import asyncio
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        dm._transport = _FakeQueryTransport(At2Packet(family=0x81, command=0x02, body=bytes.fromhex("0406")))
+        assert await dm.query_squelch() == 6
+
+    asyncio.run(run())
+
+
+def test_query_setting_decodes_two_byte_little_endian_value():
+    # Real capture: TOT query response body was 05 78 00 (subtype 0x05 +
+    # 0x0078 LE == 120 seconds, matching set_tot_seconds' own 2-byte-LE
+    # encoding and the UI's default 120s slider position).
+    import asyncio
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        dm._transport = _FakeQueryTransport(At2Packet(family=0x81, command=0x02, body=bytes.fromhex("057800")))
+        assert await dm.query_tot_seconds() == 120
+
+    asyncio.run(run())
+
+
+def test_query_dual_watch_maps_0x02_to_enabled():
+    # set_dual_watch()'s "enabled" encoding is 0x02 (not 0x01 like every
+    # other boolean setting) -- the read-back must map the same way.
+    import asyncio
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        dm._transport = _FakeQueryTransport(At2Packet(family=0x81, command=0x02, body=bytes.fromhex("0d02")))
+        assert await dm.query_dual_watch() is True
+
+    asyncio.run(run())
+
+
+def test_query_setting_raises_when_radio_never_answers():
+    # Real capture: the Smart Link query got no response at all within the
+    # listen window -- must surface as a clean RuntimeError (409), not hang
+    # forever or crash.
+    import asyncio
+    import pytest
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        dm._transport = _FakeQueryTransport(response=None)
+        with pytest.raises(RuntimeError):
+            await dm._query_setting(commands.query_squelch(), 0x02, 0x04, timeout=0.05)
+
+    asyncio.run(run())
+
+
+def test_query_setting_ignores_response_with_wrong_subtype():
+    # A response echoing a different subtype than the one queried (e.g. a
+    # reply to an unrelated in-flight query) must not be mistaken for this
+    # one -- it should time out rather than return a bogus value.
+    import asyncio
+    import pytest
+    from app.device import DeviceManager
+
+    async def run():
+        dm = DeviceManager()
+        dm._transport = _FakeQueryTransport(At2Packet(family=0x81, command=0x02, body=bytes.fromhex("0906")))  # subtype 0x09, not 0x04
+        with pytest.raises(RuntimeError):
+            await dm._query_setting(commands.query_squelch(), 0x02, 0x04, timeout=0.05)
 
     asyncio.run(run())
 

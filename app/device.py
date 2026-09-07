@@ -279,6 +279,78 @@ class DeviceManager:
         t = self._require_transport()
         await t.send_payload(commands.select_channel(channel_number))
 
+    # -- device settings: read-back ------------------------------------------
+    #
+    # CONFIRMED on real hardware (07/09/2026, USB serial, see README): the
+    # radio DOES answer a family=0x01 (query) request, contrary to what this
+    # project assumed until now ("no read-settings-back feature exists").
+    # The response is family=0x81 (that request's family|0x80), the SAME
+    # command byte as the request, body = `[subtype byte, echoed back]
+    # [value, little-endian, as many bytes as the matching set_* command
+    # uses]`. Byte-exact confirmed for squelch (query -> 0x0406 after
+    # setting squelch to 6) and observed consistent with the UI/radio state
+    # for volume, VOX, VOX sensitivity, TOT, TX inhibit, TX interval, noise
+    # reduction and Dual Watch in the same test session. Smart Link's query
+    # got no response at all (still write-only); prompt tone/language use
+    # the identical family=0x01/command=0x01 shape as volume (confirmed)
+    # but were not themselves part of that test -- treat those two as
+    # "implemented, pending confirmation" like the rest of this file.
+
+    async def _query_setting(
+        self, query_payload: bytes, response_command: int, subtype: int,
+        value_bytes: int = 1, timeout: float = 2.0,
+    ) -> int:
+        t = self._require_transport()
+        await t.send_payload(query_payload)
+        pkt = await t.wait_for_packet(
+            lambda p: (
+                p.family == (commands.FAMILY_QUERY | 0x80)
+                and p.command == response_command
+                and len(p.body) >= 1 + value_bytes
+                and p.body[0] == subtype
+            ),
+            timeout=timeout,
+        )
+        if pkt is None:
+            raise RuntimeError("aucune réponse de la radio à cette requête (non supportée, ou radio muette)")
+        return int.from_bytes(pkt.body[1:1 + value_bytes], "little")
+
+    async def query_volume(self) -> int:
+        return await self._query_setting(commands.query_volume(), 0x01, 0x01)
+
+    async def query_squelch(self) -> int:
+        return await self._query_setting(commands.query_squelch(), 0x02, 0x04)
+
+    async def query_vox(self) -> bool:
+        return bool(await self._query_setting(commands.query_vox(), 0x02, 0x06))
+
+    async def query_vox_sensitivity(self) -> int:
+        return await self._query_setting(commands.query_vox_sensitivity(), 0x02, 0x07)
+
+    async def query_tot_seconds(self) -> int:
+        return await self._query_setting(commands.query_tot_seconds(), 0x02, 0x05, value_bytes=2)
+
+    async def query_tx_inhibit(self) -> bool:
+        return bool(await self._query_setting(commands.query_tx_inhibit(), 0x02, 0x09))
+
+    async def query_tx_interval_seconds(self) -> int:
+        return await self._query_setting(commands.query_tx_interval_seconds(), 0x02, 0x0A, value_bytes=2)
+
+    async def query_noise_reduction(self) -> bool:
+        return bool(await self._query_setting(commands.query_noise_reduction(), 0x02, 0x11))
+
+    async def query_dual_watch(self) -> bool:
+        # set_dual_watch()'s "enabled" encoding is 0x02, not 0x01 like every
+        # other boolean setting here -- the read-back must match it.
+        raw = await self._query_setting(commands.query_dual_watch(), 0x02, 0x0D)
+        return raw == 0x02
+
+    async def query_prompt_tone(self) -> bool:
+        return bool(await self._query_setting(commands.query_prompt_tone(), 0x01, 0x04))
+
+    async def query_prompt_language(self) -> bool:
+        return bool(await self._query_setting(commands.query_prompt_language(), 0x01, 0x03))
+
     # -- messaging ----------------------------------------------------------
 
     async def send_text_message(self, username: str, text: str) -> None:
