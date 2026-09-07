@@ -27,7 +27,7 @@ a real radio's actual output, only against this project's own encoder.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .frame import At2Packet, build_payload, encode_frame
 

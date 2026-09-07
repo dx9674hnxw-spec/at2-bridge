@@ -24,7 +24,7 @@ Record layout (offsets are byte indices into the 24-byte record):
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 CHANNEL_RECORD_LEN = 24
 CHANNEL_COUNT = 30

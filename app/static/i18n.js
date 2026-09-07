@@ -215,7 +215,6 @@ const I18N_DICT = {
   },
 
   en: {
-    // Topbar
     "mode.server": "Server",
     "mode.local": "Local BLE",
     "theme.dark": "🌙 Dark",
@@ -238,8 +237,7 @@ const I18N_DICT = {
     "btn.disconnect": "Disconnect",
     "btn.connectLocal": "Connect (Web Bluetooth)",
     "mode.localUnsupported": "Web Bluetooth unavailable in this browser (unavailable on every iOS browser)",
-    
-    // Tabs
+
     "tab.devices": "Devices",
     "tab.channels": "Channels",
     "tab.settings": "Settings",
@@ -266,7 +264,6 @@ const I18N_DICT = {
     "alerts.empty": "No alerts yet.",
     "mode.notSupportedLocal": "Not available in local BLE mode yet — use Server mode.",
 
-    // Devices tab
     "devices.empty": "No known devices yet — scan over BLE or connect via serial to remember one.",
     "devices.connect": "Connect",
     "devices.forget": "Forget",
@@ -274,7 +271,6 @@ const I18N_DICT = {
     "devices.noPortsFound": "No port detected",
     "devices.selectPortFirst": "Select a serial port first.",
 
-    // Channel switcher
     "chan.prev": "Previous channel",
     "chan.next": "Next channel",
     "chan.rename": "Rename this channel",
@@ -293,14 +289,12 @@ const I18N_DICT = {
     "chan.receiving": "Receiving",
     "chan.optsLegend": "H/L: high/low power · N/W: narrow/wide band · 📡: added to scan · A/D: analog/digital",
 
-    // PTT panel
     "ptt.helpTitle": "PTT help",
     "ptt.hintServer": "Hold to transmit — encodes and streams voice in real time",
     "ptt.hintLocalBle": "Hold to transmit — AMR-encoded in the browser, sent directly over BLE",
     "ptt.micError": "Microphone unavailable: {error}",
     "ptt.button": "PTT",
 
-    // GPS panel
     "gps.title": "Position & emergency",
     "gps.locating": "Locating…",
     "gps.unavailable": "Geolocation unavailable",
@@ -324,7 +318,6 @@ const I18N_DICT = {
     "gps.intervalSeconds": "{n}s",
     "gps.intervalMinutes": "{n}min",
 
-    // Channels tab
     "channels.readAll": "Read all 30 channels",
     "channels.writeAll": "Write all 30 channels",
     "channels.readHint": "The bulk read is reconstructed by protocol symmetry — verify before writing.",
@@ -348,7 +341,6 @@ const I18N_DICT = {
     "channels.colHop": "Freq. hop",
     "channels.colEncKey": "Enc. key",
 
-    // Settings tab
     "settings.title": "Device settings",
     "settings.noConnection": "No active connection",
     "settings.volume": "Volume (1–8)",
@@ -375,7 +367,6 @@ const I18N_DICT = {
     "settings.advancedHint": "These settings are wired to the real protocol but never tested on physical hardware — see README.",
     "settings.deviceNameRequired": "Enter a device name.",
 
-    // Messages tab
     "msg.usernamePlaceholder": "Username",
     "msg.textPlaceholder": "Off-grid message…",
     "msg.attachImage": "Attach an image",
@@ -399,7 +390,6 @@ const I18N_DICT = {
     "msg.unknownKind": "Unknown message type ({kind})",
     "msg.me": "Me",
 
-    // Login overlay
     "login.title": "Login required",
     "login.subtitle": "This AT2 Bridge server is password-protected.",
     "login.passwordPlaceholder": "Password",
@@ -407,7 +397,6 @@ const I18N_DICT = {
     "login.error": "Incorrect password.",
     "login.sessionExpired": "Session expired, please log in again.",
 
-    // Generic
     "channelLabel": "CH{n}",
   },
 };

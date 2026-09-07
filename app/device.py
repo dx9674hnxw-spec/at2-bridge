@@ -15,6 +15,7 @@ from app.protocol.frame import At2Packet
 from app.transport.base import Transport
 from app.transport.ble_transport import BleTransport
 from app.transport.serial_transport import SerialTransport
+from app import store
 
 logger = logging.getLogger("at2.device")
 
@@ -79,7 +80,18 @@ class DeviceManager:
         t = SerialTransport()
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
         t.on_log(self._log_line)
-        await t.connect(port, baud_rate=baud_rate)
+        try:
+            await t.connect(port, baud_rate=baud_rate)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            # pyserial raises its own SerialException (or a bare OSError) for
+            # a missing/busy port -- not a RuntimeError, so without this it
+            # fell through to main.py's generic Exception handler (500
+            # "internal server error") instead of the clean 409 every other
+            # connection failure gets. Confirmed via a real test run: the
+            # port-not-found case surfaced as a 500, not the documented 409.
+            raise RuntimeError(f"connexion série impossible sur {port}: {e}") from e
         self._transport, self._kind, self._target = t, "serial", port
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
@@ -97,7 +109,15 @@ class DeviceManager:
         t = BleTransport()
         t.on_packet(lambda p: self._log_line(f"RX [{p.family:02x}/{p.command:02x}] {p.hex_preview}"))
         t.on_log(self._log_line)
-        await t.connect(address)
+        try:
+            await t.connect(address)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            # Same reasoning as connect_serial above: bleak raises its own
+            # BleakError/TimeoutError for an unreachable address, which isn't
+            # a RuntimeError and would otherwise surface as a raw 500.
+            raise RuntimeError(f"connexion BLE impossible sur {address}: {e}") from e
         self._transport, self._kind, self._target = t, "ble", address
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
