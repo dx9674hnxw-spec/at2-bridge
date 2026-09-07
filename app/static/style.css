@@ -376,29 +376,22 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .setting-card {
   display: flex; flex-direction: column; gap: 9px;
-  background: var(--color-bg-alt); border: 1px solid var(--color-border);
+  /* Same neutral surface as .card/.device-card (rgba(18,18,18,.92) --
+     hardcoded there too, no token for it) -- NOT --color-bg-alt, which is
+     a visibly bluer shade reserved for recessed panels like .ptt-wave. */
+  background-color: rgba(18, 18, 18, 0.92); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg); padding: 12px 14px;
 }
 .setting-card label { font-size: 12px; color: var(--color-text-dim); font-weight: 500; }
 .setting-card input[type=range] { width: 100%; accent-color: var(--color-primary); }
 .readout { font-family: var(--font-mono); font-size: 22px; color: var(--status-info); }
 
-.setting-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .setting-row { display: flex; align-items: center; gap: 10px; }
 .setting-row input[type=range] { flex: 1; }
 .setting-value {
   font-family: var(--font-mono); font-size: 12.5px; color: var(--color-text-soft);
   font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; flex: none;
 }
-
-/* Verification-state badges -- mirrors the README's own ✅/⚠️/✍️ taxonomy
-   so the same three states read identically in the doc and the UI. */
-.verify-badge {
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
-  padding: 2px 7px; border-radius: var(--radius-pill); white-space: nowrap; flex: none;
-  background: var(--status-neutral-bg); border: 1px solid var(--status-neutral-border); color: var(--status-neutral);
-}
-.verify-badge.confirmed { background: var(--status-up-bg); border-color: var(--status-up-border); color: var(--status-up); }
 
 .toggle-row { display: flex; align-items: center; gap: 9px; }
 .toggle-row > span { font-size: 13px; color: var(--color-text-soft); }
