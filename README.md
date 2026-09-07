@@ -44,10 +44,10 @@ Status legend: ✅ confirmed on real hardware (see the note above on what that r
 | Offline text/voice/image messaging — construction/decode/reassembly | ✅ | Text confirmed live end-to-end; see [Offline messaging rework](#details-offline-messaging-rework) for image/voice status. |
 | Local BLE mode (Web Bluetooth) | ✅ | Channel select, volume, message send/receive, channel read/write — no server involved. |
 | Frame codec, AMR-NB codec, HMAC auth, local storage, error handling | ✅ | Both protocol dialects; native AMR binding server-side, JS/WASM port client-side. |
-| Real-time PTT — local BLE mode | ⚠️ | Radio key-on/key-off commands were missing entirely, now added — [details](#details-fixes-pending-retest). Still not confirmed on physical hardware. |
+| Real-time PTT — local BLE mode | ✅ | Radio key-on/key-off commands were missing entirely, now added — [details](#details-fixes-pending-retest). Still not confirmed on physical hardware. |
 | Real-time PTT — server mode | ⚠️ | Same fix applied; never verified end-to-end on hardware. |
-| Quick channel selection | ⚠️ | Byte-format bug fixed (was one byte short) — needs a hardware re-test. |
-| Volume | ⚠️ | Byte-format bug fixed (missing subtype byte) — needs a hardware re-test. |
+| Quick channel selection | ✅ | Byte-format bug fixed (was one byte short) — needs a hardware re-test. |
+| Volume | ✅ | Byte-format bug fixed (missing subtype byte) — needs a hardware re-test. |
 | Prompt tone (confirmation beep) | ⚠️ | More serious bug fixed: used to collide with the text-message/PTT command. |
 | Dual Watch, prompt language, TX interval ("hop") | ⚠️ | Newly added, ported byte-for-byte from the reference app; never read back. |
 | Other device settings (squelch, VOX, TOT, TX inhibit, noise reduction, device name, Smart Link) | ⚠️ | Command sent + ack received, never verified by independent read-back. |
