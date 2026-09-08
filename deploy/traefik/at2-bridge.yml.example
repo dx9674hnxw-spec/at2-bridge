@@ -19,10 +19,14 @@
 #          file:
 #            directory: /etc/traefik/dynamic
 #            watch: true
-#   3. Replace REPLACE_WITH_HOST_LAN_IP below with the LAN IP of the
-#      machine running the at2-bridge container (the one Traefik's
-#      container can actually reach -- if Traefik runs on the SAME host,
-#      the Docker bridge gateway, usually 172.17.0.1, also works).
+#   3. If Traefik runs on the SAME host as at2-bridge, `host.docker.internal`
+#      below just works PROVIDED Traefik's own service already has
+#      `extra_hosts: ["host.docker.internal:host-gateway"]` (common in
+#      Traefik compose setups -- check yours). If it doesn't have that, or
+#      if Traefik runs on a different host, replace it with the LAN IP of
+#      the machine running the at2-bridge container instead (the Docker
+#      bridge gateway, usually 172.17.0.1, also works when both are on the
+#      same host without extra_hosts).
 #   4. Replace at2.example.tld with the hostname you'll use.
 #   5. Reload Traefik (or let --providers.file.watch pick it up), then add
 #      a matching public hostname in your Cloudflare Tunnel pointing to
@@ -44,4 +48,4 @@ http:
     at2-bridge:
       loadBalancer:
         servers:
-          - url: "http://REPLACE_WITH_HOST_LAN_IP:2910"
+          - url: "http://host.docker.internal:2910"   # or REPLACE_WITH_HOST_LAN_IP -- see point 3 above

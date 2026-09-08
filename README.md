@@ -184,6 +184,12 @@ Edit the network name and `Host()` rule in that file to match your setup first. 
 
 Either way, set `AT2_BRIDGE_PASSWORD` before exposing at2-bridge through the tunnel — it becomes reachable from the internet, and it controls a real radio (messaging, PTT, position/SOS).
 
+**Deploying via Portainer:** *Stacks → Add stack*, Web editor, paste `docker-compose.yml`'s content but set `build: https://github.com/dx9674hnxw-spec/at2-bridge.git` instead of `build: .` (Portainer/Docker builds directly from the Git URL, no need to clone the repo on the host first) — this is Option A, so no other change needed. Deploy, then still do the Traefik file (Option A step above) and the Cloudflare Tunnel route by hand — those aren't containers, so Portainer doesn't manage them.
+
+**Troubleshooting notes from a real deployment:**
+- `curl -I` (a HEAD request) against `/` returns `405 Method Not Allowed` — expected, `/` is a `GET`-only route (see `app/main.py`); test with a plain GET (`curl -s -o /dev/null -w "%{http_code}\n" https://your-host`) or just open it in a browser instead.
+- Right after adding the Cloudflare public hostname, a device outside your LAN can briefly get `DNS_PROBE_FINISHED_NXDOMAIN` if its resolver had already cached a "no such domain" answer from before the record existed. Confirm the record is live with `dig at2.example.tld @1.1.1.1` (bypasses local caches); if that resolves, it's just propagation/negative-cache lag on the affected device/network — wait a few minutes or flush its DNS cache.
+
 ### Local development (without Docker)
 
 ```bash
