@@ -158,7 +158,7 @@ cd at2-bridge
 docker compose up -d --build
 ```
 
-Interface served on `http://<server-ip>:<port>` (container runs in `network_mode: host`; port configurable in `docker-compose.yml`, 8000 by default).
+Interface served on `http://<server-ip>:2910` (container runs in `network_mode: host`, so there's no `ports:` mapping to edit in `docker-compose.yml` — change the port by editing the `--port` in the Dockerfile's `CMD` and its `EXPOSE` line).
 
 To enable authentication, set `AT2_BRIDGE_PASSWORD` in the container's environment — the frontend then shows a login screen on first access. Without this variable, the interface stays open to anyone who can reach the server (restrict to a trusted network such as Tailscale in that case).
 
@@ -167,6 +167,22 @@ To enable authentication, set `AT2_BRIDGE_PASSWORD` in the container's environme
 - **USB serial**: port typically `/dev/ttyACM0` or `/dev/ttyUSB0`, selectable in the interface.
 - **BLE (server mode)**: Bluetooth adapter on the server, BlueZ access via D-Bus (already configured in `docker-compose.yml`).
 - **BLE (local mode)**: no server-side hardware required — uses the Bluetooth of the device displaying the web page (see the "Web Bluetooth" section above).
+
+### Behind Traefik + a Cloudflare Tunnel
+
+The app is proxy-agnostic (WebSockets and auth tokens are derived from `location.host`/`location.protocol` client-side, so `wss://` behind TLS termination just works), but `network_mode: host` — used above for BLE/USB access — means Traefik can't auto-discover the container's IP the way it does for a normally-networked service, so the usual "just add `traefik.*` labels" pattern doesn't apply directly. Two options:
+
+**Option A — keep `network_mode: host` (BLE server mode still works).** Point Traefik at the host directly via its file provider instead of Docker labels: copy [`deploy/traefik/at2-bridge.yml.example`](./deploy/traefik/at2-bridge.yml.example) into whatever directory your Traefik container watches as a dynamic config source, fill in your host's LAN IP and hostname, then reload/let it hot-pick-up. Your Cloudflare Tunnel needs no new target — just add a public hostname pointing at the same service your other apps already use (e.g. `http://traefik:80`); Traefik does the `Host()`-based routing to at2-bridge from there, exactly like your other Published applications.
+
+**Option B — attach to Traefik's Docker network via labels (drops server-side BLE).** If you only need USB serial and/or the browser-side "Web Bluetooth" local mode, use the [`docker-compose.traefik.yml`](./docker-compose.traefik.yml) override, which replaces `network_mode: host` with a shared external network and standard `traefik.http.*` labels:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+```
+
+Edit the network name and `Host()` rule in that file to match your setup first. Same Cloudflare Tunnel step as Option A applies.
+
+Either way, set `AT2_BRIDGE_PASSWORD` before exposing at2-bridge through the tunnel — it becomes reachable from the internet, and it controls a real radio (messaging, PTT, position/SOS).
 
 ### Local development (without Docker)
 

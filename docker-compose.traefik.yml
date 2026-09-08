@@ -1,0 +1,40 @@
+# Optional override: run at2-bridge attached to Traefik via Docker labels
+# instead of network_mode: host.
+#
+# Trade-off: this DROPS server-side BLE support (BlueZ/D-Bus enumerates
+# adapters through the host's network namespace, which this container no
+# longer shares). Use this variant only if you rely on USB serial and/or
+# the local, browser-side "Web Bluetooth" mode (see README) rather than
+# the server connecting to the radio over BLE itself. If you need
+# server-side BLE, keep the default docker-compose.yml and use the file
+# provider config in deploy/traefik/at2-bridge.yml.example instead.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+#
+# Prerequisites:
+#   - An external Docker network shared with your existing Traefik
+#     container (rename `traefik_proxy` below to match yours).
+#   - Traefik's Docker provider enabled, watching that network.
+#   - Adjust the router `Host()` rule and `entrypoints` label to match
+#     your other Published applications.
+#   - Then add a public hostname in your Cloudflare Tunnel pointing to
+#     the same service your other apps use (e.g. http://traefik:80).
+
+services:
+  at2-bridge:
+    network_mode: !reset null
+    networks:
+      - traefik_proxy
+    expose:
+      - "2910"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_proxy
+      - traefik.http.routers.at2-bridge.rule=Host(`at2.example.tld`)
+      - traefik.http.routers.at2-bridge.entrypoints=web
+      - traefik.http.services.at2-bridge.loadbalancer.server.port=2910
+
+networks:
+  traefik_proxy:
+    external: true

@@ -1,0 +1,47 @@
+# Traefik dynamic (file provider) config for at2-bridge.
+#
+# Why a file provider and not Docker labels: the app's docker-compose.yml
+# uses `network_mode: host` (needed for BlueZ/D-Bus + USB serial access,
+# see the README). A host-networked container has no per-container IP
+# for Traefik's Docker provider to discover, so label-based routing
+# (`traefik.http.*` labels + a shared Docker network) does not work here.
+# Instead, this file tells Traefik directly where to send traffic: the
+# host's own IP on port 2910, the port at2-bridge's uvicorn listens on.
+#
+# Usage:
+#   1. Copy this file (drop the `.example`) into whatever directory your
+#      Traefik container already watches as its file provider, e.g.
+#      /etc/traefik/dynamic/at2-bridge.yml (adjust the path/volume mount
+#      to match your existing Traefik setup).
+#   2. Make sure Traefik's static config enables the file provider, e.g.
+#      in traefik.yml / traefik.toml / CLI args:
+#        providers:
+#          file:
+#            directory: /etc/traefik/dynamic
+#            watch: true
+#   3. Replace REPLACE_WITH_HOST_LAN_IP below with the LAN IP of the
+#      machine running the at2-bridge container (the one Traefik's
+#      container can actually reach -- if Traefik runs on the SAME host,
+#      the Docker bridge gateway, usually 172.17.0.1, also works).
+#   4. Replace at2.example.tld with the hostname you'll use.
+#   5. Reload Traefik (or let --providers.file.watch pick it up), then add
+#      a matching public hostname in your Cloudflare Tunnel pointing to
+#      the SAME service your other apps already use (http://traefik:80) --
+#      Traefik itself does the Host-based routing to at2-bridge from there.
+#   6. Set AT2_BRIDGE_PASSWORD in at2-bridge's environment before exposing
+#      it publicly -- without it, the interface (including radio control
+#      and messaging) is open to anyone who reaches the hostname.
+
+http:
+  routers:
+    at2-bridge:
+      rule: "Host(`at2.example.tld`)"
+      entryPoints:
+        - web   # match whatever entrypoint your other Published applications use
+      service: at2-bridge
+
+  services:
+    at2-bridge:
+      loadBalancer:
+        servers:
+          - url: "http://REPLACE_WITH_HOST_LAN_IP:2910"
