@@ -96,6 +96,9 @@ const I18N_DICT = {
     "chan.selectError": "Erreur sélection canal: {error}",
     "chan.receiving": "Réception",
     "chan.optsLegend": "H/L : puissance haute/basse · N/W : bande étroite/large · 📡 : ajouté au scan · A/D : analogique/numérique",
+    "chan.txFreqLabel": "TX {mhz}",
+    "chan.toneLabel": "Tone {tone}",
+    "chan.repeater": "Répéteur",
 
     // PTT panel
     "ptt.helpTitle": "Aide PTT",
@@ -323,6 +326,9 @@ const I18N_DICT = {
     "chan.selectError": "Channel select error: {error}",
     "chan.receiving": "Receiving",
     "chan.optsLegend": "H/L: high/low power · N/W: narrow/wide band · 📡: added to scan · A/D: analog/digital",
+    "chan.txFreqLabel": "TX {mhz}",
+    "chan.toneLabel": "Tone {tone}",
+    "chan.repeater": "Repeater",
 
     "ptt.helpTitle": "PTT help",
     "ptt.hintServer": "Hold to transmit — encodes and streams voice in real time",

@@ -302,6 +302,16 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 .chan-opt-icon.on { color: var(--status-info); border-color: var(--color-primary-border-soft); background: var(--status-info-bg); }
 .chan-opt-icon.warn-on { color: var(--status-degraded); border-color: var(--status-degraded-border); background: var(--status-degraded-bg); }
 
+/* RX/TX frequency readout -- the channel's own numbers front and center
+   (RX big, TX/tone/bandwidth as a sub-line), instead of only the local
+   channel name + H/N/📡/D icon row. "Répéteur" badge is derived, not
+   stored: shown whenever TX and RX genuinely differ for this channel. */
+.chan-freq-block { margin: 2px 0 14px; }
+.chan-freq-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.chan-freq-main { font-family: var(--font-mono); font-size: 32px; font-weight: 700; color: var(--color-text); line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.chan-freq-unit { font-size: 13px; font-weight: 600; color: var(--color-text-subtle); margin-left: 6px; }
+.chan-freq-sub { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-dim); margin-top: 3px; }
+
 .ptt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
 .ptt-device-sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-subtle); }
 .rf-indicator { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-pill); padding: 4px 11px; font-size: 11px; font-weight: 600; background: var(--status-neutral-bg); color: var(--status-neutral); border: 1px solid var(--status-neutral-border); }

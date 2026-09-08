@@ -63,6 +63,7 @@ function refreshDynamicTranslations() {
   if (mode === "server") refreshStatus().catch(() => {});
   else updateLocalStatusUi();
   renderChanOpts();
+  renderChanFreq();
   applyModeUi();
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
 }
@@ -501,6 +502,11 @@ $("#btn-connect-server").addEventListener("click", async () => {
     }
     await refreshStatus();
     await loadDeviceList();
+    // Background prefetch: connecting itself already succeeded, so a
+    // failure here (e.g. an empty/unconfigured codeplug) stays silent --
+    // it only means the PTT panel's frequency block and the Canaux table
+    // keep showing "—" until "Lire les 30 canaux" is used by hand.
+    loadAllChannels().catch(() => {});
   } catch (e) { showToast(e.message, "error"); }
 });
 
@@ -532,6 +538,7 @@ $("#btn-local-connect").addEventListener("click", async () => {
       id: `ble-local-${localDeviceInfo.id}`, name: localDeviceInfo.name, transport: "ble-local", target: localDeviceInfo.id,
     });
     await loadDeviceList();
+    loadAllChannels().catch(() => {}); // background prefetch, see loadAllChannels()'s comment
   } catch (e) { showToast(e.message, "error"); }
 });
 $("#btn-local-disconnect").addEventListener("click", async () => {
@@ -612,6 +619,7 @@ async function reconnectKnownDevice(id, transport, target) {
     }
     await refreshStatus();
     await loadDeviceList();
+    loadAllChannels().catch(() => {}); // background prefetch, see loadAllChannels()'s comment
   } catch (e) { showToast(e.message, "error"); }
 }
 
@@ -661,9 +669,41 @@ function renderChanOpts() {
     .join("");
 }
 
+function formatMhz(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n.toFixed(4) : "—";
+}
+
+// RX frequency front and center (mirrors a physical radio's own display),
+// TX/tone/bandwidth as a sub-line -- previously only the local channel
+// name and the H/N/📡/D icon row were shown here, with the actual
+// frequencies visible only in the Canaux tab's table.
+function renderChanFreq() {
+  const cfg = lastReadChannels.find((c) => c.channel === activeChannel);
+  const duplexBadge = $("#chan-freq-duplex");
+  if (!cfg || !cfg.rx_mhz) {
+    $("#chan-freq-rx").textContent = "—";
+    $("#chan-freq-sub").textContent = t("chan.readFirst");
+    duplexBadge.hidden = true;
+    return;
+  }
+  $("#chan-freq-rx").textContent = formatMhz(cfg.rx_mhz);
+  const bw = cfg.bandwidth_narrow ? t("chan.narrow") : t("chan.wide");
+  const tone = (cfg.tx_tone && cfg.tx_tone !== "OFF") ? cfg.tx_tone : ((cfg.rx_tone && cfg.rx_tone !== "OFF") ? cfg.rx_tone : null);
+  const parts = [t("chan.txFreqLabel", { mhz: formatMhz(cfg.tx_mhz) })];
+  if (tone) parts.push(t("chan.toneLabel", { tone }));
+  parts.push(bw);
+  $("#chan-freq-sub").textContent = parts.join(" · ");
+  // Derived, not a stored field: true whenever this channel's TX and RX
+  // genuinely differ (a repeater offset), not a claim about any specific
+  // repeater identity.
+  duplexBadge.hidden = Math.abs((cfg.tx_mhz || 0) - (cfg.rx_mhz || 0)) < 0.0001;
+}
+
 async function applyActiveChannel(select = true) {
   renderChanSelect();
   renderChanOpts();
+  renderChanFreq();
   $("#ptt-device-sub").textContent = `${t("channelLabel", { n: String(activeChannel).padStart(2, "0") })}${channelNames[activeChannel] ? " · " + channelNames[activeChannel] : ""}`;
   renderMessagingPanel(); // Messaging tab's group list/status grid/thread track the same active channel
   if (select) {
@@ -1249,20 +1289,31 @@ async function writeChannelRow(row) {
   } catch (e) { showToast(e.message, "error"); }
 }
 
+// Shared by the "Lire les 30 canaux" button and the auto-read fired right
+// after every successful connection (see connectServerTransport()/
+// btn-local-connect/reconnectKnownDevice below) -- so the PTT panel's
+// RX/TX frequency block and the Canaux table aren't stuck on "—" until
+// the user remembers to click "Lire" by hand. Throws on failure/no
+// connection; callers decide whether that's worth surfacing to the user.
+async function loadAllChannels() {
+  const transport = activeTransport();
+  let channels;
+  if (transport === "server") {
+    channels = await api("GET", "/api/channels");
+  } else if (transport === "local") {
+    channels = await AT2BleClient.readAllChannels();
+  } else {
+    throw new Error(t("gps.noActiveConnection"));
+  }
+  lastReadChannels = channels.length ? channels : emptyChannels();
+  renderChannelTable(lastReadChannels);
+  renderChanOpts();
+  renderChanFreq();
+}
+
 $("#btn-read-channels").addEventListener("click", async () => {
   try {
-    let channels;
-    const transport = activeTransport();
-    if (transport === "server") {
-      channels = await api("GET", "/api/channels");
-    } else if (transport === "local") {
-      channels = await AT2BleClient.readAllChannels();
-    } else {
-      return showToast(t("gps.noActiveConnection"), "info");
-    }
-    lastReadChannels = channels.length ? channels : emptyChannels();
-    renderChannelTable(lastReadChannels);
-    renderChanOpts();
+    await loadAllChannels();
   } catch (e) { showToast(e.message, "error"); }
 });
 
@@ -1289,6 +1340,7 @@ $("#xml-file-input").addEventListener("change", async () => {
     lastReadChannels = merged;
     renderChannelTable(lastReadChannels);
     renderChanOpts();
+    renderChanFreq();
     showToast(t("channels.importXmlSuccess", { count: imported.length }), "success");
   } catch (e) {
     showToast(e.message, "error");
