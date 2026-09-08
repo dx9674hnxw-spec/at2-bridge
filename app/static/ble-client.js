@@ -280,6 +280,66 @@ const AT2BleClient = (() => {
     await sendFrame(frame);
   }
 
+  // Device settings other than volume -- previously local BLE mode had no
+  // client-side support for any of these at all (see protocol.js's "device
+  // settings" section for the byte-format ports these build on). Each is
+  // just build-payload -> encode-frame -> send, same shape as setVolume
+  // above; no read-back counterpart here yet ("Lire les réglages actuels"
+  // stays server-mode-only, see app.js).
+  async function sendSetting(payload) {
+    await sendFrame(AT2Protocol.encodeFrame(payload));
+  }
+  async function setSquelch(level) { await sendSetting(AT2Protocol.setSquelch(level)); }
+  async function setVox(enabled) { await sendSetting(AT2Protocol.setVox(enabled)); }
+  async function setVoxSensitivity(level) { await sendSetting(AT2Protocol.setVoxSensitivity(level)); }
+  async function setTot(seconds) { await sendSetting(AT2Protocol.setTotSeconds(seconds)); }
+  async function setTxInhibit(enabled) { await sendSetting(AT2Protocol.setTxInhibit(enabled)); }
+  async function setTxInterval(seconds) { await sendSetting(AT2Protocol.setTxIntervalSeconds(seconds)); }
+  async function setNoiseReduction(enabled) { await sendSetting(AT2Protocol.setNoiseReduction(enabled)); }
+  async function setPromptTone(enabled) { await sendSetting(AT2Protocol.setPromptTone(enabled)); }
+  async function setPromptLanguage(english) { await sendSetting(AT2Protocol.setPromptLanguage(english)); }
+  async function setDeviceName(name) { await sendSetting(AT2Protocol.setDeviceName(name)); }
+  async function setSmartLink(enabled) { await sendSetting(AT2Protocol.setSmartLink(enabled)); }
+  async function setDualWatch(enabled) { await sendSetting(AT2Protocol.setDualWatch(enabled)); }
+  async function setDualWatchChannel(side, channel) { await sendSetting(AT2Protocol.selectDualWatchChannel(side, channel)); }
+  async function setDualWatchFocus(side) { await sendSetting(AT2Protocol.selectDualWatchFocus(side)); }
+
+  // Read-back for the settings above -- mirrors app/device.py's
+  // _query_setting()/query_*(): send the query, wait for family=0x81 (that
+  // request's family|0x80), same command byte, body =
+  // [subtype echoed][value, little-endian, valueBytes long]. Registers the
+  // wait *before* sending, same reasoning as readChannel() above -- a fast
+  // response must not be missed. Throws if the radio never answers (e.g.
+  // Smart Link's query, confirmed unanswered on real hardware -- see
+  // README) instead of silently returning a bogus value.
+  async function querySetting(queryPayload, responseCommand, subtype, valueBytes = 1, timeoutMs = 2000) {
+    const frame = AT2Protocol.encodeFrame(queryPayload);
+    const waitPromise = waitForPacket(
+      (p) => p.family === 0x81 && p.command === responseCommand
+        && p.body.length >= 1 + valueBytes && p.body[0] === subtype,
+      timeoutMs
+    );
+    await sendFrame(frame);
+    const pkt = await waitPromise;
+    if (!pkt) throw new Error("Pas de réponse de la radio à cette requête.");
+    let value = 0;
+    for (let i = 0; i < valueBytes; i++) value |= pkt.body[1 + i] << (8 * i);
+    return value >>> 0;
+  }
+  async function queryVolume() { return await querySetting(AT2Protocol.queryVolume(), 0x01, 0x01); }
+  async function querySquelch() { return await querySetting(AT2Protocol.querySquelch(), 0x02, 0x04); }
+  async function queryVox() { return !!(await querySetting(AT2Protocol.queryVox(), 0x02, 0x06)); }
+  async function queryVoxSensitivity() { return await querySetting(AT2Protocol.queryVoxSensitivity(), 0x02, 0x07); }
+  async function queryTot() { return await querySetting(AT2Protocol.queryTotSeconds(), 0x02, 0x05, 2); }
+  async function queryTxInhibit() { return !!(await querySetting(AT2Protocol.queryTxInhibit(), 0x02, 0x09)); }
+  async function queryTxInterval() { return await querySetting(AT2Protocol.queryTxIntervalSeconds(), 0x02, 0x0a, 2); }
+  async function queryNoiseReduction() { return !!(await querySetting(AT2Protocol.queryNoiseReduction(), 0x02, 0x11)); }
+  // set_dual_watch()'s "enabled" encoding is 0x02, not 0x01 -- the
+  // read-back must match it (same note as app/device.py::query_dual_watch).
+  async function queryDualWatch() { return (await querySetting(AT2Protocol.queryDualWatch(), 0x02, 0x0d)) === 0x02; }
+  async function queryPromptTone() { return !!(await querySetting(AT2Protocol.queryPromptTone(), 0x01, 0x04)); }
+  async function queryPromptLanguage() { return !!(await querySetting(AT2Protocol.queryPromptLanguage(), 0x01, 0x03)); }
+
   // Send each frame of a multi-frame message and wait for the radio's
   // ack before sending the next one, retrying a dropped frame instead
   // of the old fixed-delay fire-and-forget (which never noticed a
@@ -604,6 +664,31 @@ const AT2BleClient = (() => {
     connected,
     selectChannel,
     setVolume,
+    setSquelch,
+    setVox,
+    setVoxSensitivity,
+    setTot,
+    setTxInhibit,
+    setTxInterval,
+    setNoiseReduction,
+    setPromptTone,
+    setPromptLanguage,
+    setDeviceName,
+    setSmartLink,
+    setDualWatch,
+    setDualWatchChannel,
+    setDualWatchFocus,
+    queryVolume,
+    querySquelch,
+    queryVox,
+    queryVoxSensitivity,
+    queryTot,
+    queryTxInhibit,
+    queryTxInterval,
+    queryNoiseReduction,
+    queryDualWatch,
+    queryPromptTone,
+    queryPromptLanguage,
     sendText,
     sendVoice,
     sendImage,

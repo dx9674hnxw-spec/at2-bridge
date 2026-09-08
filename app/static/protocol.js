@@ -1,9 +1,10 @@
-/* Minimal JS port of the AT2 frame protocol (app/protocol/frame.py +
- * commands.py), used only by the client-side Web Bluetooth mode
- * (ble-client.js). Kept intentionally small: channel select + text
- * messaging, enough for direct browser<->radio control without a
- * server round-trip. The full protocol (codeplug read/write, PTT
- * voice) stays server-side for now -- see README.
+/* JS port of the AT2 frame protocol (app/protocol/frame.py + commands.py),
+ * used only by the client-side Web Bluetooth mode (ble-client.js) for
+ * direct browser<->radio control without a server round-trip: channel
+ * select/read/write, device settings, offline messaging, real-time PTT.
+ * Kept as a straight byte-for-byte port of the Python side so the two
+ * stay provably in sync -- see each function's Python counterpart in
+ * commands.py for the reverse-engineering notes/citations.
  */
 const AT2Protocol = (() => {
   const HEAD = [0xaa, 0x55];
@@ -62,6 +63,107 @@ const AT2Protocol = (() => {
   function setVolume(level) {
     return buildPayload(0x02, 0x01, [0x01, level]);
   }
+
+  // -- device settings (mirrors app/protocol/commands.py) -------------------
+  //
+  // Byte-for-byte ports of the same builders the server uses -- previously
+  // only selectChannel/setVolume existed here, so every other device
+  // setting silently no-opped in local BLE mode ("Local BLE mode: only
+  // Volume was applied..."). Family byte convention: 0x01 = query, 0x02 =
+  // set (instant apply or codeplug), 0x03 = device name, 0x04 = messaging/
+  // smart-link/PTT domain -- see commands.py's module docstring.
+
+  const SIDE_CODE = { A: 0x01, B: 0x02 };
+  function sideCode(side) {
+    const code = SIDE_CODE[side];
+    if (code === undefined) throw new Error(`side must be 'A' or 'B', got: ${side}`);
+    return code;
+  }
+  function u16le(n) {
+    return [n & 0xff, (n >> 8) & 0xff];
+  }
+
+  function selectDualWatchChannel(side, channel) {
+    if (channel < 1 || channel > 30) throw new Error("channel out of range");
+    return buildPayload(0x02, 0x02, [0x0e, sideCode(side), channel, 0x00]);
+  }
+
+  function selectDualWatchFocus(side) {
+    return buildPayload(0x02, 0x02, [0x0f, sideCode(side)]);
+  }
+
+  // Note: the "enabled" value is 0x02, not 0x01 like every other boolean
+  // setting below -- ported as-is from At2Commands.kt::setDualWatch.
+  function setDualWatch(enabled) {
+    return buildPayload(0x02, 0x02, [0x0d, enabled ? 0x02 : 0x00]);
+  }
+
+  function setPromptLanguage(english) {
+    return buildPayload(0x02, 0x01, [0x03, english ? 0x01 : 0x00]);
+  }
+
+  function setPromptTone(enabled) {
+    return buildPayload(0x02, 0x01, [0x04, enabled ? 0x01 : 0x00]);
+  }
+
+  function setSquelch(level) {
+    if (level < 0 || level > 9) throw new Error("squelch out of range (0..9)");
+    return buildPayload(0x02, 0x02, [0x04, level]);
+  }
+
+  function setTotSeconds(seconds) {
+    if (seconds < 0 || seconds > 240) throw new Error("TOT out of range (0..240)");
+    return buildPayload(0x02, 0x02, [0x05, ...u16le(seconds)]);
+  }
+
+  function setVox(enabled) {
+    return buildPayload(0x02, 0x02, [0x06, enabled ? 0x01 : 0x00]);
+  }
+
+  function setVoxSensitivity(level) {
+    if (level < 1 || level > 5) throw new Error("VOX sensitivity out of range (1..5)");
+    return buildPayload(0x02, 0x02, [0x07, level]);
+  }
+
+  function setTxInhibit(enabled) {
+    return buildPayload(0x02, 0x02, [0x09, enabled ? 0x01 : 0x00]);
+  }
+
+  function setTxIntervalSeconds(seconds) {
+    if (seconds < 0 || seconds > 240) throw new Error("TX interval out of range (0..240)");
+    return buildPayload(0x02, 0x02, [0x0a, ...u16le(seconds)]);
+  }
+
+  function setNoiseReduction(enabled) {
+    return buildPayload(0x02, 0x02, [0x11, enabled ? 0x01 : 0x00]);
+  }
+
+  function setDeviceName(name) {
+    return buildPayload(0x03, 0x01, Array.from(new TextEncoder().encode(name)));
+  }
+
+  function setSmartLink(enabled) {
+    return buildPayload(0x04, 0x09, [enabled ? 0x01 : 0x00]);
+  }
+
+  // -- device setting queries (mirrors app/protocol/commands.py's query_*) --
+  //
+  // Confirmed on real hardware (07/09/2026, see README): the radio answers
+  // a family=0x01 query with family=0x81, the same command byte, body =
+  // [subtype byte echoed][value, little-endian]. See ble-client.js's
+  // querySetting() for the send+wait+parse that uses these.
+
+  function queryVolume() { return buildPayload(0x01, 0x01, [0x01]); }
+  function querySquelch() { return buildPayload(0x01, 0x02, [0x04]); }
+  function queryVox() { return buildPayload(0x01, 0x02, [0x06]); }
+  function queryVoxSensitivity() { return buildPayload(0x01, 0x02, [0x07]); }
+  function queryTotSeconds() { return buildPayload(0x01, 0x02, [0x05]); }
+  function queryTxInhibit() { return buildPayload(0x01, 0x02, [0x09]); }
+  function queryTxIntervalSeconds() { return buildPayload(0x01, 0x02, [0x0a]); }
+  function queryNoiseReduction() { return buildPayload(0x01, 0x02, [0x11]); }
+  function queryDualWatch() { return buildPayload(0x01, 0x02, [0x0d]); }
+  function queryPromptTone() { return buildPayload(0x01, 0x01, [0x04]); }
+  function queryPromptLanguage() { return buildPayload(0x01, 0x01, [0x03]); }
 
   // -- text messaging (mirrors app/protocol/messages.py) --------------------
 
@@ -673,7 +775,13 @@ const AT2Protocol = (() => {
     return [];
   }
 
-  return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume, buildTextMessageFrames,
+  return { crc16Ccitt, buildPayload, encodeFrame, decodeFrame, selectChannel, setVolume,
+    selectDualWatchChannel, selectDualWatchFocus, setDualWatch, setPromptLanguage, setPromptTone,
+    setSquelch, setTotSeconds, setVox, setVoxSensitivity, setTxInhibit, setTxIntervalSeconds,
+    setNoiseReduction, setDeviceName, setSmartLink,
+    queryVolume, querySquelch, queryVox, queryVoxSensitivity, queryTotSeconds, queryTxInhibit,
+    queryTxIntervalSeconds, queryNoiseReduction, queryDualWatch, queryPromptTone, queryPromptLanguage,
+    buildTextMessageFrames,
     buildVoiceMessageFrames, buildImageMessageFrames,
     isMessageAck, MessageAssembler, encodeCpsFrame, decodeCpsFrame, buildChannelReadRequest, buildChannelWriteRequest, decodeChannelReadResponse,
     buildPttKeyPayload, buildOfflineSessionPayload, buildPttVoicePayload, isPttVoicePacket, isIncomingRfActivity, extractAmrFrames, extractRfActivityAudioFrames,

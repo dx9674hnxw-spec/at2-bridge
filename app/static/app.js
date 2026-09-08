@@ -1358,10 +1358,12 @@ SETTINGS_SLIDERS.forEach(([sliderId]) => {
 // selection, not a confirmed radio read-back (no query exists for it).
 $$("#dual-watch-focus-segmented button").forEach((btn) => {
   btn.addEventListener("click", async () => {
-    if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+    const transport = activeTransport();
+    if (transport !== "server" && transport !== "local") return showToast(t("gps.noActiveConnection"), "info");
     const side = btn.dataset.action === "set-dual-watch-focus-a" ? "A" : "B";
     try {
-      await api("PUT", "/api/device/dual-watch/focus", { side });
+      if (transport === "server") await api("PUT", "/api/device/dual-watch/focus", { side });
+      else await AT2BleClient.setDualWatchFocus(side);
       $$("#dual-watch-focus-segmented button").forEach((b) => b.classList.toggle("active", b === btn));
       showToast(t("settings.applied"), "success");
     } catch (e) { showToast(e.message, "error"); }
@@ -1407,35 +1409,71 @@ SETTINGS_TRACKED_IDS.forEach((id) => {
 
 // Read-back: confirmed on real hardware (07/09/2026, see README) that the
 // radio DOES answer these queries -- contrary to what this project assumed
-// until then. Server mode only (no BLE-local client support for these
-// yet, same limitation as "Appliquer les changements" below). Reads
+// until then. Each entry's `server`/`local` resolve to a plain value
+// (level/seconds as a number, enabled/english as a boolean) regardless of
+// transport, so `apply` doesn't need to know which one answered. Reads
 // happen one at a time and independently: a setting the radio doesn't
 // answer (e.g. an unconfirmed one, or a flaky link) just doesn't update
 // its control instead of aborting the whole batch. Each successful read
 // also becomes the new baseline for that field.
 $("#btn-read-settings").addEventListener("click", async () => {
-  if (activeTransport() !== "server") return showToast(t("mode.notSupportedLocal"), "info");
+  const transport = activeTransport();
+  if (transport !== "server" && transport !== "local") return showToast(t("gps.noActiveConnection"), "info");
   const btn = $("#btn-read-settings");
   const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = t("settings.reading");
   const reads = [
-    { id: "volume-slider", path: "/api/device/volume", apply: (d) => { $("#volume-slider").value = d.level; refreshSettingValue("volume-slider"); } },
-    { id: "squelch-slider", path: "/api/device/squelch", apply: (d) => { $("#squelch-slider").value = d.level; refreshSettingValue("squelch-slider"); } },
-    { id: "vox-toggle", path: "/api/device/vox", apply: (d) => { $("#vox-toggle").checked = d.enabled; } },
-    { id: "vox-sensitivity-slider", path: "/api/device/vox-sensitivity", apply: (d) => { $("#vox-sensitivity-slider").value = d.level; refreshSettingValue("vox-sensitivity-slider"); } },
-    { id: "tot-slider", path: "/api/device/tot", apply: (d) => { $("#tot-slider").value = d.seconds; refreshSettingValue("tot-slider"); } },
-    { id: "tx-inhibit-toggle", path: "/api/device/tx-inhibit", apply: (d) => { $("#tx-inhibit-toggle").checked = d.enabled; } },
-    { id: "tx-interval-slider", path: "/api/device/tx-interval", apply: (d) => { $("#tx-interval-slider").value = d.seconds; refreshSettingValue("tx-interval-slider"); } },
-    { id: "noise-reduction-toggle", path: "/api/device/noise-reduction", apply: (d) => { $("#noise-reduction-toggle").checked = d.enabled; } },
-    { id: "dual-watch-toggle", path: "/api/device/dual-watch", apply: (d) => { $("#dual-watch-toggle").checked = d.enabled; } },
-    { id: "prompt-tone-toggle", path: "/api/device/prompt-tone", apply: (d) => { $("#prompt-tone-toggle").checked = d.enabled; } },
-    { id: "prompt-language-toggle", path: "/api/device/prompt-language", apply: (d) => { $("#prompt-language-toggle").checked = d.english; } },
+    { id: "volume-slider",
+      server: () => api("GET", "/api/device/volume").then((d) => d.level),
+      local: () => AT2BleClient.queryVolume(),
+      apply: (v) => { $("#volume-slider").value = v; refreshSettingValue("volume-slider"); } },
+    { id: "squelch-slider",
+      server: () => api("GET", "/api/device/squelch").then((d) => d.level),
+      local: () => AT2BleClient.querySquelch(),
+      apply: (v) => { $("#squelch-slider").value = v; refreshSettingValue("squelch-slider"); } },
+    { id: "vox-toggle",
+      server: () => api("GET", "/api/device/vox").then((d) => d.enabled),
+      local: () => AT2BleClient.queryVox(),
+      apply: (v) => { $("#vox-toggle").checked = v; } },
+    { id: "vox-sensitivity-slider",
+      server: () => api("GET", "/api/device/vox-sensitivity").then((d) => d.level),
+      local: () => AT2BleClient.queryVoxSensitivity(),
+      apply: (v) => { $("#vox-sensitivity-slider").value = v; refreshSettingValue("vox-sensitivity-slider"); } },
+    { id: "tot-slider",
+      server: () => api("GET", "/api/device/tot").then((d) => d.seconds),
+      local: () => AT2BleClient.queryTot(),
+      apply: (v) => { $("#tot-slider").value = v; refreshSettingValue("tot-slider"); } },
+    { id: "tx-inhibit-toggle",
+      server: () => api("GET", "/api/device/tx-inhibit").then((d) => d.enabled),
+      local: () => AT2BleClient.queryTxInhibit(),
+      apply: (v) => { $("#tx-inhibit-toggle").checked = v; } },
+    { id: "tx-interval-slider",
+      server: () => api("GET", "/api/device/tx-interval").then((d) => d.seconds),
+      local: () => AT2BleClient.queryTxInterval(),
+      apply: (v) => { $("#tx-interval-slider").value = v; refreshSettingValue("tx-interval-slider"); } },
+    { id: "noise-reduction-toggle",
+      server: () => api("GET", "/api/device/noise-reduction").then((d) => d.enabled),
+      local: () => AT2BleClient.queryNoiseReduction(),
+      apply: (v) => { $("#noise-reduction-toggle").checked = v; } },
+    { id: "dual-watch-toggle",
+      server: () => api("GET", "/api/device/dual-watch").then((d) => d.enabled),
+      local: () => AT2BleClient.queryDualWatch(),
+      apply: (v) => { $("#dual-watch-toggle").checked = v; } },
+    { id: "prompt-tone-toggle",
+      server: () => api("GET", "/api/device/prompt-tone").then((d) => d.enabled),
+      local: () => AT2BleClient.queryPromptTone(),
+      apply: (v) => { $("#prompt-tone-toggle").checked = v; } },
+    { id: "prompt-language-toggle",
+      server: () => api("GET", "/api/device/prompt-language").then((d) => d.english),
+      local: () => AT2BleClient.queryPromptLanguage(),
+      apply: (v) => { $("#prompt-language-toggle").checked = v; } },
   ];
   let ok = 0, fail = 0;
   for (const r of reads) {
     try {
-      r.apply(await api("GET", r.path));
+      const value = await (transport === "server" ? r.server() : r.local());
+      r.apply(value);
       settingsBaseline[r.id] = getFieldValue(r.id);
       ok++;
     } catch (e) {
@@ -1450,23 +1488,18 @@ $("#btn-read-settings").addEventListener("click", async () => {
 });
 
 // Apply all: one button sends every setting on this tab to the radio in a
-// single pass, instead of a separate "Appliquer" per row. In local BLE
-// mode only Volume is wired up client-side (see applyVolumeLevel above),
-// so that's the only one sent there. Each successful send also becomes
-// the new baseline for that field, so the unsaved counter reflects only
-// what genuinely didn't make it (a failed field stays flagged unsaved).
+// single pass, instead of a separate "Appliquer" per row. Each entry
+// carries both a server call (PUT to the backend) and a local-BLE call
+// (AT2BleClient, straight to the radio over Web Bluetooth) -- local BLE
+// mode used to only support Volume here, silently no-opping every other
+// field (see protocol.js/ble-client.js's "device settings" sections for
+// the byte-format ports that made the rest possible). Each successful
+// send also becomes the new baseline for that field, so the unsaved
+// counter reflects only what genuinely didn't make it (a failed field
+// stays flagged unsaved).
 $("#btn-apply-settings").addEventListener("click", async () => {
   const transport = activeTransport();
-  if (transport === "local") {
-    try {
-      await applyVolumeLevel(parseInt($("#volume-slider").value, 10));
-      settingsBaseline["volume-slider"] = getFieldValue("volume-slider");
-      refreshUnsavedCount();
-      showToast(t("settings.applyAllLocalOnly"), "info");
-    } catch (e) { showToast(e.message, "error"); }
-    return;
-  }
-  if (transport !== "server") return showToast(t("gps.noActiveConnection"), "info");
+  if (transport !== "server" && transport !== "local") return showToast(t("gps.noActiveConnection"), "info");
 
   const btn = $("#btn-apply-settings");
   const originalLabel = btn.textContent;
@@ -1474,31 +1507,63 @@ $("#btn-apply-settings").addEventListener("click", async () => {
   btn.textContent = t("settings.applying");
 
   const tasks = [
-    { id: "volume-slider", method: "PUT", path: "/api/device/volume", body: () => ({ level: parseInt($("#volume-slider").value, 10) }) },
-    { id: "squelch-slider", method: "PUT", path: "/api/device/squelch", body: () => ({ level: parseInt($("#squelch-slider").value, 10) }) },
-    { id: "vox-toggle", method: "PUT", path: "/api/device/vox", body: () => ({ enabled: $("#vox-toggle").checked }) },
-    { id: "vox-sensitivity-slider", method: "PUT", path: "/api/device/vox-sensitivity", body: () => ({ level: parseInt($("#vox-sensitivity-slider").value, 10) }) },
-    { id: "tot-slider", method: "PUT", path: "/api/device/tot", body: () => ({ seconds: parseInt($("#tot-slider").value, 10) }) },
-    { id: "tx-inhibit-toggle", method: "PUT", path: "/api/device/tx-inhibit", body: () => ({ enabled: $("#tx-inhibit-toggle").checked }) },
-    { id: "tx-interval-slider", method: "PUT", path: "/api/device/tx-interval", body: () => ({ seconds: parseInt($("#tx-interval-slider").value, 10) }) },
-    { id: "noise-reduction-toggle", method: "PUT", path: "/api/device/noise-reduction", body: () => ({ enabled: $("#noise-reduction-toggle").checked }) },
-    { id: "prompt-tone-toggle", method: "PUT", path: "/api/device/prompt-tone", body: () => ({ enabled: $("#prompt-tone-toggle").checked }) },
-    { id: "prompt-language-toggle", method: "PUT", path: "/api/device/prompt-language", body: () => ({ english: $("#prompt-language-toggle").checked }) },
-    { id: "smart-link-toggle", method: "PUT", path: "/api/device/smart-link", body: () => ({ enabled: $("#smart-link-toggle").checked }) },
-    { id: "dual-watch-toggle", method: "PUT", path: "/api/device/dual-watch", body: () => ({ enabled: $("#dual-watch-toggle").checked }) },
-    { id: "dual-watch-channel-a", method: "PUT", path: "/api/device/dual-watch/channel", body: () => ({ side: "A", channel: parseInt($("#dual-watch-channel-a").value, 10) }) },
-    { id: "dual-watch-channel-b", method: "PUT", path: "/api/device/dual-watch/channel", body: () => ({ side: "B", channel: parseInt($("#dual-watch-channel-b").value, 10) }) },
+    { id: "volume-slider",
+      server: () => api("PUT", "/api/device/volume", { level: parseInt($("#volume-slider").value, 10) }),
+      local: () => AT2BleClient.setVolume(parseInt($("#volume-slider").value, 10)) },
+    { id: "squelch-slider",
+      server: () => api("PUT", "/api/device/squelch", { level: parseInt($("#squelch-slider").value, 10) }),
+      local: () => AT2BleClient.setSquelch(parseInt($("#squelch-slider").value, 10)) },
+    { id: "vox-toggle",
+      server: () => api("PUT", "/api/device/vox", { enabled: $("#vox-toggle").checked }),
+      local: () => AT2BleClient.setVox($("#vox-toggle").checked) },
+    { id: "vox-sensitivity-slider",
+      server: () => api("PUT", "/api/device/vox-sensitivity", { level: parseInt($("#vox-sensitivity-slider").value, 10) }),
+      local: () => AT2BleClient.setVoxSensitivity(parseInt($("#vox-sensitivity-slider").value, 10)) },
+    { id: "tot-slider",
+      server: () => api("PUT", "/api/device/tot", { seconds: parseInt($("#tot-slider").value, 10) }),
+      local: () => AT2BleClient.setTot(parseInt($("#tot-slider").value, 10)) },
+    { id: "tx-inhibit-toggle",
+      server: () => api("PUT", "/api/device/tx-inhibit", { enabled: $("#tx-inhibit-toggle").checked }),
+      local: () => AT2BleClient.setTxInhibit($("#tx-inhibit-toggle").checked) },
+    { id: "tx-interval-slider",
+      server: () => api("PUT", "/api/device/tx-interval", { seconds: parseInt($("#tx-interval-slider").value, 10) }),
+      local: () => AT2BleClient.setTxInterval(parseInt($("#tx-interval-slider").value, 10)) },
+    { id: "noise-reduction-toggle",
+      server: () => api("PUT", "/api/device/noise-reduction", { enabled: $("#noise-reduction-toggle").checked }),
+      local: () => AT2BleClient.setNoiseReduction($("#noise-reduction-toggle").checked) },
+    { id: "prompt-tone-toggle",
+      server: () => api("PUT", "/api/device/prompt-tone", { enabled: $("#prompt-tone-toggle").checked }),
+      local: () => AT2BleClient.setPromptTone($("#prompt-tone-toggle").checked) },
+    { id: "prompt-language-toggle",
+      server: () => api("PUT", "/api/device/prompt-language", { english: $("#prompt-language-toggle").checked }),
+      local: () => AT2BleClient.setPromptLanguage($("#prompt-language-toggle").checked) },
+    { id: "smart-link-toggle",
+      server: () => api("PUT", "/api/device/smart-link", { enabled: $("#smart-link-toggle").checked }),
+      local: () => AT2BleClient.setSmartLink($("#smart-link-toggle").checked) },
+    { id: "dual-watch-toggle",
+      server: () => api("PUT", "/api/device/dual-watch", { enabled: $("#dual-watch-toggle").checked }),
+      local: () => AT2BleClient.setDualWatch($("#dual-watch-toggle").checked) },
+    { id: "dual-watch-channel-a",
+      server: () => api("PUT", "/api/device/dual-watch/channel", { side: "A", channel: parseInt($("#dual-watch-channel-a").value, 10) }),
+      local: () => AT2BleClient.setDualWatchChannel("A", parseInt($("#dual-watch-channel-a").value, 10)) },
+    { id: "dual-watch-channel-b",
+      server: () => api("PUT", "/api/device/dual-watch/channel", { side: "B", channel: parseInt($("#dual-watch-channel-b").value, 10) }),
+      local: () => AT2BleClient.setDualWatchChannel("B", parseInt($("#dual-watch-channel-b").value, 10)) },
   ];
   // Device name is skipped when left blank, same guard the old per-field
   // handler had -- never overwrite the radio's name with an empty string
   // just because the field wasn't touched.
   const deviceName = $("#device-name-input").value.trim();
-  if (deviceName) tasks.push({ id: "device-name-input", method: "PUT", path: "/api/device/name", body: () => ({ name: deviceName }) });
+  if (deviceName) {
+    tasks.push({ id: "device-name-input",
+      server: () => api("PUT", "/api/device/name", { name: deviceName }),
+      local: () => AT2BleClient.setDeviceName(deviceName) });
+  }
 
   let ok = 0, fail = 0;
   for (const task of tasks) {
     try {
-      await api(task.method, task.path, task.body());
+      await (transport === "server" ? task.server() : task.local());
       settingsBaseline[task.id] = getFieldValue(task.id);
       ok++;
     } catch (e) {
