@@ -294,23 +294,36 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 .devices-grid > .card { margin-bottom: 0; } /* le gap de la grille gère déjà l'espacement ici */
 @media (min-width: 780px) { .devices-grid { grid-template-columns: 1fr 1fr; align-items: start; } }
 
-.chan-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
-.chan-arrow { width: 30px; height: 30px; min-height: auto; border-radius: var(--radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-dim); font-size: 15px; padding: 0; }
-.chan-select { flex: 1; min-width: 130px; font-weight: 600; font-size: 13px; }
-.chan-opts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Line 1: prev/select/next only, centered as a compact group (not
+   stretched full-width) -- rename/help moved down to join the option
+   icons as one row, see .chan-opts-row below. */
+.chan-switch { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.chan-arrow { width: 30px; height: 30px; min-height: auto; border-radius: var(--radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-dim); font-size: 15px; padding: 0; flex: none; }
+.chan-select { flex: 0 1 220px; min-width: 130px; font-weight: 600; font-size: 13px; }
+
+/* Line 2: H/N/📡/D icons + rename + help, centered together as one row.
+   .chan-opts itself stays a plain flex group (renderChanOpts() replaces
+   its innerHTML wholesale) -- the two static buttons live as siblings in
+   the wrapping row instead, so they survive that re-render. */
+.chan-opts-row { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chan-opts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .chan-opt-icon { width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-faint); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .chan-opt-icon.on { color: var(--status-info); border-color: var(--color-primary-border-soft); background: var(--status-info-bg); }
 .chan-opt-icon.warn-on { color: var(--status-degraded); border-color: var(--status-degraded-border); background: var(--status-degraded-bg); }
 
-/* RX/TX frequency readout -- the channel's own numbers front and center
-   (RX big, TX/tone/bandwidth as a sub-line), instead of only the local
-   channel name + H/N/📡/D icon row. "Répéteur" badge is derived, not
-   stored: shown whenever TX and RX genuinely differ for this channel. */
-.chan-freq-block { margin: 2px 0 14px; }
-.chan-freq-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+/* Line 3+4: RX/TX frequency readout, as its own recessed "screen" panel
+   (same treatment as .ptt-wave below) -- RX big and centered (mirrors a
+   physical radio's own display), TX/tone/bandwidth as a centered
+   sub-line. "Répéteur" badge is derived, not stored: shown whenever TX
+   and RX genuinely differ for this channel. */
+.chan-freq-block {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+  margin-bottom: 14px; padding: 14px 16px;
+  background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+}
 .chan-freq-main { font-family: var(--font-mono); font-size: 32px; font-weight: 700; color: var(--color-text); line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .chan-freq-unit { font-size: 13px; font-weight: 600; color: var(--color-text-subtle); margin-left: 6px; }
-.chan-freq-sub { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-dim); margin-top: 3px; }
+.chan-freq-sub { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-dim); }
 
 .ptt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
 .ptt-device-sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-subtle); }
