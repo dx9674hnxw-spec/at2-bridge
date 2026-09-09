@@ -477,11 +477,34 @@ tbody tr:hover { background: var(--color-surface-hover); }
    area on a wide monitor) but the Beta tab's iframes want the same
    breathing room, so it's a reusable class rather than an #tab-map rule.
    .wide-panel > .card caps how wide that gets so it doesn't turn into an
-   unreadable ultra-wide strip on very large displays. */
+   unreadable ultra-wide strip on very large displays.
+
+   width is deliberately left at its default `auto`, NOT set to 100%:
+   with equal negative left/right margins, `auto` is what lets the UA
+   solve the box-model equation freely and actually expand the box to
+   fill from edge to edge. Pinning it to `width:100%` (as this rule
+   originally did) fixes the box at 100% of the *unexpanded* containing
+   block instead, which over-constrains the equation once combined with
+   non-auto margins on both sides -- browsers then resolve the conflict
+   by recomputing width itself against the still-growing padding
+   (`calc(50vw - ...)`), so the visible box kept shrinking as the
+   viewport grew wider instead of the intended opposite. Confirmed via
+   computed styles: at a 2560px viewport this produced a ~34px `.card`,
+   the exact "tiny sliver of text" bug reported after this shipped.
+
+   padding-left/right must be a *fixed* 16px too, not the viewport-scaled
+   `calc(50vw - 50% + 16px)` this rule also originally used: that value
+   grows exactly as fast as the box itself does (both track 50vw), so
+   the available content width came out to a constant ~1036px --
+   identical to main's own width -- at every viewport size. .card's own
+   max-width:1600px could then never actually be reached: there was
+   never more than main's original ~1036px of room to give it, on any
+   screen. Confirmed by sweeping viewports from 900px to 3440px and
+   reading .card's rendered width back: 1036px at every single one. */
 .wide-panel {
-  width: 100%; max-width: none;
+  max-width: none;
   margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
-  padding-left: calc(50vw - 50% + 16px); padding-right: calc(50vw - 50% + 16px);
+  padding-left: 16px; padding-right: 16px;
   box-sizing: border-box;
 }
 .wide-panel > .card { max-width: 1600px; margin-left: auto; margin-right: auto; }
