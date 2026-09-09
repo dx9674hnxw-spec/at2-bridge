@@ -73,16 +73,16 @@
      tokens, not literals inline in the rules -- each value is used more
      than once across that section, so a single source of truth here is
      what the CSS is supposed to look like, theme-swapped or not. */
-  --freq-crt-bg: #05070f;
-  --freq-crt-border: #16213a;
-  --freq-crt-scanline: rgba(150, 195, 255, .11);
-  --freq-crt-text-bright: #e3f1ff;
-  --freq-crt-text-dim: #7fb0e8;
-  --freq-crt-text-blue: #63a9ff;
-  --freq-crt-aberration-red: rgba(255, 60, 60, .6);
-  --freq-crt-aberration-cyan: rgba(70, 150, 255, .6);
-  --freq-crt-aberration-red-soft: rgba(255, 60, 60, .4);
-  --freq-crt-aberration-cyan-soft: rgba(70, 150, 255, .4);
+  --freq-crt-bg: #08090d;
+  --freq-crt-border: #1c2028;
+  --freq-crt-scanline: rgba(200, 210, 225, .13);
+  --freq-crt-text-bright: #eef2f7;
+  --freq-crt-text-dim: #9aa8bb;
+  --freq-crt-text-blue: #7fa8d6;
+  --freq-crt-aberration-red: rgba(255, 60, 60, .5);
+  --freq-crt-aberration-cyan: rgba(100, 160, 220, .5);
+  --freq-crt-aberration-red-soft: rgba(255, 60, 60, .35);
+  --freq-crt-aberration-cyan-soft: rgba(100, 160, 220, .35);
 }
 
 /* -- Light theme override -------------------------------------------------
@@ -896,8 +896,10 @@ tbody tr:hover { background: var(--color-surface-hover); }
    (the TX/RX audiograph strip) alongside their existing class in
    index.html. Scanlines + animated static noise
    (an inline feTurbulence SVG, jittered in steps so it reads as static
-   rather than a smooth pan), plus a chromatic-aberration text-shadow
-   (red/cyan split) on the big digits.
+   rather than a smooth pan; a feComponentTransfer after it steepens the
+   contrast so the grain reads as distinct flecks instead of a flat gray
+   haze), plus a chromatic-aberration text-shadow (red/blue split) on the
+   big digits.
 
    There used to also be a brighter "tracking" band sweeping down through
    the screen every ~9s. Removed: `top`/`height` in % on a position:
@@ -915,7 +917,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
    physical device's own CRT/LCD readout, which doesn't relight itself
    for the room's light/dark preference, so those tokens are never
    redefined under [data-theme="light"] the way --color-* / --status-* are,
-   and it stays the same dark phosphor-blue screen in both app themes.
+   and it stays the same dark screen in both app themes.
 
    No !important anywhere: this block is appended after .chan-freq-block/
    .scan-display's own rules, and at equal specificity (one class each)
@@ -939,7 +941,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
   content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
   background-image:
     repeating-linear-gradient(to bottom, var(--freq-crt-scanline) 0px, var(--freq-crt-scanline) 1px, transparent 1px, transparent 2px),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.2' intercept='-0.55'/%3E%3CfeFuncG type='linear' slope='2.2' intercept='-0.55'/%3E%3CfeFuncB type='linear' slope='2.2' intercept='-0.55'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 100% 100%, 180px 180px;
   background-blend-mode: overlay;
   mix-blend-mode: overlay;
