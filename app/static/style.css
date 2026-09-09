@@ -622,14 +622,14 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .scan-log-row.hit { border-color: var(--status-down-border); color: var(--status-down); }
 .scan-log-time { color: var(--color-text-faint); flex-shrink: 0; }
 
-/* Channel grid: one chip per channel (fixed 10 columns -- 30 channels is
-   the hardware's fixed count, so this is always exactly 3 rows and never
-   needs to reflow; kept at 10 cols on narrow screens too, just tighter
-   padding/font, rather than wrapping to fewer columns). Click anywhere on
-   a chip to toggle it in/out of the scan rotation -- replaces the old
-   per-row checkbox. Priority is set from the toolbar's dropdown (already
-   wired to the same scanPriorityCh state); a chip just reflects it via
-   border color, no separate star target to mis-tap in a ~30px cell. */
+/* Channel grid: one chip per channel -- 10 columns (3 rows for the
+   hardware's fixed 30-channel count) down to 480px, then 5 columns (6
+   rows) below that so chips stay a comfortable tap size on phones
+   instead of shrinking to fit 10 across. Click anywhere on a chip to
+   toggle it in/out of the scan rotation -- replaces the old per-row
+   checkbox. Priority is set from the toolbar's dropdown (already wired
+   to the same scanPriorityCh state); a chip just reflects it via border
+   color, no separate star target to mis-tap in a small cell. */
 .scan-chan-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
 .scan-chan-chip {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -647,10 +647,10 @@ tbody tr:hover { background: var(--color-surface-hover); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 @media (max-width: 480px) {
-  .scan-chan-grid { gap: 4px; }
-  .scan-chan-chip { padding: 6px 2px; }
-  .scan-chan-num { font-size: 10px; }
-  .scan-chan-chip-name { font-size: 8.5px; }
+  .scan-chan-grid { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .scan-chan-chip { padding: 10px 6px; }
+  .scan-chan-num { font-size: 13px; }
+  .scan-chan-chip-name { font-size: 10.5px; }
 }
 
 /* -- Beta tab: isolated prototypes, each its own static page under
