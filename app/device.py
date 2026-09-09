@@ -15,7 +15,6 @@ from app.protocol.frame import At2Packet
 from app.transport.base import Transport
 from app.transport.ble_transport import BleTransport
 from app.transport.serial_transport import SerialTransport
-from app import store
 
 logger = logging.getLogger("at2.device")
 
@@ -96,12 +95,12 @@ class DeviceManager:
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
         # NOTE (29/08/2026): remembering the device is now an EXPLICIT action
-        # taken by the frontend (see app.js's btn-connect-serial handler),
-        # not an automatic side effect of every successful connect. This used
-        # to unconditionally re-add the device via store.remember_device()
-        # here, which silently undid "Forget" the moment the person
-        # reconnected to the same port for any reason -- confirmed as a real,
-        # reported bug. See CONSIGNES_PROJET.md.
+        # taken by the frontend (see app.js's btn-connect-server handler,
+        # serial branch), not an automatic side effect of every successful
+        # connect. This used to unconditionally re-add the device via
+        # store.remember_device() here, which silently undid "Forget" the
+        # moment the person reconnected to the same port for any reason --
+        # confirmed as a real, reported bug. See CONSIGNES_PROJET.md.
         self._log_line(f"Connecté en série sur {port} @ {baud_rate} bauds")
 
     async def connect_ble(self, address: str) -> None:
@@ -122,9 +121,10 @@ class DeviceManager:
         self._install_ptt_rx_listener(t)
         self._install_message_rx_listener(t)
         # NOTE (29/08/2026): same reasoning as connect_serial above --
-        # remembering is now explicit (app.js's btn-scan-ble handler already
-        # does its own remember_device call with the proper scanned name
-        # right after this returns). No longer done automatically here.
+        # remembering is now explicit (app.js's btn-connect-server handler,
+        # BLE branch, already does its own remember_device call with the
+        # scanned device name right after this returns). No longer done
+        # automatically here.
         self._log_line(f"Connecté en BLE sur {address}")
 
     async def disconnect(self) -> None:

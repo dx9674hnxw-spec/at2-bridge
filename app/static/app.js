@@ -65,6 +65,7 @@ function refreshDynamicTranslations() {
   renderChanOpts();
   renderChanFreq();
   applyModeUi();
+  applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
 }
 
@@ -76,6 +77,7 @@ function refreshDynamicTranslations() {
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   $("#theme-toggle").textContent = theme === "light" ? t("theme.light") : t("theme.dark");
+  $("#theme-toggle").title = t("theme.title");
 }
 
 const savedTheme = localStorage.getItem("at2_theme") || "dark";

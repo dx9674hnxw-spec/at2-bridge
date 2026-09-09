@@ -10,7 +10,6 @@ container, or the host's built-in adapter with `network_mode: host`).
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from bleak import BleakClient, BleakScanner
