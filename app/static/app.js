@@ -200,8 +200,15 @@ async function apiUpload(path, formData) {
 // PttSession, the raw-frame debug tool), so no per-feature special-casing
 // is needed here.
 // ---------------------------------------------------------------------------
-let logLines = []; // { timestamp, text, cls }
+let logLines = []; // { timestamp, text, cls, el }
 let lastActionStart = 0;
+let logFilterText = "";
+let unseenLogLines = 0;
+
+// Keeps a long session's memory/DOM bounded, same idea as alertHistory's
+// 200-entry cap and the beacon store's 300 -- this one previously had no
+// cap at all, so it could grow forever.
+const LOG_MAX_LINES = 800;
 
 function classifyLogLine(text) {
   if (/^RX\b/.test(text)) return "log-rx";
@@ -211,23 +218,87 @@ function classifyLogLine(text) {
   return "log-info";
 }
 
+function lineMatchesFilter(entry) {
+  if (!logFilterText) return true;
+  return entry.text.toLowerCase().includes(logFilterText) || entry.timestamp.includes(logFilterText);
+}
+
+// "At the bottom" with a little slack (40px) rather than an exact ===0
+// check -- otherwise a fractional-pixel scroll position (common with
+// high-DPI displays/trackpad momentum) would count as "scrolled away"
+// and start holding back new lines behind the jump badge for no reason.
+function isLogAtBottom() {
+  const el = $("#log-console");
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+}
+
+function updateLogJumpBadge() {
+  const badge = $("#log-jump-badge");
+  badge.hidden = unseenLogLines === 0;
+  if (unseenLogLines > 0) badge.textContent = t("log.newLines", { n: unseenLogLines });
+}
+
+function scrollLogToBottom() {
+  const el = $("#log-console");
+  el.scrollTop = el.scrollHeight;
+  unseenLogLines = 0;
+  updateLogJumpBadge();
+}
+
 function renderLogLine(entry) {
   const el = $("#log-console");
   const span = document.createElement("span");
   span.className = `log-line ${entry.cls}`;
   span.textContent = `[${entry.timestamp}] ${entry.text}\n`;
+  span.style.display = lineMatchesFilter(entry) ? "" : "none";
+  entry.el = span;
   el.appendChild(span);
+}
+
+function trimLogOverflow() {
+  if (logLines.length <= LOG_MAX_LINES) return;
+  const overflow = logLines.length - LOG_MAX_LINES;
+  for (let i = 0; i < overflow; i++) logLines[i].el.remove();
+  logLines.splice(0, overflow);
+  lastActionStart = Math.max(0, lastActionStart - overflow);
 }
 
 function appendLog(line) {
   const now = new Date().toLocaleTimeString("fr-FR");
   const entry = { timestamp: now, text: line, cls: classifyLogLine(line) };
+  const wasAtBottom = isLogAtBottom();
   logLines.push(entry);
   if (entry.cls !== "log-rx") lastActionStart = logLines.length - 1;
   renderLogLine(entry);
-  const el = $("#log-console");
-  el.scrollTop = el.scrollHeight;
+  trimLogOverflow();
+  // Only the auto-scroll/badge care whether this line is actually visible
+  // under the current filter -- no point yanking the view to the bottom,
+  // or counting toward "N new lines", for something the filter is hiding.
+  if (lineMatchesFilter(entry)) {
+    if (wasAtBottom) scrollLogToBottom();
+    else { unseenLogLines++; updateLogJumpBadge(); }
+  }
 }
+
+$("#log-filter").addEventListener("input", (e) => {
+  logFilterText = e.target.value.trim().toLowerCase();
+  for (const entry of logLines) entry.el.style.display = lineMatchesFilter(entry) ? "" : "none";
+  // Typing a filter reshuffles what's visible around the current scroll
+  // position in a way "was I at the bottom" can't meaningfully answer
+  // anymore -- simplest correct behavior is to jump to the bottom of
+  // whatever now matches and clear the "new lines" counter with it.
+  scrollLogToBottom();
+});
+
+$("#log-jump-badge").addEventListener("click", scrollLogToBottom);
+
+$("#btn-log-clear").addEventListener("click", () => {
+  logLines = [];
+  lastActionStart = 0;
+  unseenLogLines = 0;
+  $("#log-console").innerHTML = "";
+  updateLogJumpBadge();
+});
 
 function formatLogEntries(entries) {
   return entries.map((e) => `[${e.timestamp}] ${e.text}`).join("\n");
