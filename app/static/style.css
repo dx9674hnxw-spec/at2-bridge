@@ -573,17 +573,24 @@ tbody tr:hover { background: var(--color-surface-hover); }
    Leaflet's own default light gray instead of matching the dark theme. */
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--color-bg-alt); }
 
-/* Stock OSM tiles (see ensureLeafletMap() in app.js -- CARTO's dark
-   basemap turned out to need an API key now) are a light/day-mode
-   basemap; invert+rotate them back to a dark map with a CSS filter on
-   just the tile pane, the standard trick for a free dark-mode map
-   without a purpose-built dark tile set. Scoped to .leaflet-tile-pane
-   specifically (not e.g. .leaflet-layer or the map container), which
-   holds only the raster tile images -- markers/tooltips/circleMarkers
-   live in .leaflet-overlay-pane/.leaflet-marker-pane, untouched by this,
-   so their already-correct colors (see renderMap() in app.js) don't get
-   run through the same inversion and come out wrong. */
-.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
+/* Stock OSM tiles (see ensureLeafletMap() in app.js -- every free,
+   no-API-key dark basemap has been retiring that free tier one by one,
+   CARTO included) are a light/day-mode basemap; darken them with a CSS
+   filter on just the tile pane instead of a purpose-built dark tile set.
+   grayscale() FIRST, before invert() -- inverting a still-in-color map
+   (green parks, blue water, orange roads) and hue-rotating to compensate
+   only approximately restores the original hues, and saturated colors
+   come out muddy/purplish. Desaturating first sidesteps that entirely:
+   the result is a clean monochrome map, light roads/labels on a near-
+   black ground, same idea as e.g. CARTO's own Dark Matter but achieved
+   without needing their tiles (or their now-required API key) at all.
+   Scoped to .leaflet-tile-pane specifically (not e.g. .leaflet-layer or
+   the map container), which holds only the raster tile images --
+   markers/tooltips/circleMarkers live in .leaflet-overlay-pane/
+   .leaflet-marker-pane, untouched by this, so their already-correct
+   colors (see renderMap() in app.js) don't get run through the same
+   filter and come out wrong. */
+.leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
 
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
    light-mode design by default too -- reskin all three to the app's own
