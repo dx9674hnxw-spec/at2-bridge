@@ -99,52 +99,6 @@
             <div class="chan-freq-sub" id="chan-freq-sub">—</div>
           </div>
 
-          <!-- Scan de canaux -- vivait dans son propre onglet, déplacé ici
-               (repliable, comme "+ Nouvelle connexion" ci-dessus) pour
-               rester à côté du sélecteur de canal et du PTT qu'il pilote
-               tous les deux. Voir la section "Scan tab" dans app.js pour
-               la logique (le nom de la fonction n'a pas changé). -->
-          <div class="scan-disclosure">
-            <button class="scan-disclosure-toggle" id="scan-disclosure-toggle">
-              <span data-i18n="scan.title">Scan de canaux</span>
-              <span class="scan-disclosure-sub" id="scan-disclosure-sub">—</span>
-              <span class="chevron">›</span>
-            </button>
-            <div class="scan-disclosure-body" id="scan-disclosure-body">
-              <div class="scan-disclosure-inner">
-                <div class="settings-toolbar" style="margin-bottom:10px;">
-                  <label class="scan-range-label"><span data-i18n="scan.speedLabel">Vitesse</span><input type="range" id="scan-dwell-range" min="150" max="1200" step="50" value="450" /></label>
-                  <label class="scan-range-label"><span data-i18n="scan.pauseLabel">Pause sur activité</span><input type="range" id="scan-pause-range" min="1" max="8" step="1" value="3" /></label>
-                  <label class="scan-range-label"><span data-i18n="scan.priorityLabel">Prioritaire</span>
-                    <select id="scan-priority-select"><option value="" data-i18n="scan.priorityNone">Aucun</option></select>
-                  </label>
-                  <button class="btn-primary" id="scan-toggle-btn" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
-                </div>
-
-                <div id="scan-empty-state" class="hint scan-empty-state">
-                  <span data-i18n="scan.emptyHint">Aucun canal lu pour l'instant — lisez les canaux pour choisir lesquels scanner.</span>
-                  <button class="btn-ghost" id="scan-read-btn" data-i18n="scan.readChannelsBtn">Lire les canaux</button>
-                </div>
-
-                <div class="scan-layout" id="scan-layout" hidden>
-                  <div>
-                    <div class="scan-display" id="scan-display">
-                      <div class="scan-status" id="scan-status" data-i18n="scan.statusIdle">À l'arrêt</div>
-                      <div class="scan-ch-num" id="scan-ch-num">—</div>
-                      <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
-                      <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
-                      <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
-                    </div>
-                    <p class="hint" style="margin:10px 0 8px;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>
-                    <div class="hint" style="margin-bottom:6px;" data-i18n="scan.logHeading">Journal du scan</div>
-                    <div class="scan-log" id="scan-log"></div>
-                  </div>
-                  <div class="scan-chan-table" id="scan-chan-table"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div class="ptt-header">
             <div class="ptt-device-sub" id="ptt-device-sub">—</div>
             <span class="rf-indicator" id="rf-indicator">
@@ -189,14 +143,75 @@
 
           <button class="btn-ghost gps-send-btn" id="gps-send-now" data-i18n="gps.sendNow">Envoyer ma position maintenant</button>
 
-          <div class="sos-row">
-            <button class="sos-btn" id="sos-btn" data-i18n="gps.sos">SOS</button>
+          <!-- Redesigned: used to be a single click on a small button
+               right next to a dropdown -- one misclick sent a real SOS.
+               Now a hold-to-confirm button (same interaction language as
+               PTT's own press-and-hold, see #ptt-btn) with a filling bar
+               as the confirmation affordance, so triggering it takes a
+               deliberate ~1.4s hold instead of a tap. -->
+          <div class="sos-block">
+            <div class="section-label" data-i18n="gps.sosSectionLabel">Urgence</div>
             <select id="sos-preset" class="sos-preset">
               <option value="Perdu, besoin d'un itinéraire" data-i18n="gps.sosPresetLost">Perdu, besoin d'un itinéraire</option>
               <option value="Blessé, besoin de secours médical" data-i18n="gps.sosPresetInjured">Blessé, besoin de secours médical</option>
               <option value="Bloqué, besoin d'une évacuation" data-i18n="gps.sosPresetStuck">Bloqué, besoin d'une évacuation</option>
             </select>
+            <button class="sos-hold-btn" id="sos-btn">
+              <span class="sos-hold-fill" id="sos-hold-fill"></span>
+              <span class="sos-hold-content">
+                <span class="sos-hold-icon">!</span>
+                <span class="sos-hold-label" id="sos-hold-label" data-i18n="gps.sosHoldLabel">Maintenir pour envoyer SOS</span>
+              </span>
+            </button>
+            <div class="hint" id="sos-status" data-i18n="gps.sosIdleHint">Envoie ta position avec le motif ci-dessus.</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Scan de canaux -- déplacé de son propre onglet ici (toujours
+           dans Appareils, à côté du sélecteur de canal/PTT qu'il pilote),
+           mais en carte pleine largeur plutôt que nichée dans #ptt-panel :
+           confinée à cette seule colonne, sa mise en page interne (état +
+           journal + liste des canaux) n'avait que ~480px pour respirer et
+           finissait entièrement empilée à la verticale malgré le reste de
+           la largeur de page disponible juste à côté. Voir la section
+           correspondante dans app.js (les noms de fonctions n'ont pas
+           changé). -->
+      <div class="card" id="scan-card">
+        <div class="ptt-header">
+          <div>
+            <div class="ptt-device-name" data-i18n="scan.title">Scan de canaux</div>
+            <div class="ptt-device-sub" id="scan-sub">—</div>
+          </div>
+          <div class="settings-toolbar">
+            <label class="scan-range-label"><span data-i18n="scan.speedLabel">Vitesse</span><input type="range" id="scan-dwell-range" min="150" max="1200" step="50" value="450" /></label>
+            <label class="scan-range-label"><span data-i18n="scan.pauseLabel">Pause sur activité</span><input type="range" id="scan-pause-range" min="1" max="8" step="1" value="3" /></label>
+            <label class="scan-range-label"><span data-i18n="scan.priorityLabel">Prioritaire</span>
+              <select id="scan-priority-select"><option value="" data-i18n="scan.priorityNone">Aucun</option></select>
+            </label>
+            <button class="btn-primary" id="scan-toggle-btn" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
+          </div>
+        </div>
+
+        <div id="scan-empty-state" class="hint scan-empty-state">
+          <span data-i18n="scan.emptyHint">Aucun canal lu pour l'instant — lisez les canaux pour choisir lesquels scanner.</span>
+          <button class="btn-ghost" id="scan-read-btn" data-i18n="scan.readChannelsBtn">Lire les canaux</button>
+        </div>
+
+        <div class="scan-layout" id="scan-layout" hidden>
+          <div>
+            <div class="scan-display" id="scan-display">
+              <div class="scan-status" id="scan-status" data-i18n="scan.statusIdle">À l'arrêt</div>
+              <div class="scan-ch-num" id="scan-ch-num">—</div>
+              <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
+              <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
+              <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+            </div>
+            <p class="hint" style="margin:10px 0 8px;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>
+            <div class="hint" style="margin-bottom:6px;" data-i18n="scan.logHeading">Journal du scan</div>
+            <div class="scan-log" id="scan-log"></div>
+          </div>
+          <div class="scan-chan-table" id="scan-chan-table"></div>
         </div>
       </div>
     </section>
