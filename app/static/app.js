@@ -64,6 +64,7 @@ function refreshDynamicTranslations() {
   else updateLocalStatusUi();
   renderChanOpts();
   renderChanFreq();
+  renderScanState();
   refreshBetaLabels();
   applyModeUi();
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
@@ -703,6 +704,16 @@ function renderChanFreq() {
   duplexBadge.hidden = Math.abs((cfg.tx_mhz || 0) - (cfg.rx_mhz || 0)) < 0.0001;
 }
 
+// Bare protocol call, no UI side effects -- split out of
+// applyActiveChannel() so the Scan tab can key an arbitrary channel on
+// the radio while it cycles without also dragging the Messaging tab's
+// active group along on every dwell step (see applyScanFinish() below).
+async function sendChannelSelect(ch) {
+  const transport = activeTransport();
+  if (transport === "server") await api("POST", `/api/channels/${ch}/select`);
+  else if (transport === "local") await AT2BleClient.selectChannel(ch);
+}
+
 async function applyActiveChannel(select = true) {
   renderChanSelect();
   renderChanOpts();
@@ -710,11 +721,8 @@ async function applyActiveChannel(select = true) {
   $("#ptt-device-sub").textContent = `${t("channelLabel", { n: String(activeChannel).padStart(2, "0") })}${channelNames[activeChannel] ? " · " + channelNames[activeChannel] : ""}`;
   renderMessagingPanel(); // Messaging tab's group list/status grid/thread track the same active channel
   if (select) {
-    try {
-      const transport = activeTransport();
-      if (transport === "server") await api("POST", `/api/channels/${activeChannel}/select`);
-      else if (transport === "local") await AT2BleClient.selectChannel(activeChannel);
-    } catch (e) { appendLog(t("chan.selectError", { error: e.message })); }
+    try { await sendChannelSelect(activeChannel); }
+    catch (e) { appendLog(t("chan.selectError", { error: e.message })); }
   }
 }
 
@@ -860,6 +868,11 @@ $("#ptt-help").addEventListener("click", () => showToast(t("chan.optsLegend"), "
 let rfActivityTimer = null;
 
 function markIncomingRfActivity() {
+  // Dispatched unconditionally, ahead of the pttActive short-circuit below
+  // (that one's just about not fighting the TX indicator visually) -- the
+  // Scan tab's pause-on-activity listens for this and it's real incoming
+  // traffic either way. See the Scan tab section further down.
+  window.dispatchEvent(new Event("at2:rf-activity"));
   if (pttActive) return; // already showing our own TX state, don't fight it
   $("#rf-indicator").classList.add("rx");
   $("#rf-label").textContent = t("chan.receiving");
@@ -1262,6 +1275,227 @@ window.addEventListener("resize", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Scan tab: cycles through the channels already read into lastReadChannels
+// (Canaux tab), sending the real select_channel command for each one via
+// sendChannelSelect() -- ported from the Beta tab's frequency-scan.html
+// prototype, same idea minus the simulated activity. "Activity detected"
+// reuses the RX indicator's real incoming-PTT-packet signal (see the
+// "at2:rf-activity" event dispatched from markIncomingRfActivity() above);
+// there is no RSSI/squelch telemetry in this protocol to detect with, and
+// this only catches traffic relayed through this app, not any radio
+// chatter -- see scan.activityNote / beta/README.md's "Honnêteté
+// matérielle" for why that limit is stated up front rather than implied.
+// ---------------------------------------------------------------------------
+let scanRunning = false;
+let scanPaused = false;
+let scanTimerId = null;
+let scanRafId = null;
+let scanChannelBeforeStart = null;
+let scanCurrentKey = null; // the channel object currently being dwelled on
+let scanPriorityCh = null;
+let scanIncluded = new Set(); // session-only "include in this scan" set, seeded from scan_add but not written back to the radio
+
+function scanEligibleChannels() {
+  // Only channels with a known RX frequency are worth cycling to --
+  // emptyChannels() placeholders (never actually read) have none.
+  return lastReadChannels.filter((c) => scanIncluded.has(c.channel) && c.rx_mhz);
+}
+function scanOrderedChannels() {
+  const list = scanEligibleChannels();
+  if (scanPriorityCh != null) {
+    const p = lastReadChannels.find((c) => c.channel === scanPriorityCh);
+    if (p && p.rx_mhz) {
+      const out = [];
+      for (const c of list) { out.push(c); if (c.channel !== p.channel) out.push(p); }
+      return out.length ? out : [p];
+    }
+  }
+  return list;
+}
+
+function renderScanState() {
+  const hasChannels = lastReadChannels.some((c) => c.rx_mhz);
+  $("#scan-empty-state").hidden = hasChannels;
+  $("#scan-layout").hidden = !hasChannels;
+  $("#scan-toggle-btn").disabled = !hasChannels;
+  if (!hasChannels) { $("#scan-sub").textContent = t("scan.subEmpty"); return; }
+  // Reseed the session-only include set only the first time real channels
+  // show up (or after a fresh read replaces the list entirely) -- avoids
+  // clobbering checkboxes the user already unticked on a re-render that
+  // isn't actually new data (e.g. a language switch).
+  const knownChannels = new Set(lastReadChannels.map((c) => c.channel));
+  for (const ch of [...scanIncluded]) if (!knownChannels.has(ch)) scanIncluded.delete(ch);
+  if (!scanIncluded.size) {
+    for (const c of lastReadChannels) if (c.rx_mhz && c.scan_add !== false) scanIncluded.add(c.channel);
+  }
+  renderScanChannelTable();
+  renderScanPrioritySelect();
+  updateScanSub();
+}
+
+function renderScanChannelTable() {
+  const table = $("#scan-chan-table");
+  const rows = lastReadChannels.filter((c) => c.rx_mhz);
+  table.innerHTML = rows.map((c) => {
+    const name = channelNames[c.channel] || c.name || "";
+    return `
+    <div class="scan-chan-row ${!scanIncluded.has(c.channel) ? "excluded" : ""} ${c.channel === scanPriorityCh ? "priority" : ""} ${scanCurrentKey === c.channel ? "current" : ""}" data-ch="${c.channel}">
+      <input type="checkbox" ${scanIncluded.has(c.channel) ? "checked" : ""} data-ch="${c.channel}" title="${t("scan.includeInScan")}" />
+      <div class="scan-chan-info">
+        <div class="scan-chan-name">CH${String(c.channel).padStart(2, "0")}${name ? " · " + escapeHtml(name) : ""}</div>
+        <div class="scan-chan-sub">${formatMhz(c.rx_mhz)} MHz</div>
+      </div>
+      <button class="scan-chan-star ${c.channel === scanPriorityCh ? "active" : ""}" data-ch="${c.channel}" title="${t("scan.priorityStar")}">★</button>
+    </div>`;
+  }).join("");
+  table.querySelectorAll("input[type=checkbox]").forEach((cb) => cb.addEventListener("change", () => {
+    const ch = Number(cb.dataset.ch);
+    if (cb.checked) scanIncluded.add(ch); else scanIncluded.delete(ch);
+    renderScanChannelTable(); renderScanPrioritySelect(); updateScanSub();
+  }));
+  table.querySelectorAll(".scan-chan-star").forEach((btn) => btn.addEventListener("click", () => {
+    const ch = Number(btn.dataset.ch);
+    scanPriorityCh = scanPriorityCh === ch ? null : ch;
+    renderScanChannelTable(); renderScanPrioritySelect();
+  }));
+}
+function renderScanPrioritySelect() {
+  const sel = $("#scan-priority-select");
+  const current = String(scanPriorityCh ?? "");
+  sel.innerHTML = `<option value="">${t("scan.priorityNone")}</option>` +
+    lastReadChannels.filter((c) => c.rx_mhz).map((c) => {
+      const name = channelNames[c.channel] || c.name || "";
+      return `<option value="${c.channel}">CH${String(c.channel).padStart(2, "0")}${name ? " · " + escapeHtml(name) : ""}</option>`;
+    }).join("");
+  sel.value = current;
+}
+$("#scan-priority-select").addEventListener("change", (e) => {
+  scanPriorityCh = e.target.value ? Number(e.target.value) : null;
+  renderScanChannelTable();
+});
+$("#scan-read-btn").addEventListener("click", async () => {
+  try { await loadAllChannels(); } catch (e) { showToast(e.message, "error"); }
+});
+
+function updateScanSub() {
+  const n = lastReadChannels.filter((c) => c.rx_mhz).length;
+  $("#scan-sub").textContent = scanRunning
+    ? t("scan.subRunning", { active: scanIncluded.size })
+    : t("scan.subReady", { n, active: scanIncluded.size });
+}
+
+function fmtScanClock() { return new Date().toLocaleTimeString(getLang() === "en" ? "en-GB" : "fr-FR", { hour12: false }); }
+function scanLog(text, hit) {
+  const log = $("#scan-log");
+  const row = document.createElement("div");
+  row.className = "scan-log-row" + (hit ? " hit" : "");
+  row.innerHTML = `<span class="scan-log-time">${fmtScanClock()}</span><span>${escapeHtml(text)}</span>`;
+  log.insertBefore(row, log.firstChild);
+  while (log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+function setScanDisplay(c, statusText, hit) {
+  $("#scan-display").classList.toggle("hit", !!hit);
+  $("#scan-status").textContent = statusText;
+  const name = c ? (channelNames[c.channel] || c.name || "") : "";
+  $("#scan-ch-num").textContent = c ? `CH${String(c.channel).padStart(2, "0")}` : "—";
+  $("#scan-ch-name").textContent = c ? (name || "—") : t("scan.idleHint");
+  $("#scan-ch-freq").textContent = c ? `${formatMhz(c.rx_mhz)} MHz` : " ";
+  scanCurrentKey = c ? c.channel : null;
+  $$(".scan-chan-row").forEach((r) => r.classList.toggle("current", c && Number(r.dataset.ch) === c.channel));
+}
+
+function animateScanProgress(durationMs) {
+  cancelAnimationFrame(scanRafId);
+  const bar = $("#scan-progress-bar");
+  const start = performance.now();
+  function tick(now) {
+    const pct = Math.min(100, ((now - start) / durationMs) * 100);
+    bar.style.width = pct + "%";
+    if (pct < 100 && scanRunning && !scanPaused) scanRafId = requestAnimationFrame(tick);
+  }
+  scanRafId = requestAnimationFrame(tick);
+}
+
+let scanStepIdx = -1;
+async function scanStep() {
+  if (!scanRunning || scanPaused) return;
+  const list = scanOrderedChannels();
+  if (!list.length) { stopScan(); scanLog(t("scan.logNoChannels"), false); return; }
+  scanStepIdx = (scanStepIdx + 1) % list.length;
+  const c = list[scanStepIdx];
+  try { await sendChannelSelect(c.channel); }
+  catch (e) { appendLog(t("chan.selectError", { error: e.message })); }
+  if (!scanRunning) return; // stopped while the select command was in flight
+  setScanDisplay(c, t("scan.statusScanning"), false);
+  const dwell = Number($("#scan-dwell-range").value);
+  animateScanProgress(dwell);
+  scanTimerId = setTimeout(() => {
+    if (!scanRunning || scanPaused) return;
+    const name = channelNames[c.channel] || c.name || "";
+    scanLog(t("scan.logVisit", { n: String(c.channel).padStart(2, "0"), name }), false);
+    scanStep();
+  }, dwell);
+}
+
+// Fires on genuine incoming-PTT-packet activity (see the "at2:rf-activity"
+// listener below) -- pauses the scan on whatever channel it's currently
+// dwelling on, same UX the Beta prototype validated, just triggered by a
+// real signal instead of Math.random().
+function onScanActivityDetected() {
+  if (!scanRunning || scanPaused || scanStepIdx < 0) return;
+  const list = scanOrderedChannels();
+  const c = list[scanStepIdx];
+  if (!c) return;
+  scanPaused = true;
+  clearTimeout(scanTimerId);
+  const pauseS = Number($("#scan-pause-range").value);
+  const name = channelNames[c.channel] || c.name || "";
+  setScanDisplay(c, t("scan.statusHit"), true);
+  scanLog(t("scan.logHit", { n: String(c.channel).padStart(2, "0"), name, s: pauseS }), true);
+  animateScanProgress(pauseS * 1000);
+  scanTimerId = setTimeout(() => { scanPaused = false; scanStep(); }, pauseS * 1000);
+}
+window.addEventListener("at2:rf-activity", onScanActivityDetected);
+
+function startScan() {
+  if (!scanOrderedChannels().length) { scanLog(t("scan.logNoChannels"), false); return; }
+  scanChannelBeforeStart = activeChannel;
+  scanRunning = true; scanPaused = false; scanStepIdx = -1;
+  $("#scan-toggle-btn").textContent = t("scan.stopBtn");
+  $("#scan-toggle-btn").classList.add("btn-danger");
+  updateScanSub();
+  scanLog(t("scan.logStarted"), false);
+  scanStep();
+}
+function stopScan() {
+  scanRunning = false; scanPaused = false;
+  clearTimeout(scanTimerId); cancelAnimationFrame(scanRafId);
+  $("#scan-toggle-btn").textContent = t("scan.startBtn");
+  $("#scan-toggle-btn").classList.remove("btn-danger");
+  $("#scan-progress-bar").style.width = "0%";
+  setScanDisplay(null, t("scan.statusIdle"), false);
+  updateScanSub();
+  scanLog(t("scan.logStopped"), false);
+  // Hand the radio (and the Messaging tab, which tracks the same
+  // activeChannel) back to whatever channel was active before the scan
+  // started -- otherwise both are left on whatever channel the scan
+  // happened to land on when stopped.
+  if (scanChannelBeforeStart != null && scanChannelBeforeStart !== activeChannel) {
+    activeChannel = scanChannelBeforeStart;
+    applyActiveChannel(true).catch(() => {});
+  } else if (scanChannelBeforeStart != null) {
+    sendChannelSelect(scanChannelBeforeStart).catch((e) => appendLog(t("chan.selectError", { error: e.message })));
+  }
+  scanChannelBeforeStart = null;
+}
+$("#scan-toggle-btn").addEventListener("click", () => { scanRunning ? stopScan() : startScan(); });
+
+$$(".tab").forEach((tabBtn) => {
+  if (tabBtn.dataset.tab === "scan") tabBtn.addEventListener("click", () => renderScanState());
+});
+
+// ---------------------------------------------------------------------------
 // Beta tab: isolated prototypes, each its own static page under
 // app/static/beta/ (own HTML/CSS/JS -- see beta/README.md) loaded in an
 // <iframe> so a bug in an experiment can't reach the rest of the app.
@@ -1270,7 +1504,6 @@ window.addEventListener("resize", () => {
 // ---------------------------------------------------------------------------
 const BETA_PAGES = [
   { id: "map-redesign", i18nKey: "beta.page.mapRedesign", src: "/static/beta/map-redesign.html" },
-  { id: "frequency-scan", i18nKey: "beta.page.frequencyScan", src: "/static/beta/frequency-scan.html" },
   { id: "spectrum", i18nKey: "beta.page.spectrum", src: "/static/beta/spectrum.html" },
   { id: "record-replay", i18nKey: "beta.page.recordReplay", src: "/static/beta/record-replay.html" },
 ];
@@ -1406,6 +1639,7 @@ async function loadAllChannels() {
   renderChannelTable(lastReadChannels);
   renderChanOpts();
   renderChanFreq();
+  renderScanState(); // Scan tab's channel list/empty-state tracks the same read
 }
 
 $("#btn-read-channels").addEventListener("click", async () => {
