@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Beta — Enregistrement / lecture</title>
+<!-- Standalone beta prototype -- see app/static/beta/README.md. Own
+     <html>/<style>/<script>, loaded by the Beta tab in an <iframe>. -->
+<link rel="stylesheet" href="../style.css" />
+<style>
+  body{ padding:14px; }
+  .beta-note{ display:flex; gap:8px; align-items:flex-start; background:var(--color-bg-alt); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:9px 12px; font-size:11.5px; color:var(--color-text-subtle); margin-bottom:12px; line-height:1.55; }
+  .beta-note code{ font-family:var(--font-mono); background:var(--color-surface); padding:1px 5px; border-radius:3px; border:1px solid var(--color-border); }
+
+  .rec-layout{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:22px 16px; background:var(--color-bg-alt); border:1px solid var(--color-border); border-radius:var(--radius-lg); margin-bottom:16px; }
+  .rec-btn{
+    width:84px; height:84px; border-radius:50%; flex-shrink:0; background:var(--color-surface); border:2px solid var(--color-border-strong);
+    color:var(--color-text-dim); font-size:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all var(--transition-fast);
+  }
+  .rec-btn.recording{ background:var(--status-down); border-color:var(--status-down); color:#fff; box-shadow:0 0 0 8px var(--status-down-bg); animation:rec-pulse 1.4s ease-in-out infinite; }
+  @keyframes rec-pulse{ 50%{ box-shadow:0 0 0 14px var(--status-down-bg); } }
+  @media (prefers-reduced-motion: reduce){ .rec-btn.recording{ animation:none; } }
+  .rec-timer{ font-family:var(--font-mono); font-size:20px; color:var(--color-text-soft); font-variant-numeric:tabular-nums; }
+  .rec-hint{ font-size:12px; color:var(--color-text-subtle); text-align:center; }
+  .rec-wave{ height:36px; display:flex; align-items:center; justify-content:center; gap:3px; width:100%; max-width:320px; }
+  .rec-wave span{ width:3px; min-height:3px; border-radius:2px; background:var(--color-text-faint); transition:height 0.08s ease, background-color 0.15s ease; }
+  .rec-wave.active span{ background:var(--status-down); }
+
+  .rec-list{ display:flex; flex-direction:column; gap:8px; }
+  .rec-row{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-md); background:var(--color-bg-alt); border:1px solid var(--color-border); flex-wrap:wrap; }
+  .rec-info{ min-width:0; flex:1 1 160px; }
+  .rec-name{ font-size:12.5px; font-weight:600; color:var(--color-text); background:transparent; border:none; padding:0; width:100%; }
+  .rec-name:focus{ outline:none; border-bottom:1px dashed var(--color-border-strong); }
+  .rec-meta{ font-size:10.5px; color:var(--color-text-subtle); font-family:var(--font-mono); margin-top:2px; }
+  .rec-row audio{ height:32px; max-width:220px; flex:1 1 200px; }
+  .rec-actions{ display:flex; gap:6px; flex-shrink:0; }
+  .rec-actions button{ padding:6px 10px; font-size:11.5px; min-height:auto; }
+</style>
+</head>
+<body>
+
+<div class="beta-note">
+  🧪 <span><b>Ce qui est réel :</b> l'enregistrement utilise le micro de cet appareil via l'API navigateur (<code>MediaRecorder</code>), même famille d'API que <code>ptt-audio.js</code> dans l'appli principale (capture <code>getUserMedia</code> déjà utilisée pour le PTT). La lecture fonctionne vraiment. <b>Ce qui ne l'est pas :</b> « Renvoyer en PTT » est désactivé -- cette page est isolée, sans accès à la connexion série/BLE active de l'appli, donc elle ne peut pas réellement transmettre. Porter cette fonction consisterait à relier un clip enregistré au pipeline PTT existant (<code>ptt-amr-codec.js</code>, WebSocket <code>/ws/ptt</code>). Rien n'est persistant : tout disparaît au rechargement de la page.</span>
+</div>
+
+<div class="ptt-device-name">Enregistrement / lecture</div>
+<div class="ptt-device-sub" style="margin-bottom:14px;" id="rec-sub">Micro non testé</div>
+
+<div class="rec-layout">
+  <button class="rec-btn" id="rec-btn" title="Démarrer l'enregistrement">⏺</button>
+  <div class="rec-timer" id="rec-timer">00:00</div>
+  <div class="rec-wave" id="rec-wave"></div>
+  <div class="rec-hint" id="rec-hint">Cliquez pour enregistrer depuis le micro de cet appareil.</div>
+</div>
+
+<div class="hint" style="margin-bottom:8px;">Enregistrements de cette session</div>
+<div class="rec-list" id="rec-list"></div>
+
+<script>
+"use strict";
+document.documentElement.setAttribute("data-theme", localStorage.getItem("at2_theme") || "dark");
+
+for (let i = 0; i < 28; i++) { const s = document.createElement("span"); document.getElementById("rec-wave").appendChild(s); }
+
+let mediaRecorder = null;
+let audioCtx = null, analyser = null, micStream = null, waveRaf = null;
+let chunks = [];
+let startedAt = 0;
+let timerId = null;
+let recordings = []; // { id, name, url, blob, duration, createdAt }
+let nextId = 1;
+
+function fmtClock(sec){
+  sec = Math.max(0, Math.round(sec));
+  return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
+
+function pickMimeType(){
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+  for (const c of candidates) if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+  return "";
+}
+
+async function startRecording(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById("rec-sub").textContent = "Micro indisponible (getUserMedia non supporté par ce navigateur).";
+    return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    document.getElementById("rec-sub").textContent = "Accès micro refusé ou indisponible -- autorisez le micro pour ce site.";
+    return;
+  }
+  document.getElementById("rec-sub").textContent = "Micro actif";
+  chunks = [];
+  const mimeType = pickMimeType();
+  mediaRecorder = new MediaRecorder(micStream, mimeType ? { mimeType } : undefined);
+  mediaRecorder.addEventListener("dataavailable", (e) => { if (e.data.size) chunks.push(e.data); });
+  mediaRecorder.addEventListener("stop", onRecordingStop);
+  mediaRecorder.start();
+  startedAt = performance.now();
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(micStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 64;
+  src.connect(analyser);
+  animateWave();
+
+  document.getElementById("rec-btn").classList.add("recording");
+  document.getElementById("rec-btn").textContent = "⏹";
+  document.getElementById("rec-btn").title = "Arrêter";
+  document.getElementById("rec-hint").textContent = "Enregistrement en cours…";
+  document.getElementById("rec-wave").classList.add("active");
+  timerId = setInterval(() => {
+    document.getElementById("rec-timer").textContent = fmtClock((performance.now() - startedAt) / 1000);
+  }, 200);
+}
+
+function stopRecording(){
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  cancelAnimationFrame(waveRaf);
+  document.getElementById("rec-wave").classList.remove("active");
+  document.getElementById("rec-wave").querySelectorAll("span").forEach(s => s.style.height = "3px");
+  clearInterval(timerId);
+  document.getElementById("rec-btn").classList.remove("recording");
+  document.getElementById("rec-btn").textContent = "⏺";
+  document.getElementById("rec-btn").title = "Démarrer l'enregistrement";
+  document.getElementById("rec-hint").textContent = "Cliquez pour enregistrer depuis le micro de cet appareil.";
+}
+
+function onRecordingStop(){
+  const duration = (performance.now() - startedAt) / 1000;
+  document.getElementById("rec-timer").textContent = "00:00";
+  if (duration < 0.4 || !chunks.length) return; // too short to be useful, drop silently
+  const blob = new Blob(chunks, { type: chunks[0]?.type || "audio/webm" });
+  const url = URL.createObjectURL(blob);
+  recordings.unshift({ id: nextId++, name: `Enregistrement ${recordings.length + 1}`, url, blob, duration, createdAt: new Date() });
+  renderList();
+}
+
+function animateWave(){
+  const bars = document.getElementById("rec-wave").querySelectorAll("span");
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  function tick(){
+    analyser.getByteFrequencyData(data);
+    bars.forEach((bar, i) => {
+      const v = data[Math.floor((i / bars.length) * data.length)] || 0;
+      bar.style.height = Math.max(3, (v / 255) * 32) + "px";
+    });
+    waveRaf = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+document.getElementById("rec-btn").addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") stopRecording();
+  else startRecording();
+});
+
+function renderList(){
+  const list = document.getElementById("rec-list");
+  if (!recordings.length) {
+    list.innerHTML = `<div class="hint" style="padding:12px 4px;">Aucun enregistrement pour l'instant.</div>`;
+    return;
+  }
+  list.innerHTML = recordings.map(r => `
+    <div class="rec-row" data-id="${r.id}">
+      <div class="rec-info">
+        <input class="rec-name" value="${escapeHtml(r.name)}" data-id="${r.id}" />
+        <div class="rec-meta">${fmtClock(r.duration)} · ${r.createdAt.toLocaleTimeString("fr-FR", { hour12: false })}</div>
+      </div>
+      <audio controls src="${r.url}"></audio>
+      <div class="rec-actions">
+        <button class="btn-ghost" data-action="replay" data-id="${r.id}" title="Renvoyer en PTT -- non câblé depuis cette maquette isolée">Renvoyer en PTT</button>
+        <button class="btn-danger" data-action="delete" data-id="${r.id}">Supprimer</button>
+      </div>
+    </div>`).join("");
+  list.querySelectorAll(".rec-name").forEach(inp => inp.addEventListener("change", () => {
+    const r = recordings.find(x => x.id === Number(inp.dataset.id));
+    if (r) r.name = inp.value.trim() || r.name;
+  }));
+  list.querySelectorAll('[data-action="delete"]').forEach(btn => btn.addEventListener("click", () => {
+    const id = Number(btn.dataset.id);
+    const r = recordings.find(x => x.id === id);
+    if (r) URL.revokeObjectURL(r.url);
+    recordings = recordings.filter(x => x.id !== id);
+    renderList();
+  }));
+  list.querySelectorAll('[data-action="replay"]').forEach(btn => btn.addEventListener("click", () => {
+    showHint("Pas encore câblé : il faudrait relier ce clip au pipeline PTT réel de l'appli (ptt-amr-codec.js) pour le retransmettre.");
+  }));
+}
+
+let hintTimer = null;
+function showHint(text){
+  let el = document.getElementById("rr-hint-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "rr-hint-toast";
+    el.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:9px 14px;font-size:12px;color:var(--color-text-soft);box-shadow:var(--shadow-card-hover);max-width:min(90%,420px);text-align:center;opacity:0;transition:opacity 200ms ease;";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.opacity = "1";
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { el.style.opacity = "0"; }, 3200);
+}
+
+renderList();
+</script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Beta — Scan de canaux</title>
+<!-- Standalone beta prototype -- see app/static/beta/README.md. Own
+     <html>/<style>/<script>, loaded by the Beta tab in an <iframe>. -->
+<link rel="stylesheet" href="../style.css" />
+<style>
+  body{ padding:14px; }
+  .beta-note{ display:flex; gap:8px; align-items:flex-start; background:var(--color-bg-alt); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:9px 12px; font-size:11.5px; color:var(--color-text-subtle); margin-bottom:12px; line-height:1.5; }
+  .beta-note code{ font-family:var(--font-mono); background:var(--color-surface); padding:1px 5px; border-radius:3px; border:1px solid var(--color-border); }
+
+  .scan-layout{ display:grid; grid-template-columns:1fr 320px; gap:14px; align-items:start; }
+  @media (max-width:820px){ .scan-layout{ grid-template-columns:1fr; } }
+
+  .scan-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+  .scan-toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .scan-toolbar label{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--color-text-dim); }
+  .scan-toolbar input[type=range]{ width:90px; }
+  .scan-toolbar select{ font-size:12px; padding:6px 8px; }
+
+  .scan-display{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    background:var(--color-bg-alt); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+    padding:24px 16px; margin-bottom:12px; position:relative; overflow:hidden;
+  }
+  .scan-display.hit{ border-color:var(--status-down-border); background:var(--status-down-bg); }
+  .scan-ch-num{ font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--color-text); letter-spacing:0.02em; }
+  .scan-ch-name{ font-size:14px; font-weight:600; color:var(--color-text-soft); }
+  .scan-ch-freq{ font-family:var(--font-mono); font-size:13px; color:var(--status-info); }
+  .scan-status{ font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--color-text-faint); }
+  .scan-display.hit .scan-status{ color:var(--status-down); }
+  .scan-progress{ width:100%; max-width:280px; height:4px; border-radius:2px; background:var(--color-border); overflow:hidden; }
+  .scan-progress-bar{ height:100%; background:var(--color-primary); width:0%; transition:width 60ms linear; }
+  .scan-display.hit .scan-progress-bar{ background:var(--status-down); }
+  .scan-idle-hint{ font-size:12px; color:var(--color-text-subtle); }
+
+  .scan-log{ display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; font-family:var(--font-mono); font-size:11px; }
+  .scan-log-row{ display:flex; gap:8px; padding:5px 8px; border-radius:var(--radius-sm); background:var(--color-bg-alt); border:1px solid var(--color-border); }
+  .scan-log-row.hit{ border-color:var(--status-down-border); color:var(--status-down); }
+  .scan-log-time{ color:var(--color-text-faint); flex-shrink:0; }
+
+  .chan-table{ display:flex; flex-direction:column; gap:6px; max-height:560px; overflow-y:auto; }
+  .chan-row{ display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:var(--radius-md); background:var(--color-bg-alt); border:1px solid var(--color-border); }
+  .chan-row.current{ border-color:var(--color-primary-border); background:var(--color-primary-ring); }
+  .chan-row.excluded{ opacity:0.45; }
+  .chan-row input[type=checkbox]{ width:15px; height:15px; accent-color:var(--color-primary); flex-shrink:0; }
+  .chan-row.priority{ border-color:var(--status-degraded-border); }
+  .chan-info{ min-width:0; flex:1; }
+  .chan-name{ font-size:12.5px; font-weight:600; color:var(--color-text); display:flex; align-items:center; gap:5px; }
+  .chan-sub{ font-size:10.5px; color:var(--color-text-subtle); font-family:var(--font-mono); }
+  .chan-star{ background:none; border:none; padding:0; cursor:pointer; color:var(--color-text-faint); font-size:14px; flex-shrink:0; }
+  .chan-star.active{ color:var(--status-degraded); }
+
+  @media (max-width:640px){ .scan-head{ flex-direction:column; } }
+</style>
+</head>
+<body>
+
+<div class="beta-note">
+  🧪 <span><b>Ce qui est réel :</b> la sélection de canal utilise la vraie commande protocole (<code>select_channel()</code>, voir <code>app/protocol/commands.py</code>) — porter ce prototype consisterait à réellement piloter la radio canal par canal. <b>Ce qui est simulé :</b> le protocole AT2 reverse-engineered n'expose <b>aucune</b> donnée RSSI/occupation de canal (confirmé : aucune trace dans <code>commands.py</code> ni le README) — la « détection d'activité » ci-dessous est un tirage aléatoire pour évaluer l'ergonomie du scan, pas une vraie mesure radio. La liste de canaux est un exemple (16 canaux PMR/UHF fictifs), pas lue depuis un appareil.</span>
+</div>
+
+<div class="scan-head">
+  <div>
+    <div class="ptt-device-name">Scan de canaux</div>
+    <div class="ptt-device-sub" id="scan-sub">Prêt — 16 canaux, 12 actifs pour le scan</div>
+  </div>
+  <div class="scan-toolbar">
+    <label>Vitesse <input type="range" id="dwell-range" min="150" max="1200" step="50" value="450" /></label>
+    <label>Pause sur activité <input type="range" id="pause-range" min="1" max="8" step="1" value="3" /></label>
+    <label>Prioritaire
+      <select id="priority-select"><option value="">Aucun</option></select>
+    </label>
+    <button class="btn-primary" id="scan-toggle">Lancer le scan</button>
+  </div>
+</div>
+
+<div class="scan-layout">
+  <div>
+    <div class="scan-display" id="scan-display">
+      <div class="scan-status" id="scan-status">À l'arrêt</div>
+      <div class="scan-ch-num" id="scan-ch-num">—</div>
+      <div class="scan-ch-name" id="scan-ch-name">Sélectionnez « Lancer le scan »</div>
+      <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
+      <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+      <div class="scan-idle-hint" id="scan-idle-hint">Balaie les canaux cochés ci-contre, dans l'ordre, avec le délai réglé ci-dessus.</div>
+    </div>
+    <div class="hint" style="margin-bottom:8px;">Journal du scan</div>
+    <div class="scan-log" id="scan-log"></div>
+  </div>
+  <div class="chan-table" id="chan-table"></div>
+</div>
+
+<script>
+"use strict";
+document.documentElement.setAttribute("data-theme", localStorage.getItem("at2_theme") || "dark");
+
+// Example channel plan -- PMR446/UHF-style frequencies for illustration
+// only, not read from any real device (see beta-note above). `scanAdd`
+// mirrors the real protocol's per-channel scan-list bit (channel.py's
+// ChannelConfig.scan_add / byte offset 20) so this table's shape matches
+// what a real read-back would eventually look like.
+const CHANNELS = [
+  { ch: 1,  name: "PMR 1",      freq: 446.00625, scanAdd: true },
+  { ch: 2,  name: "PMR 2",      freq: 446.01875, scanAdd: true },
+  { ch: 3,  name: "PMR 3",      freq: 446.03125, scanAdd: true },
+  { ch: 4,  name: "PMR 4",      freq: 446.04375, scanAdd: false },
+  { ch: 5,  name: "PMR 5",      freq: 446.05625, scanAdd: true },
+  { ch: 6,  name: "PMR 6",      freq: 446.06875, scanAdd: true },
+  { ch: 7,  name: "PMR 7",      freq: 446.08125, scanAdd: true },
+  { ch: 8,  name: "PMR 8",      freq: 446.09375, scanAdd: false },
+  { ch: 9,  name: "Ops-1",      freq: 438.20000, scanAdd: true },
+  { ch: 10, name: "Ops-2",      freq: 438.42500, scanAdd: true },
+  { ch: 11, name: "Base",       freq: 439.00000, scanAdd: true },
+  { ch: 12, name: "Secours",    freq: 439.98750, scanAdd: true },
+  { ch: 13, name: "Logistique", freq: 440.15000, scanAdd: false },
+  { ch: 14, name: "Simplex-1",  freq: 433.45000, scanAdd: true },
+  { ch: 15, name: "Simplex-2",  freq: 433.55000, scanAdd: true },
+  { ch: 16, name: "Test",       freq: 434.00000, scanAdd: false },
+];
+let priorityCh = null;
+let scanning = false;
+let timerId = null;
+let progressStart = 0;
+let progressRaf = null;
+let currentIdx = -1;
+let paused = false;
+
+function activeChannels(){
+  const list = CHANNELS.filter(c => c.scanAdd);
+  if (priorityCh != null) {
+    // Priority channel gets visited between every other channel, same
+    // idea real scanning radios use ("priority scan").
+    const p = CHANNELS.find(c => c.ch === priorityCh);
+    if (p) {
+      const out = [];
+      for (const c of list) { out.push(c); if (c.ch !== p.ch) out.push(p); }
+      return out.length ? out : [p];
+    }
+  }
+  return list;
+}
+
+function renderChannelTable(){
+  const table = document.getElementById("chan-table");
+  table.innerHTML = CHANNELS.map(c => `
+    <div class="chan-row ${!c.scanAdd ? "excluded" : ""} ${c.ch === priorityCh ? "priority" : ""}" data-ch="${c.ch}">
+      <input type="checkbox" ${c.scanAdd ? "checked" : ""} data-ch="${c.ch}" title="Inclure dans le scan" />
+      <div class="chan-info">
+        <div class="chan-name">CH${String(c.ch).padStart(2, "0")} · ${escapeHtml(c.name)}</div>
+        <div class="chan-sub">${c.freq.toFixed(5)} MHz</div>
+      </div>
+      <button class="chan-star ${c.ch === priorityCh ? "active" : ""}" data-ch="${c.ch}" title="Canal prioritaire">★</button>
+    </div>`).join("");
+  table.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener("change", () => {
+    const c = CHANNELS.find(x => x.ch === Number(cb.dataset.ch));
+    c.scanAdd = cb.checked;
+    renderChannelTable(); renderPrioritySelect(); updateSub();
+  }));
+  table.querySelectorAll('.chan-star').forEach(btn => btn.addEventListener("click", () => {
+    const ch = Number(btn.dataset.ch);
+    priorityCh = priorityCh === ch ? null : ch;
+    renderChannelTable(); renderPrioritySelect();
+  }));
+}
+function renderPrioritySelect(){
+  const sel = document.getElementById("priority-select");
+  const current = String(priorityCh ?? "");
+  sel.innerHTML = `<option value="">Aucun</option>` + CHANNELS.map(c => `<option value="${c.ch}">CH${String(c.ch).padStart(2, "0")} · ${escapeHtml(c.name)}</option>`).join("");
+  sel.value = current;
+}
+document.getElementById("priority-select").addEventListener("change", (e) => {
+  priorityCh = e.target.value ? Number(e.target.value) : null;
+  renderChannelTable();
+});
+function updateSub(){
+  const n = CHANNELS.filter(c => c.scanAdd).length;
+  document.getElementById("scan-sub").textContent = scanning
+    ? `Scan en cours — ${n} canal${n > 1 ? "aux" : ""} actif${n > 1 ? "s" : ""}`
+    : `Prêt — ${CHANNELS.length} canaux, ${n} actif${n > 1 ? "s" : ""} pour le scan`;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
+function fmtClock(){ return new Date().toLocaleTimeString("fr-FR", { hour12: false }); }
+
+function logEvent(text, hit){
+  const log = document.getElementById("scan-log");
+  const row = document.createElement("div");
+  row.className = "scan-log-row" + (hit ? " hit" : "");
+  row.innerHTML = `<span class="scan-log-time">${fmtClock()}</span><span>${escapeHtml(text)}</span>`;
+  log.insertBefore(row, log.firstChild);
+  while (log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+function setDisplay(c, status, hit){
+  document.getElementById("scan-display").classList.toggle("hit", !!hit);
+  document.getElementById("scan-status").textContent = status;
+  document.getElementById("scan-ch-num").textContent = c ? `CH${String(c.ch).padStart(2, "0")}` : "—";
+  document.getElementById("scan-ch-name").textContent = c ? c.name : "Sélectionnez « Lancer le scan »";
+  document.getElementById("scan-ch-freq").textContent = c ? `${c.freq.toFixed(5)} MHz` : " ";
+  document.querySelectorAll(".chan-row").forEach(r => r.classList.toggle("current", c && Number(r.dataset.ch) === c.ch));
+}
+
+function animateProgress(durationMs){
+  cancelAnimationFrame(progressRaf);
+  progressStart = performance.now();
+  const bar = document.getElementById("scan-progress-bar");
+  function tick(now){
+    const pct = Math.min(100, ((now - progressStart) / durationMs) * 100);
+    bar.style.width = pct + "%";
+    if (pct < 100 && scanning && !paused) progressRaf = requestAnimationFrame(tick);
+  }
+  progressRaf = requestAnimationFrame(tick);
+}
+
+function scanStep(){
+  if (!scanning || paused) return;
+  const list = activeChannels();
+  if (!list.length) { stopScan(); logEvent("Aucun canal actif -- scan arrêté.", false); return; }
+  currentIdx = (currentIdx + 1) % list.length;
+  const c = list[currentIdx];
+  const dwell = Number(document.getElementById("dwell-range").value);
+  // Simulated activity -- see beta-note: no real busy/RSSI signal exists
+  // in this protocol, this is a stand-in to evaluate the pause/resume UX.
+  const activity = Math.random() < 0.14;
+  if (activity) {
+    paused = true;
+    setDisplay(c, "Activité détectée (simulée)", true);
+    logEvent(`CH${String(c.ch).padStart(2, "0")} ${c.name} -- activité détectée, pause`, true);
+    const pauseMs = Number(document.getElementById("pause-range").value) * 1000;
+    animateProgress(pauseMs);
+    timerId = setTimeout(() => { paused = false; scanStep(); }, pauseMs);
+  } else {
+    setDisplay(c, "Scan…", false);
+    animateProgress(dwell);
+    timerId = setTimeout(scanStep, dwell);
+  }
+}
+
+function startScan(){
+  if (!activeChannels().length) { logEvent("Aucun canal coché -- rien à scanner.", false); return; }
+  scanning = true; paused = false; currentIdx = -1;
+  document.getElementById("scan-toggle").textContent = "Arrêter le scan";
+  document.getElementById("scan-toggle").classList.add("btn-danger");
+  document.getElementById("scan-idle-hint").style.display = "none";
+  updateSub();
+  logEvent("Scan démarré.", false);
+  scanStep();
+}
+function stopScan(){
+  scanning = false; paused = false;
+  clearTimeout(timerId); cancelAnimationFrame(progressRaf);
+  document.getElementById("scan-toggle").textContent = "Lancer le scan";
+  document.getElementById("scan-toggle").classList.remove("btn-danger");
+  document.getElementById("scan-idle-hint").style.display = "";
+  document.getElementById("scan-progress-bar").style.width = "0%";
+  setDisplay(null, "À l'arrêt", false);
+  updateSub();
+  logEvent("Scan arrêté.", false);
+}
+document.getElementById("scan-toggle").addEventListener("click", () => { scanning ? stopScan() : startScan(); });
+
+renderChannelTable();
+renderPrioritySelect();
+updateSub();
+</script>
+</body>
+</html>
