@@ -62,31 +62,31 @@ Status legend: ✅ confirmed on real hardware (see the note above on what that r
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_04.png" alt="Devices tab — BLE/USB connection and PTT"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_01.png" alt="Devices tab — BLE/USB connection and PTT"><br>
       <sub><b>Devices</b> — connect via Local BLE or USB serial, hold PTT, position & SOS panel</sub>
     </td>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_01.png" alt="Channels tab — 30 channel table"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_02.png" alt="Channels tab — 30 channel table"><br>
       <sub><b>Channels</b> — read/write all 30 channels, tones, power, scan, encryption key</sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_02.png" alt="Settings tab — device settings"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_03.png" alt="Settings tab — device settings"><br>
       <sub><b>Settings</b> — audio, VOX, TX timeout/hop, dual watch, device name</sub>
     </td>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_03.png" alt="Messaging tab — off-grid channels"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_04.png" alt="Messaging tab — off-grid channels"><br>
       <sub><b>Messaging</b> — off-grid chat rooms mapped to radio channels</sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_05.png" alt="Map tab — position tracking"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_05.png" alt="Map tab — position tracking"><br>
       <sub><b>Map</b> — positions extracted from received offline beacons</sub>
     </td>
     <td align="center" width="50%">
-      <img src="docs/screenshots/Screen_06.png" alt="Log tab — raw frame debug"><br>
+      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_06.png" alt="Log tab — raw frame debug"><br>
       <sub><b>Log</b> — raw frame debug console, export exchanges</sub>
     </td>
   </tr>
