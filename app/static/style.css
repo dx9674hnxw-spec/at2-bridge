@@ -576,24 +576,37 @@ tbody tr:hover { background: var(--color-surface-hover); }
 /* Stock OSM tiles (see ensureLeafletMap() in app.js -- every free,
    no-API-key dark basemap has been retiring that free tier one by one,
    CARTO included) are a light/day-mode basemap; darken them with a CSS
-   filter on just the tile pane instead of a purpose-built dark tile set.
-   grayscale() FIRST, before invert() -- inverting a still-in-color map
-   (green parks, blue water, orange roads) and hue-rotating to compensate
-   only approximately restores the original hues, and saturated colors
-   come out muddy/purplish. Desaturating first sidesteps that entirely:
-   the result is a clean monochrome map, light roads/labels on a near-
-   black ground, same idea as e.g. CARTO's own Dark Matter but achieved
-   without needing their tiles (or their now-required API key) at all.
-   Scoped to .leaflet-tile-pane specifically (not e.g. .leaflet-layer or
-   the map container), which holds only the raster tile images --
+   filter instead of a purpose-built dark tile set. grayscale() FIRST,
+   before invert() -- inverting a still-in-color map (green parks, blue
+   water, orange roads) and hue-rotating to compensate only approximately
+   restores the original hues, and saturated colors come out muddy/
+   purplish. Desaturating first sidesteps that entirely: the result is a
+   clean monochrome map, light roads/labels on a near-black ground, same
+   idea as e.g. CARTO's own Dark Matter but achieved without needing
+   their tiles (or their now-required API key) at all.
+
+   On .leaflet-tile (each tile <img>) rather than .leaflet-tile-pane (the
+   pane wrapping all of them) -- this used to be on the pane, and broke
+   drag/scroll-zoom entirely on real devices even though it looked and
+   built fine here (the Beta map-redesign prototype, no filter anywhere
+   on its map, drags fine, was the tell). filter establishes a new
+   containing block for its element, same as transform -- Leaflet pans by
+   applying translate3d to *descendants* of the tile pane (each zoom
+   level's .leaflet-tile-container), so a filter sitting above those in
+   the tree was fighting Leaflet's own positioning math on every drag
+   frame. Individual tile <img> elements are leaves with nothing
+   transformed underneath them, so the filter can't intercept anything
+   there.
+
    markers/tooltips/circleMarkers live in .leaflet-overlay-pane/
-   .leaflet-marker-pane, untouched by this, so their already-correct
-   colors (see renderMap() in app.js) don't get run through the same
-   filter and come out wrong. Also skipped when #map-canvas carries
-   .using-custom-basemap -- a user-supplied tile URL (Settings > Carte,
-   e.g. a real CARTO/Stadia/MapTiler key) is presumably already styled
-   the way its owner wants, not stock light OSM needing to be darkened. */
-#map-canvas:not(.using-custom-basemap) .leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+   .leaflet-marker-pane, a sibling of the tile pane entirely -- untouched
+   either way, so their already-correct colors (see renderMap() in
+   app.js) never ran through this filter regardless of which selector.
+   Skipped when #map-canvas carries .using-custom-basemap -- a user-
+   supplied tile URL (Settings > Carte, e.g. a real CARTO/Stadia/MapTiler
+   key) is presumably already styled the way its owner wants, not stock
+   light OSM needing to be darkened. */
+#map-canvas:not(.using-custom-basemap) .leaflet-tile { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
 
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
    light-mode design by default too -- reskin all three to the app's own
