@@ -847,7 +847,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
   .conn-panel { /*flex-direction: column;*/ align-items: stretch; }
   .conn-controls { justify-content: flex-start; }
   .conn-controls > select { flex: 1 1 auto; min-width: 0; }
-  main { padding: 12px 12px calc(20px + var(--safe-bottom)); }
+  main { padding: 12px 12px calc(64px + var(--safe-bottom)); } /* keep clear of the now-always-visible #alert-footer */
   .ptt-btn { width: 96px; height: 96px; font-size: 14px; }
   /*.status-pill { align-self: flex-start; }*/
 }
@@ -883,7 +883,11 @@ tbody tr:hover { background: var(--color-surface-hover); }
 }
 .alert-footer[hidden] { display: none; }
 
-.alert-footer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-info); }
+/* No type class yet = the idle default shown before the first real
+   alert (visible on load now instead of [hidden] until then) -- neutral
+   gray, distinct from an actual info-type toast once one comes in. */
+.alert-footer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-neutral); }
+.alert-footer-info .alert-footer-dot { background: var(--status-info); }
 .alert-footer-success .alert-footer-dot { background: var(--status-up); }
 .alert-footer-error .alert-footer-dot { background: var(--status-down); }
 
