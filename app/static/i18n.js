@@ -80,7 +80,6 @@ const I18N_DICT = {
     "scan.logNoChannels": "Aucun canal coché — rien à scanner.",
     "scan.logHit": "CH{n} {name} — activité détectée (PTT), pause {s}s",
     "scan.logVisit": "CH{n} {name} — RAS",
-    "scan.priorityStar": "Canal prioritaire",
     "scan.includeInScan": "Inclure dans le scan",
 
     // Beta tab -- isolated prototypes (app/static/beta/, its own README),
@@ -348,7 +347,6 @@ const I18N_DICT = {
     "scan.logNoChannels": "No channel checked -- nothing to scan.",
     "scan.logHit": "CH{n} {name} -- activity detected (PTT), pausing {s}s",
     "scan.logVisit": "CH{n} {name} -- clear",
-    "scan.priorityStar": "Priority channel",
     "scan.includeInScan": "Include in scan",
 
     "beta.flag": "experimental",
