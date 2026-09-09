@@ -961,8 +961,20 @@ async function sendPositionPayload(url, note) {
     // making local-BLE position messages a different shape than server
     // mode's for no protocol reason. Matters now that the Map tab parses
     // this text back out to plot beacons.
-    const posText = `${note ? note + " " : ""}📍 ${lastCoords.lat.toFixed(5)},${lastCoords.lon.toFixed(5)}`;
+    // The /api/position/sos server route prefixes the note with 🆘 itself
+    // (see main.py) before it ever reaches send_position() -- local mode
+    // calls AT2BleClient.sendText() directly, bypassing that route, so it
+    // needs the same prefix here or an SOS goes out wire-identical to a
+    // routine "send my position now" beacon (no emergency marker at all
+    // for a receiving radio/app to key off of).
+    const fullNote = url === "/api/position/sos" ? `🆘 ${note}` : note;
+    const posText = `${fullNote ? fullNote + " " : ""}📍 ${lastCoords.lat.toFixed(5)},${lastCoords.lon.toFixed(5)}`;
     await AT2BleClient.sendText(username, posText);
+    // Server mode gets this for free (backend logs the send, streamed
+    // into the Journal over the log WS -- see ws.onmessage below); local
+    // mode runs client-side only, so without this the Journal shows every
+    // incoming RX packet but never what actually went out.
+    appendLog(`Message texte envoyé (BLE local): "${posText}"`);
   } else {
     throw new Error(t("gps.noActiveConnection"));
   }
