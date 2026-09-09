@@ -941,8 +941,15 @@ function requestLocation(centerMap) {
 }
 requestLocation();
 
+// Throws on any failure to actually send (no GPS fix, no connection) --
+// used to swallow both cases with just a toast and no throw, which the
+// SOS button's hold-to-confirm handler took as success: it flipped to
+// "✔ Sent" with a timestamp even when nothing had gone out. Every caller
+// already wraps this in try/catch and shows e.message itself, so
+// throwing here is enough to fix all of them at once instead of getting
+// the "did it actually send" check right in each caller separately.
 async function sendPositionPayload(url, note) {
-  if (!lastCoords) return showToast(t("gps.noCoords"), "info");
+  if (!lastCoords) throw new Error(t("gps.noCoords"));
   const username = $("#msg-username")?.value || "AT2Bridge";
   const transport = activeTransport();
   if (transport === "server") {
@@ -957,7 +964,7 @@ async function sendPositionPayload(url, note) {
     const posText = `${note ? note + " " : ""}📍 ${lastCoords.lat.toFixed(5)},${lastCoords.lon.toFixed(5)}`;
     await AT2BleClient.sendText(username, posText);
   } else {
-    showToast(t("gps.noActiveConnection"), "info");
+    throw new Error(t("gps.noActiveConnection"));
   }
 }
 
@@ -988,16 +995,59 @@ $("#beacon-interval").addEventListener("change", () => {
   if ($("#beacon-toggle").checked) $("#beacon-toggle").dispatchEvent(new Event("change"));
 });
 
-$("#sos-btn").addEventListener("click", async () => {
+// SOS used to send on a single click of a small button right next to the
+// reason dropdown -- one misclick or fat-thumb tap fired a real emergency
+// alert. Now a hold-to-confirm interaction, same language as PTT's own
+// press-and-hold (#ptt-btn, same tab): sending only actually happens once
+// the hold completes; letting go early cancels, same failure mode as
+// releasing PTT early. SOS_HOLD_MS must match the CSS transition duration
+// on .sos-hold-fill (style.css) -- that fill is a visual cue only, this
+// timer is what actually gates the send.
+const SOS_HOLD_MS = 1400;
+let sosHoldTimer = null;
+let sosHolding = false;
+
+function sosSetLabel(key) { $("#sos-hold-label").textContent = t(key); }
+
+function sosStartHold() {
+  if (sosHolding || $("#sos-btn").classList.contains("sent")) return;
+  sosHolding = true;
+  $("#sos-btn").classList.add("holding");
+  sosSetLabel("gps.sosHolding");
+  sosHoldTimer = setTimeout(sosConfirmSend, SOS_HOLD_MS);
+}
+function sosCancelHold() {
+  if (!sosHolding) return;
+  sosHolding = false;
+  clearTimeout(sosHoldTimer);
+  $("#sos-btn").classList.remove("holding");
+  sosSetLabel("gps.sosHoldLabel");
+}
+async function sosConfirmSend() {
+  sosHolding = false;
   const btn = $("#sos-btn");
+  btn.classList.remove("holding");
   const preset = $("#sos-preset").value;
   try {
     await sendPositionPayload("/api/position/sos", preset);
     btn.classList.add("sent");
-    btn.textContent = t("gps.sosSent");
-    setTimeout(() => { btn.classList.remove("sent"); btn.textContent = t("gps.sos"); }, 2200);
-  } catch (e) { showToast(e.message, "error"); }
-});
+    sosSetLabel("gps.sosSent");
+    $("#sos-status").textContent = t("gps.sosSentAt", { time: new Date().toLocaleTimeString("fr-FR", { hour12: false }) });
+    setTimeout(() => {
+      btn.classList.remove("sent");
+      sosSetLabel("gps.sosHoldLabel");
+      $("#sos-status").textContent = t("gps.sosIdleHint");
+    }, 3000);
+  } catch (e) {
+    sosSetLabel("gps.sosHoldLabel");
+    $("#sos-status").textContent = t("gps.sosIdleHint");
+    showToast(e.message, "error");
+  }
+}
+const sosBtn = $("#sos-btn");
+sosBtn.addEventListener("mousedown", sosStartHold);
+sosBtn.addEventListener("touchstart", (e) => { e.preventDefault(); sosStartHold(); });
+["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((evt) => sosBtn.addEventListener(evt, sosCancelHold));
 
 // ---------------------------------------------------------------------------
 // Map tab: last known position of every sender who has shared a GPS
@@ -1275,12 +1325,14 @@ window.addEventListener("resize", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Channel scan: a collapsible section inside the Devices tab's PTT panel
-// (below the channel switcher, above the PTT button -- see
-// #scan-disclosure in index.html) rather than its own tab, since it acts
-// on the same channel selection PTT and the channel dropdown do. Cycles
-// through the channels already read into lastReadChannels (Canaux tab),
-// sending the real select_channel command for each one via
+// Channel scan: a full-width card in the Devices tab (#scan-card in
+// index.html), right below the PTT/channel-selection grid -- not its own
+// tab, since it acts on the same channel selection PTT and the channel
+// dropdown do; not nested inside #ptt-panel either (tried that first --
+// that column was too narrow, left the whole section stacked vertically
+// with unused width beside it). Cycles through the channels already read
+// into lastReadChannels (Canaux tab), sending the real select_channel
+// command for each one via
 // sendChannelSelect() -- ported from the Beta tab's frequency-scan.html
 // prototype, same idea minus the simulated activity. "Activity detected"
 // reuses the RX indicator's real incoming-PTT-packet signal (see the
@@ -1322,7 +1374,7 @@ function renderScanState() {
   $("#scan-empty-state").hidden = hasChannels;
   $("#scan-layout").hidden = !hasChannels;
   $("#scan-toggle-btn").disabled = !hasChannels;
-  if (!hasChannels) { $("#scan-disclosure-sub").textContent = t("scan.subEmpty"); return; }
+  if (!hasChannels) { $("#scan-sub").textContent = t("scan.subEmpty"); return; }
   // Reseed the session-only include set only the first time real channels
   // show up (or after a fresh read replaces the list entirely) -- avoids
   // clobbering checkboxes the user already unticked on a re-render that
@@ -1383,7 +1435,7 @@ $("#scan-read-btn").addEventListener("click", async () => {
 
 function updateScanSub() {
   const n = lastReadChannels.filter((c) => c.rx_mhz).length;
-  $("#scan-disclosure-sub").textContent = scanRunning
+  $("#scan-sub").textContent = scanRunning
     ? t("scan.subRunning", { active: scanIncluded.size })
     : t("scan.subReady", { n, active: scanIncluded.size });
 }
@@ -1495,18 +1547,10 @@ function stopScan() {
 }
 $("#scan-toggle-btn").addEventListener("click", () => { scanRunning ? stopScan() : startScan(); });
 
-// Collapsed by default (same disclosure pattern as "+ Nouvelle connexion"
-// above it) -- the Devices tab is PTT's home, scanning is a secondary
-// mode most sessions won't touch, so it shouldn't push the PTT button
-// further down the page by default.
-$("#scan-disclosure-toggle").addEventListener("click", () => {
-  $("#scan-disclosure-toggle").classList.toggle("open");
-  $("#scan-disclosure-body").classList.toggle("open");
-});
-// No longer gated behind a tab click (there's no separate Scan tab to
-// click into anymore) -- render the real empty/ready state immediately
-// instead of leaving the static HTML placeholders up until the next
-// channel read or language switch happens to trigger a re-render.
+// Always visible now (full-width card, no disclosure to expand into) --
+// render the real empty/ready state immediately instead of leaving the
+// static HTML placeholders up until the next channel read or language
+// switch happens to trigger a re-render.
 renderScanState();
 
 // ---------------------------------------------------------------------------

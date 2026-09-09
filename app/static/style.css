@@ -368,25 +368,37 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 .switch input:checked + .switch-track .switch-thumb { transform: translateX(14px); }
 
 .gps-send-btn { width: 100%; margin: 12px 0 14px; }
-.sos-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.sos-btn { background: var(--status-down); color: #fff; border-radius: var(--radius-md); padding: 10px 16px; font-weight: 700; font-size: 13px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; }
-.sos-btn.sent { background: var(--status-up); }
-.sos-btn::before {
-  content: "!";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--status-down);
-  font-size: 11px;
-  font-weight: 900;
-  flex-shrink: 0;
+
+/* -- SOS: was a single click on a small button right next to the reason
+   dropdown -- one misclick or fat-thumb tap sent a real emergency alert.
+   Redesigned as a hold-to-confirm button (same interaction language as
+   PTT's own press-and-hold on #ptt-btn just below it in this same tab):
+   the fill sweeps left-to-right over sos-hold-ms (JS) while held, and
+   only actually sends once it completes -- a quick tap fills partway
+   and reverts, same failure mode as letting go of PTT early. ---------- */
+.sos-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.sos-preset { width: 100%; margin-bottom: 10px; }
+.sos-hold-btn {
+  position: relative; overflow: hidden; display: block; width: 100%; min-height: 56px; padding: 0;
+  background: var(--status-down-bg); border: 1.5px solid var(--status-down-border); border-radius: var(--radius-lg);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: none;
 }
-.sos-btn.sent::before { color: var(--status-up); }
-.sos-preset { flex: 1; min-width: 140px; }
+/* Width transition duration must match SOS_HOLD_MS in app.js. */
+.sos-hold-fill { position: absolute; inset: 0; width: 0%; background: var(--status-down); transition: width 1400ms linear; }
+.sos-hold-btn.holding .sos-hold-fill { width: 100%; }
+.sos-hold-btn.sent .sos-hold-fill { width: 100%; transition: none; }
+.sos-hold-content {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 9px; height: 56px;
+  color: var(--status-down); font-weight: 700; font-size: 13.5px; letter-spacing: 0.01em; transition: color 200ms ease;
+}
+.sos-hold-btn.holding .sos-hold-content, .sos-hold-btn.sent .sos-hold-content { color: #fff; }
+.sos-hold-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: var(--status-down); color: #fff; font-size: 12px; font-weight: 900;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+.sos-hold-btn.holding .sos-hold-icon, .sos-hold-btn.sent .sos-hold-icon { background: #fff; color: var(--status-down); }
+@media (prefers-reduced-motion: reduce) { .sos-hold-fill { transition-duration: 1ms; } }
 
 .table-wrap { overflow-x: auto; background: rgba(18, 18, 18, 0.92); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); -webkit-overflow-scrolling: touch; }
 table { border-collapse: collapse; width: 100%; min-width: 900px; }
@@ -544,23 +556,18 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-beacon-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
 .map-beacon-sub { font-size: 11px; color: var(--color-text-subtle); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* -- Channel scan: a collapsible section inside the PTT panel (Appareils
-   tab), same disclosure pattern as .new-conn-* just above it -- cycles
-   through the channels read into the Canaux table (lastReadChannels in
-   app.js), sending the real select_channel command for each one -- ported
-   from the Beta tab's frequency-scan.html prototype. "Activity detected"
-   reuses the RX indicator's real incoming-PTT-packet signal
-   (markIncomingRfActivity()), not a simulated RSSI reading -- the AT2
-   protocol exposes no such telemetry, see beta/README.md. ------------- */
-.scan-disclosure { margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 10px; }
-.scan-disclosure-toggle { width: 100%; display: flex; align-items: center; gap: 8px; background: transparent; color: var(--color-text-dim); font-size: 12.5px; font-weight: 600; padding: 4px 2px; border: none; min-height: auto; }
-.scan-disclosure-sub { flex: 1; text-align: left; font-weight: 500; color: var(--color-text-faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scan-disclosure-toggle .chevron { transition: transform var(--transition-fast); color: var(--color-text-subtle); flex-shrink: 0; }
-.scan-disclosure-toggle.open .chevron { transform: rotate(90deg); }
-.scan-disclosure-body { max-height: 0; overflow: hidden; transition: max-height 240ms ease; }
-.scan-disclosure-body.open { max-height: 2000px; }
-.scan-disclosure-inner { padding-top: 14px; }
-
+/* -- Channel scan: a full-width card in the Appareils tab, right below
+   the PTT/channel-selection grid it acts on (not its own tab, not nested
+   inside #ptt-panel either -- that column was only ~480px wide and left
+   the whole section (display + log + channel list) stacked in one long
+   vertical column with a lot of unused width beside it, caught visually
+   after trying that placement). Cycles through the channels read into
+   the Canaux table (lastReadChannels in app.js), sending the real
+   select_channel command for each one -- ported from the Beta tab's
+   frequency-scan.html prototype. "Activity detected" reuses the RX
+   indicator's real incoming-PTT-packet signal (markIncomingRfActivity()),
+   not a simulated RSSI reading -- the AT2 protocol exposes no such
+   telemetry, see beta/README.md. --------------------------------------- */
 .scan-range-label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-text-dim); }
 .scan-range-label input[type=range] { width: 90px; }
 
@@ -573,15 +580,9 @@ tbody tr:hover { background: var(--color-surface-hover); }
    visually. Same bug, same fix as .sos-banner in the beta map prototype. */
 .scan-empty-state[hidden] { display: none; }
 
-/* Single column, always -- this used to live in its own full-width tab
-   (where a @media (max-width:820px) breakpoint made sense) but now sits
-   inside the PTT panel's own devices-grid column, well under half the
-   viewport on any normal screen; that breakpoint checks *viewport* width
-   and so never actually fired here, leaving a cramped 1fr sliver next to
-   a fixed 320px channel list regardless of how little room there was
-   (caught visually after moving this, not assumed fine by analogy). */
-.scan-layout { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.scan-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 14px; align-items: start; }
 .scan-layout[hidden] { display: none; }
+@media (max-width: 820px) { .scan-layout { grid-template-columns: 1fr; } }
 
 .scan-display {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
