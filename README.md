@@ -14,7 +14,7 @@
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" />
   
   <!-- Tests -->
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-64_passed-success.svg?logo=pytest" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-69_passed-success.svg?logo=pytest" />
   
   <!-- Hardware -->
   <img alt="Radio" src="https://img.shields.io/badge/🛜_Radio-Baofeng_AT2-8A2BE2.svg" />
