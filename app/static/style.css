@@ -311,7 +311,20 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 
 .devices-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
 .devices-grid > .card { margin-bottom: 0; } /* le gap de la grille gère déjà l'espacement ici */
-@media (min-width: 780px) { .devices-grid { grid-template-columns: 1fr 1fr; align-items: start; } }
+/* Both cards flex-column so their content can be pinned to the bottom of
+   whatever height the grid row ends up stretching them to below -- see
+   .sos-block's margin-top:auto. Harmless at the single-column width too:
+   with no stretched sibling there's no extra height to distribute, so it
+   just sits at its natural size same as a plain block would. */
+#ptt-panel, #gps-panel { display: flex; flex-direction: column; }
+@media (min-width: 780px) {
+  /* stretch (the grid default -- was pinned to "start" here) so both
+     cards share the taller one's height instead of each sizing to its
+     own content and leaving the shorter one's bottom edge floating
+     above the other's, per the redesigned SOS block (now taller than
+     it used to be) no longer lining up with #ptt-panel below it. */
+  .devices-grid { grid-template-columns: 1fr 1fr; align-items: stretch; }
+}
 
 /* Line 1: prev/select/next only, centered as a compact group (not
    stretched full-width) -- rename/help moved down to join the option
@@ -395,7 +408,13 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
    the fill sweeps left-to-right over sos-hold-ms (JS) while held, and
    only actually sends once it completes -- a quick tap fills partway
    and reverts, same failure mode as letting go of PTT early. ---------- */
-.sos-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+/* auto, not a fixed value: in the flex-column #gps-panel this soaks up
+   whatever extra height the devices-grid stretch above gave the card
+   (see .devices-grid), pinning the SOS block flush to the bottom so it
+   lines up with #ptt-panel's own bottom edge instead of floating partway
+   up a taller card. Falls back to acting like margin-top:0 when there's
+   no extra space to distribute (e.g. the single-column mobile layout). */
+.sos-block { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--color-border); }
 .sos-preset { width: 100%; margin-bottom: 10px; }
 .sos-hold-btn {
   position: relative; overflow: hidden; display: block; width: 100%; min-height: 56px; padding: 0;
