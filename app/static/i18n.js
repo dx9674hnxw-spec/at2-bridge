@@ -47,13 +47,14 @@ const I18N_DICT = {
     "tab.settings": "Réglages",
     "tab.messages": "Messagerie",
     "tab.map": "Carte",
-    "tab.scan": "Scan",
     "tab.log": "Journal",
     "tab.beta": "Beta",
 
-    // Scan tab -- cycles real channels via select_channel(), same call the
-    // channel dropdown uses (see sendChannelSelect() in app.js). "Activity
-    // detected" reuses the RX indicator's real incoming-PTT-packet signal,
+    // Channel scan -- a collapsible section inside the PTT panel (Appareils
+    // tab), not its own tab. Cycles real channels via select_channel(),
+    // same call the channel dropdown uses (see sendChannelSelect() in
+    // app.js). "Activity detected" reuses the RX indicator's real
+    // incoming-PTT-packet signal,
     // not a simulated RSSI reading -- ported from the Beta tab's
     // frequency-scan.html prototype.
     "scan.title": "Scan de canaux",
@@ -317,7 +318,6 @@ const I18N_DICT = {
     "tab.settings": "Settings",
     "tab.messages": "Messaging",
     "tab.map": "Map",
-    "tab.scan": "Scan",
     "tab.log": "Log",
     "tab.beta": "Beta",
 

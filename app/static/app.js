@@ -1275,8 +1275,12 @@ window.addEventListener("resize", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Scan tab: cycles through the channels already read into lastReadChannels
-// (Canaux tab), sending the real select_channel command for each one via
+// Channel scan: a collapsible section inside the Devices tab's PTT panel
+// (below the channel switcher, above the PTT button -- see
+// #scan-disclosure in index.html) rather than its own tab, since it acts
+// on the same channel selection PTT and the channel dropdown do. Cycles
+// through the channels already read into lastReadChannels (Canaux tab),
+// sending the real select_channel command for each one via
 // sendChannelSelect() -- ported from the Beta tab's frequency-scan.html
 // prototype, same idea minus the simulated activity. "Activity detected"
 // reuses the RX indicator's real incoming-PTT-packet signal (see the
@@ -1318,7 +1322,7 @@ function renderScanState() {
   $("#scan-empty-state").hidden = hasChannels;
   $("#scan-layout").hidden = !hasChannels;
   $("#scan-toggle-btn").disabled = !hasChannels;
-  if (!hasChannels) { $("#scan-sub").textContent = t("scan.subEmpty"); return; }
+  if (!hasChannels) { $("#scan-disclosure-sub").textContent = t("scan.subEmpty"); return; }
   // Reseed the session-only include set only the first time real channels
   // show up (or after a fresh read replaces the list entirely) -- avoids
   // clobbering checkboxes the user already unticked on a re-render that
@@ -1379,7 +1383,7 @@ $("#scan-read-btn").addEventListener("click", async () => {
 
 function updateScanSub() {
   const n = lastReadChannels.filter((c) => c.rx_mhz).length;
-  $("#scan-sub").textContent = scanRunning
+  $("#scan-disclosure-sub").textContent = scanRunning
     ? t("scan.subRunning", { active: scanIncluded.size })
     : t("scan.subReady", { n, active: scanIncluded.size });
 }
@@ -1491,9 +1495,19 @@ function stopScan() {
 }
 $("#scan-toggle-btn").addEventListener("click", () => { scanRunning ? stopScan() : startScan(); });
 
-$$(".tab").forEach((tabBtn) => {
-  if (tabBtn.dataset.tab === "scan") tabBtn.addEventListener("click", () => renderScanState());
+// Collapsed by default (same disclosure pattern as "+ Nouvelle connexion"
+// above it) -- the Devices tab is PTT's home, scanning is a secondary
+// mode most sessions won't touch, so it shouldn't push the PTT button
+// further down the page by default.
+$("#scan-disclosure-toggle").addEventListener("click", () => {
+  $("#scan-disclosure-toggle").classList.toggle("open");
+  $("#scan-disclosure-body").classList.toggle("open");
 });
+// No longer gated behind a tab click (there's no separate Scan tab to
+// click into anymore) -- render the real empty/ready state immediately
+// instead of leaving the static HTML placeholders up until the next
+// channel read or language switch happens to trigger a re-render.
+renderScanState();
 
 // ---------------------------------------------------------------------------
 // Beta tab: isolated prototypes, each its own static page under
