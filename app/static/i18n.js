@@ -229,6 +229,7 @@ const I18N_DICT = {
     "settings.sectionTransmission": "Transmission",
     "settings.sectionDualWatch": "Dual Watch",
     "settings.sectionDevice": "Appareil",
+    "settings.sectionMap": "Carte",
     "settings.dualWatchEnable": "Activer le Dual Watch",
     "settings.voxSensitivity": "Sensibilité VOX (1–5)",
     "settings.tot": "Temporisation TX — secondes (0 = désactivé, max 240)",
@@ -255,6 +256,11 @@ const I18N_DICT = {
 
     // Map tab
     "map.title": "Carte",
+    "map.tileUrlHint": "Optionnel — laisse vide pour les tuiles OSM gratuites (assombries automatiquement). Pour un vrai fond de carte sombre, crée un compte gratuit chez un fournisseur de tuiles (CARTO, Stadia, MapTiler…) et colle ici l'URL de tuiles qu'il te donne (avec ta clé déjà dedans). Prend effet au prochain chargement de la page.",
+    "map.tileUrlLabel": "URL des tuiles",
+    "map.tileUrlPlaceholder": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=…",
+    "map.tileAttributionLabel": "Attribution",
+    "map.tileAttributionPlaceholder": "&copy; OpenStreetMap contributors &copy; CARTO",
     "map.viewRadar": "Vue radar",
     "map.viewMap": "Vue carte",
     "map.centerOnMe": "Centrer sur moi",
@@ -492,6 +498,7 @@ const I18N_DICT = {
     "settings.sectionTransmission": "Transmission",
     "settings.sectionDualWatch": "Dual Watch",
     "settings.sectionDevice": "Device",
+    "settings.sectionMap": "Map",
     "settings.dualWatchEnable": "Enable Dual Watch",
     "settings.voxSensitivity": "VOX sensitivity (1–5)",
     "settings.tot": "TX timeout — seconds (0 = disabled, max 240)",
@@ -517,6 +524,11 @@ const I18N_DICT = {
 
     // Map tab
     "map.title": "Map",
+    "map.tileUrlHint": "Optional — leave blank for the free OSM tiles (darkened automatically). For a real dark basemap, sign up for a free account with a tile provider (CARTO, Stadia, MapTiler…) and paste the tile URL it gives you here (with your key already in it). Takes effect on the next page load.",
+    "map.tileUrlLabel": "Tile URL",
+    "map.tileUrlPlaceholder": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=…",
+    "map.tileAttributionLabel": "Attribution",
+    "map.tileAttributionPlaceholder": "&copy; OpenStreetMap contributors &copy; CARTO",
     "map.viewRadar": "Radar view",
     "map.viewMap": "Map view",
     "map.centerOnMe": "Center on me",

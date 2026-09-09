@@ -1303,6 +1303,35 @@ if (!LEAFLET_AVAILABLE) {
   $("#map-view-toggle").title = t("map.leafletUnavailable");
 }
 
+// Optional user-supplied tile URL/attribution (Settings > Carte), so
+// someone willing to sign up for a free CARTO/Stadia/MapTiler account and
+// key can get that provider's actual dark basemap instead of the CSS-
+// filtered OSM fallback -- see ensureLeafletMap() below. Stored client-side
+// only (localStorage), read fresh at Leaflet-init time rather than cached
+// in a top-level const, since the settings inputs can be edited any time
+// after this script has already run once. Never sent anywhere -- this app
+// has no backend of its own to relay it through, it goes straight from the
+// browser to whichever tile host the URL points at, same as the default
+// OSM fallback already does.
+const MAP_TILE_URL_KEY = "at2_map_tile_url";
+const MAP_TILE_ATTRIBUTION_KEY = "at2_map_tile_attribution";
+// Fallback if a custom tile URL is set but the attribution field was left
+// blank -- a fixed technical default, not user-facing copy, so it can't
+// drift out of correctness if map.tileAttributionPlaceholder's *example*
+// text ever gets reworded/retranslated for clarity independent of this.
+const DEFAULT_CUSTOM_TILE_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; CARTO";
+
+function getMapTilePrefs() {
+  try {
+    return {
+      url: (localStorage.getItem(MAP_TILE_URL_KEY) || "").trim(),
+      attribution: (localStorage.getItem(MAP_TILE_ATTRIBUTION_KEY) || "").trim(),
+    };
+  } catch (e) {
+    return { url: "", attribution: "" };
+  }
+}
+
 // True once the user has panned/zoomed the map by hand. Every incoming
 // beacon used to re-run fitBounds() unconditionally, which yanked the view
 // back to "fit everyone" a second or two into any manual drag -- on a live
@@ -1324,17 +1353,24 @@ function ensureLeafletMap() {
     dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
     boxZoom: true, touchZoom: true, tap: true,
   }).setView([0, 0], 2);
-  // Tried CARTO's "Dark Matter" basemap here first (same OSM data,
-  // pre-styled dark) -- turned out to require an API key now (their
-  // anonymous basemaps.cartocdn.com access was retired), which stamped
-  // "API KEY REQUIRED" across every tile. Every other free-without-a-key
-  // dark basemap (Esri included) has been trending the same way industry-
-  // wide, so rather than gamble on a second one, stock OSM tiles stay --
-  // genuinely free, no account, always has been -- darkened with a CSS
-  // filter on the tile pane instead (see .leaflet-tile-pane in style.css).
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // CARTO's "Dark Matter" basemap (same OSM data, pre-styled dark) turned
+  // out to need an API key now -- their anonymous basemaps.cartocdn.com
+  // access was retired, which stamped "API KEY REQUIRED" across every
+  // tile. That's true of every other no-key dark basemap too at this
+  // point (industry-wide trend, not CARTO-specific), so rather than keep
+  // gambling on a provider staying free-without-an-account, stock OSM
+  // tiles are the default -- genuinely free, no account, always has been
+  // -- darkened with a CSS filter on the tile pane instead (see
+  // .leaflet-tile-pane in style.css). Someone willing to sign up for
+  // their own free key with a provider can paste that provider's tile URL
+  // into Settings > Carte to get the real thing instead; #map-canvas gets
+  // a class either way so the CSS filter only applies to the OSM
+  // fallback, not an already-properly-styled custom basemap.
+  const { url: customTileUrl, attribution: customAttribution } = getMapTilePrefs();
+  $("#map-canvas").classList.toggle("using-custom-basemap", !!customTileUrl);
+  L.tileLayer(customTileUrl || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
+    attribution: customTileUrl ? (customAttribution || DEFAULT_CUSTOM_TILE_ATTRIBUTION) : "&copy; OpenStreetMap",
   }).addTo(leafletMap);
   // Belt-and-suspenders for the options above: explicitly re-enable the
   // interaction handlers Leaflet exposes for this, in case something about
@@ -1346,6 +1382,24 @@ function ensureLeafletMap() {
   leafletMap.scrollWheelZoom.enable();
   leafletMap.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
+  });
+}
+
+// Settings > Carte fields -- just persist to localStorage on change.
+// ensureLeafletMap() only ever runs once (guarded by `if (leafletMap)`
+// above), so a change here doesn't retroactively swap an already-built
+// map's tile layer; the hint text next to these inputs says as much.
+{
+  const urlInput = $("#map-tile-url");
+  const attributionInput = $("#map-tile-attribution");
+  const prefs = getMapTilePrefs();
+  urlInput.value = prefs.url;
+  attributionInput.value = prefs.attribution;
+  urlInput.addEventListener("change", () => {
+    try { localStorage.setItem(MAP_TILE_URL_KEY, urlInput.value.trim()); } catch (e) {}
+  });
+  attributionInput.addEventListener("change", () => {
+    try { localStorage.setItem(MAP_TILE_ATTRIBUTION_KEY, attributionInput.value.trim()); } catch (e) {}
   });
 }
 

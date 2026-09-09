@@ -589,8 +589,11 @@ tbody tr:hover { background: var(--color-surface-hover); }
    markers/tooltips/circleMarkers live in .leaflet-overlay-pane/
    .leaflet-marker-pane, untouched by this, so their already-correct
    colors (see renderMap() in app.js) don't get run through the same
-   filter and come out wrong. */
-.leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+   filter and come out wrong. Also skipped when #map-canvas carries
+   .using-custom-basemap -- a user-supplied tile URL (Settings > Carte,
+   e.g. a real CARTO/Stadia/MapTiler key) is presumably already styled
+   the way its owner wants, not stock light OSM needing to be darkened. */
+#map-canvas:not(.using-custom-basemap) .leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
 
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
    light-mode design by default too -- reskin all three to the app's own
