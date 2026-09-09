@@ -64,6 +64,25 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+
+  /* .freq-crt (VHS/CRT frequency readouts, see that section further
+     down) -- kept as their own group rather than folded into --color-*
+     because they're deliberately NOT redefined under [data-theme="light"]
+     below: this is meant to read as a physical device's own screen,
+     which doesn't relight itself for the room's theme. Still real
+     tokens, not literals inline in the rules -- each value is used more
+     than once across that section, so a single source of truth here is
+     what the CSS is supposed to look like, theme-swapped or not. */
+  --freq-crt-bg: #050a08;
+  --freq-crt-border: #14231f;
+  --freq-crt-scanline: rgba(190, 255, 220, .11);
+  --freq-crt-text-bright: #d7fff0;
+  --freq-crt-text-dim: #7fe8c4;
+  --freq-crt-text-blue: #8fd4ff;
+  --freq-crt-aberration-red: rgba(255, 60, 60, .6);
+  --freq-crt-aberration-cyan: rgba(60, 220, 255, .6);
+  --freq-crt-aberration-red-soft: rgba(255, 60, 60, .4);
+  --freq-crt-aberration-cyan-soft: rgba(60, 220, 255, .4);
 }
 
 /* -- Light theme override -------------------------------------------------
@@ -889,11 +908,13 @@ tbody tr:hover { background: var(--color-surface-hover); }
    entire page instead of staying inside its card. Not a placement fix:
    dropped outright, it didn't land well as an effect either.
 
-   Deliberately theme-independent: every color below is a literal, not a
-   --color-*/--status-* token, on purpose -- this is meant to look like a
+   Deliberately theme-independent: every color below is a --freq-crt-*
+   token (declared once in :root at the top of this file), not a
+   --color-* or --status-* one, on purpose -- this is meant to look like a
    physical device's own CRT/LCD readout, which doesn't relight itself
-   for the room's light/dark preference, so it stays the same dark
-   phosphor-green screen in both app themes.
+   for the room's light/dark preference, so those tokens are never
+   redefined under [data-theme="light"] the way --color-* / --status-* are,
+   and it stays the same dark phosphor-green screen in both app themes.
 
    No !important anywhere: this block is appended after .chan-freq-block/
    .scan-display's own rules, and at equal specificity (one class each)
@@ -908,15 +929,15 @@ tbody tr:hover { background: var(--color-surface-hover); }
    none of that is motion, it's just color/texture. --------------------- */
 .freq-crt {
   position: relative;
-  background: #050a08;
-  border-color: #14231f;
+  background: var(--freq-crt-bg);
+  border-color: var(--freq-crt-border);
   overflow: hidden;
   isolation: isolate; /* keep the overlay/screen blend modes scoped to this element's own stacking context */
 }
 .freq-crt::before {
   content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
   background-image:
-    repeating-linear-gradient(to bottom, rgba(190, 255, 220, .11) 0px, rgba(190, 255, 220, .11) 1px, transparent 1px, transparent 2px),
+    repeating-linear-gradient(to bottom, var(--freq-crt-scanline) 0px, var(--freq-crt-scanline) 1px, transparent 1px, transparent 2px),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 100% 100%, 180px 180px;
   background-blend-mode: overlay;
@@ -932,17 +953,17 @@ tbody tr:hover { background: var(--color-surface-hover); }
   100% { background-position: 0 0, 0% 0%; }
 }
 .freq-crt .chan-freq-main, .freq-crt .scan-ch-num {
-  position: relative; z-index: 4; color: #d7fff0;
-  text-shadow: -1.5px 0 rgba(255, 60, 60, .6), 1.5px 0 rgba(60, 220, 255, .6);
+  position: relative; z-index: 4; color: var(--freq-crt-text-bright);
+  text-shadow: -1.5px 0 var(--freq-crt-aberration-red), 1.5px 0 var(--freq-crt-aberration-cyan);
   animation: freq-crt-flicker 4s linear infinite;
 }
 .freq-crt .chan-freq-unit, .freq-crt .chan-freq-sub,
 .freq-crt .scan-status, .freq-crt .scan-ch-name {
-  position: relative; z-index: 4; color: #7fe8c4;
+  position: relative; z-index: 4; color: var(--freq-crt-text-dim);
 }
 .freq-crt .scan-ch-freq {
-  position: relative; z-index: 4; color: #8fd4ff;
-  text-shadow: -1px 0 rgba(255, 60, 60, .4), 1px 0 rgba(60, 220, 255, .4);
+  position: relative; z-index: 4; color: var(--freq-crt-text-blue);
+  text-shadow: -1px 0 var(--freq-crt-aberration-red-soft), 1px 0 var(--freq-crt-aberration-cyan-soft);
 }
 @keyframes freq-crt-flicker {
   0%, 92%, 100% { opacity: 1; transform: translateX(0); }
