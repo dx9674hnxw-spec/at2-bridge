@@ -36,6 +36,7 @@
       <button class="tab" data-tab="device" data-i18n="tab.settings">Réglages</button>
       <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
       <button class="tab" data-tab="map" data-i18n="tab.map">Carte</button>
+      <button class="tab" data-tab="scan" data-i18n="tab.scan">Scan</button>
       <button class="tab" data-tab="log" data-i18n="tab.log">Journal</button>
       <button class="tab" data-tab="beta" data-i18n="tab.beta">Beta</button>
     </nav>
@@ -390,6 +391,52 @@
           <div class="map-beacon-list" id="map-beacon-list"></div>
         </div>
         <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
+      </div>
+    </section>
+
+    <!-- Ported from the Beta tab's frequency-scan.html prototype -- real
+         channel selection (select_channel(), same call the channel
+         dropdown/PTT panel use) and real activity detection (reuses the
+         RX indicator's incoming-PTT-packet signal, see markIncomingRfActivity()
+         in app.js), NOT a simulated RSSI sweep -- the AT2 protocol has no
+         such telemetry, see beta/README.md's "Honnêteté matérielle". -->
+    <section id="tab-scan" class="tab-panel wide-panel">
+      <div class="card">
+        <div class="ptt-header">
+          <div>
+            <div class="ptt-device-name" data-i18n="scan.title">Scan de canaux</div>
+            <div class="ptt-device-sub" id="scan-sub">—</div>
+          </div>
+          <div class="settings-toolbar">
+            <label class="scan-range-label"><span data-i18n="scan.speedLabel">Vitesse</span><input type="range" id="scan-dwell-range" min="150" max="1200" step="50" value="450" /></label>
+            <label class="scan-range-label"><span data-i18n="scan.pauseLabel">Pause sur activité</span><input type="range" id="scan-pause-range" min="1" max="8" step="1" value="3" /></label>
+            <label class="scan-range-label"><span data-i18n="scan.priorityLabel">Prioritaire</span>
+              <select id="scan-priority-select"><option value="" data-i18n="scan.priorityNone">Aucun</option></select>
+            </label>
+            <button class="btn-primary" id="scan-toggle-btn" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
+          </div>
+        </div>
+
+        <div id="scan-empty-state" class="hint scan-empty-state">
+          <span data-i18n="scan.emptyHint">Aucun canal lu pour l'instant — lisez les canaux pour choisir lesquels scanner.</span>
+          <button class="btn-ghost" id="scan-read-btn" data-i18n="scan.readChannelsBtn">Lire les canaux</button>
+        </div>
+
+        <div class="scan-layout" id="scan-layout" hidden>
+          <div>
+            <div class="scan-display" id="scan-display">
+              <div class="scan-status" id="scan-status" data-i18n="scan.statusIdle">À l'arrêt</div>
+              <div class="scan-ch-num" id="scan-ch-num">—</div>
+              <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
+              <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
+              <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+            </div>
+            <p class="hint" style="margin:10px 0 8px;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>
+            <div class="hint" style="margin-bottom:6px;" data-i18n="scan.logHeading">Journal du scan</div>
+            <div class="scan-log" id="scan-log"></div>
+          </div>
+          <div class="scan-chan-table" id="scan-chan-table"></div>
+        </div>
       </div>
     </section>
 

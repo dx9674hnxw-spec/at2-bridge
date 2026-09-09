@@ -46,6 +46,19 @@ mieux vaut prototyper l'ergonomie avec des données simulées, clairement
 annoncées, en attendant de savoir si/comment une vraie mesure serait un
 jour possible.
 
+## Déjà porté
+
+- **Scan de canaux** (était `frequency-scan.html`) — vit maintenant dans
+  l'onglet **Scan** de l'appli principale (`index.html` → `#tab-scan`,
+  logique dans `app.js`). La sélection de canal est réelle
+  (`sendChannelSelect()`, même commande `select_channel()` que le
+  sélecteur de canal normal) et la "détection d'activité" a été
+  reformulée en un vrai signal (l'indicateur RX existant,
+  `markIncomingRfActivity()`, via l'event `at2:rf-activity`) au lieu du
+  tirage aléatoire du prototype — voir le commentaire en tête de la
+  section Scan dans `app.js` pour le détail de ce qui a changé au
+  portage.
+
 ## Prototypes actuels
 
 - `map-redesign.html` — refonte de l'onglet Carte : bascule "Suivi auto"
@@ -55,13 +68,6 @@ jour possible.
   tester sans matériel (`+ Balise de test` / `🧹 Suppr. balises de test`,
   qui écrivent/nettoient des entrées taguées `synthetic:true` dans
   `at2_beacons`).
-- `frequency-scan.html` — scan des canaux configurés (respecte un flag
-  `scanAdd` par canal, comme `channel.py`), canal prioritaire, vitesse et
-  délai de pause réglables, journal des passages. La sélection de canal
-  serait réelle à porter (`select_channel()` existe déjà côté protocole) ;
-  la "détection d'activité" pendant le scan est un tirage aléatoire
-  (**aucune donnée RSSI/occupation réelle n'existe dans ce protocole**),
-  clairement annoncé dans la page.
 - `spectrum.html` — concept de spectromètre/waterfall (trace + cascade en
   Canvas, pics simulés, hold max, span/fréquence centrale réglables).
   Entièrement simulé et annoncé comme tel : le matériel actuel ne peut
