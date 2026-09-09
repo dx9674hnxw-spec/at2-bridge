@@ -36,7 +36,6 @@
       <button class="tab" data-tab="device" data-i18n="tab.settings">Réglages</button>
       <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
       <button class="tab" data-tab="map" data-i18n="tab.map">Carte</button>
-      <button class="tab" data-tab="log" data-i18n="tab.log">Journal</button>
       <button class="tab" data-tab="beta" data-i18n="tab.beta">Beta</button>
     </nav>
   </div>
@@ -390,6 +389,30 @@
           </div>
         </div>
       </div>
+
+      <!-- Journal + outil de trame brute -- anciennement leur propre onglet
+           "Journal", fusionné ici sous Réglages (même logique que le Scan
+           déplacé sous Appareils : contenu de diagnostic/expert, pas un
+           flux qu'on consulte en continu, donc pas besoin d'un onglet dédié
+           à lui seul). Les IDs n'ont pas changé, tout le JS qui les cible
+           fonctionne à l'identique. -->
+      <div class="card" style="margin-bottom:14px;">
+        <div class="ptt-device-sub" style="margin-bottom:6px; font-weight:600;" data-i18n="debug.rawFrameTitle">🧪 Debug — Envoi de trame brute (expérimental)</div>
+        <div class="hint" style="margin-bottom:10px;" data-i18n="debug.rawFrameHint">Contourne toute la couche protocole. Réservé aux tests d'hypothèses de rétro-ingénierie — voir CONSIGNES_PROJET.md.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="raw-frame-input" style="flex:1; min-width:220px; font-family:var(--font-mono);" data-i18n-placeholder="debug.rawFramePlaceholder" placeholder="aa55...77ee" />
+          <button class="btn-primary" id="btn-send-raw-frame" data-i18n="debug.rawFrameSend">Envoyer</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ptt-device-name" style="margin-bottom:10px;" data-i18n="tab.log">Journal</div>
+        <div class="panel-toolbar" style="margin-bottom:10px;">
+          <button class="btn-ghost" id="btn-log-copy-all" data-i18n="log.copyAll">Copier tout</button>
+          <button class="btn-ghost" id="btn-log-copy-last" data-i18n="log.copyLast">Copier le dernier échange</button>
+          <button class="btn-ghost" id="btn-log-export" data-i18n="log.export">Exporter (.txt)</button>
+        </div>
+        <pre id="log-console"></pre>
+      </div>
     </section>
 
     <section id="tab-messages" class="tab-panel">
@@ -453,23 +476,6 @@
         </div>
         <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
       </div>
-    </section>
-
-    <section id="tab-log" class="tab-panel">
-      <div class="card" style="margin-bottom:14px;">
-        <div class="ptt-device-sub" style="margin-bottom:6px; font-weight:600;" data-i18n="debug.rawFrameTitle">🧪 Debug — Envoi de trame brute (expérimental)</div>
-        <div class="hint" style="margin-bottom:10px;" data-i18n="debug.rawFrameHint">Contourne toute la couche protocole. Réservé aux tests d'hypothèses de rétro-ingénierie — voir CONSIGNES_PROJET.md.</div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <input type="text" id="raw-frame-input" style="flex:1; min-width:220px; font-family:var(--font-mono);" data-i18n-placeholder="debug.rawFramePlaceholder" placeholder="aa55...77ee" />
-          <button class="btn-primary" id="btn-send-raw-frame" data-i18n="debug.rawFrameSend">Envoyer</button>
-        </div>
-      </div>
-      <div class="panel-toolbar" style="margin-bottom:10px;">
-        <button class="btn-ghost" id="btn-log-copy-all" data-i18n="log.copyAll">Copier tout</button>
-        <button class="btn-ghost" id="btn-log-copy-last" data-i18n="log.copyLast">Copier le dernier échange</button>
-        <button class="btn-ghost" id="btn-log-export" data-i18n="log.export">Exporter (.txt)</button>
-      </div>
-      <pre id="log-console"></pre>
     </section>
 
     <!-- Isolated experiments -- see app/static/beta/README.md. Each
