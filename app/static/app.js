@@ -941,6 +941,59 @@ function requestLocation(centerMap) {
 }
 requestLocation();
 
+// SOS alert tone: a short synthesized two-tone siren, sent as a real
+// store-and-forward voice message (same AT2Protocol.buildVoiceMessageFrames
+// / AmrNbCodec path as a recorded voice note -- see #btn-record-voice
+// below) alongside the SOS text, so a receiving radio/app gets an audible
+// alert too, not just a silent text bubble. Synthesized rather than
+// recorded from the mic: no permission prompt needed in the moment, and
+// it's identical every time so it reads as a deliberate alert tone rather
+// than whatever the mic happened to pick up.
+const ALERT_TONE_SAMPLE_RATE = 8000; // must match sendVoice()'s expected PCM rate
+function generateAlertTonePcm() {
+  const freqA = 950, freqB = 1400; // classic two-tone siren pitch
+  const segmentMs = 220;
+  const repeats = 5; // ~2.2s total -- long enough to be unmistakable, short enough to send quickly
+  const segmentSamples = Math.round(ALERT_TONE_SAMPLE_RATE * segmentMs / 1000);
+  const fadeSamples = Math.round(ALERT_TONE_SAMPLE_RATE * 0.005); // 5ms fade in/out per segment, avoids clicks at each tone switch
+  const pcm = new Int16Array(segmentSamples * 2 * repeats);
+  const amp = 0.55 * 32767;
+  let idx = 0;
+  for (let r = 0; r < repeats; r++) {
+    for (const freq of [freqA, freqB]) {
+      for (let i = 0; i < segmentSamples; i++) {
+        let env = 1;
+        if (i < fadeSamples) env = i / fadeSamples;
+        else if (i > segmentSamples - fadeSamples) env = (segmentSamples - i) / fadeSamples;
+        pcm[idx++] = Math.round(amp * env * Math.sin((2 * Math.PI * freq * i) / ALERT_TONE_SAMPLE_RATE));
+      }
+    }
+  }
+  const durationMs = Math.round((pcm.length / ALERT_TONE_SAMPLE_RATE) * 1000);
+  return { pcm, durationMs };
+}
+
+// Best-effort: a failed tone shouldn't make sosConfirmSend() report the
+// whole SOS as failed when the actual position/text (the critical part)
+// went out fine. Logged either way so it's never silently skipped.
+async function sendAlertTone(username, transport) {
+  const { pcm, durationMs } = generateAlertTonePcm();
+  try {
+    if (transport === "server") {
+      const form = new FormData();
+      form.append("username", username);
+      form.append("duration_ms", String(durationMs));
+      form.append("pcm", new Blob([pcm.buffer], { type: "application/octet-stream" }), "alert.pcm");
+      await apiUpload("/api/messages/voice", form);
+    } else if (transport === "local") {
+      await AT2BleClient.sendVoice(username, pcm, durationMs);
+      appendLog(`Tonalité d'alerte envoyée (BLE local, ${(durationMs / 1000).toFixed(1)}s).`);
+    }
+  } catch (e) {
+    appendLog(`⚠️ Échec d'envoi de la tonalité d'alerte: ${e.message}`);
+  }
+}
+
 // Throws on any failure to actually send (no GPS fix, no connection) --
 // used to swallow both cases with just a toast and no throw, which the
 // SOS button's hold-to-confirm handler took as success: it flipped to
@@ -978,6 +1031,11 @@ async function sendPositionPayload(url, note) {
   } else {
     throw new Error(t("gps.noActiveConnection"));
   }
+  // Position/text above is the critical part of an SOS and has already
+  // thrown by now if it failed; the tone is a best-effort addition on
+  // top (sendAlertTone() never throws, see its own comment), so this
+  // never turns a real SOS send into a reported failure.
+  if (url === "/api/position/sos") await sendAlertTone(username, transport);
 }
 
 $("#gps-send-now").addEventListener("click", async () => {
