@@ -1317,9 +1317,15 @@ let mapProgrammaticMove = false;
 function ensureLeafletMap() {
   if (leafletMap || !LEAFLET_AVAILABLE) return;
   leafletMap = L.map("map-canvas").setView([0, 0], 2);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // CARTO's "Dark Matter" basemap instead of stock OSM tiles: same
+  // OpenStreetMap data, styled dark so it doesn't look like a bright
+  // light-mode rectangle dropped into an otherwise all-dark app. Free,
+  // no API key/account (unlike Mapbox or Stadia's hosted Stamen tiles) --
+  // matters here since this app has no backend account of its own to hold
+  // a key for. Attribution to both required by their terms.
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
   }).addTo(leafletMap);
   leafletMap.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
