@@ -64,6 +64,7 @@ function refreshDynamicTranslations() {
   else updateLocalStatusUi();
   renderChanOpts();
   renderChanFreq();
+  refreshBetaLabels();
   applyModeUi();
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
@@ -1258,6 +1259,55 @@ $$(".tab").forEach((tabBtn) => {
 // Leaflet's cached size stale until the next beacon triggers a re-render.
 window.addEventListener("resize", () => {
   if (leafletMap && mapViewMode === "map") leafletMap.invalidateSize();
+});
+
+// ---------------------------------------------------------------------------
+// Beta tab: isolated prototypes, each its own static page under
+// app/static/beta/ (own HTML/CSS/JS -- see beta/README.md) loaded in an
+// <iframe> so a bug in an experiment can't reach the rest of the app.
+// Adding a new one to try is one line here plus the file itself; nothing
+// else in this app needs to change.
+// ---------------------------------------------------------------------------
+const BETA_PAGES = [
+  { id: "map-redesign", i18nKey: "beta.page.mapRedesign", src: "/static/beta/map-redesign.html" },
+];
+
+function buildBetaTab() {
+  const nav = $("#beta-subtabs");
+  const frames = $("#beta-frames");
+  nav.innerHTML = BETA_PAGES.map((p, i) => `<button class="beta-subtab ${i === 0 ? "active" : ""}" data-beta="${p.id}"></button>`).join("");
+  frames.innerHTML = BETA_PAGES.map((p, i) => `<iframe class="beta-frame ${i === 0 ? "active" : ""}" data-beta="${p.id}" loading="lazy"></iframe>`).join("");
+  nav.querySelectorAll(".beta-subtab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      nav.querySelectorAll(".beta-subtab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      frames.querySelectorAll(".beta-frame").forEach((f) => f.classList.toggle("active", f.dataset.beta === btn.dataset.beta));
+      activateBetaFrame(btn.dataset.beta);
+    });
+  });
+  refreshBetaLabels();
+}
+// iframe src is only set the first time a sub-tab is actually shown --
+// same reasoning as the Map tab's own lazy render: no point loading
+// Leaflet + OSM tiles for an experiment nobody opened this session.
+function activateBetaFrame(id) {
+  const frame = $(`.beta-frame[data-beta="${id}"]`);
+  const page = BETA_PAGES.find((p) => p.id === id);
+  if (frame && page && !frame.getAttribute("src")) frame.src = page.src;
+}
+function refreshBetaLabels() {
+  $$(".beta-subtab").forEach((btn) => {
+    const page = BETA_PAGES.find((p) => p.id === btn.dataset.beta);
+    if (page) btn.textContent = t(page.i18nKey);
+  });
+  $$(".beta-frame").forEach((f) => {
+    const page = BETA_PAGES.find((p) => p.id === f.dataset.beta);
+    if (page) f.title = t(page.i18nKey);
+  });
+}
+buildBetaTab();
+$$(".tab").forEach((tabBtn) => {
+  if (tabBtn.dataset.tab === "beta") tabBtn.addEventListener("click", () => activateBetaFrame(BETA_PAGES[0].id));
 });
 
 // ---------------------------------------------------------------------------
