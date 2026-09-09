@@ -6,7 +6,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AT2 Bridge</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <!-- MapLibre GL JS, not Leaflet -- see ensureMap()/app.js's comment for
+       why: Leaflet only speaks raster {z}/{x}/{y} tile grids, and every
+       free-tier tile provider we found (CARTO, MapTiler) gates raster
+       tiles behind a paid plan now, serving only a vector style.json
+       (Mapbox/MapLibre style spec) on the free tier instead. MapLibre GL
+       renders that style.json directly. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -405,11 +411,11 @@
            de deviner le schéma d'auth propre à chaque fournisseur. -->
       <div class="card">
         <div class="ptt-device-name" style="margin-bottom:10px;" data-i18n="settings.sectionMap">Carte</div>
-        <div class="hint" style="margin-bottom:10px;" data-i18n="map.tileUrlHint">Optionnel — laisse vide pour les tuiles OSM gratuites (assombries automatiquement). Pour un vrai fond de carte sombre, crée un compte gratuit chez un fournisseur de tuiles (CARTO, Stadia, MapTiler…) et colle ici l'URL de tuiles qu'il te donne (avec ta clé déjà dedans). Prend effet au prochain chargement de la page.</div>
-        <label class="hint" for="map-tile-url" style="display:block; margin-bottom:4px;" data-i18n="map.tileUrlLabel">URL des tuiles</label>
-        <input type="text" id="map-tile-url" style="width:100%; font-family:var(--font-mono); margin-bottom:10px;" data-i18n-placeholder="map.tileUrlPlaceholder" placeholder="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=…" />
-        <label class="hint" for="map-tile-attribution" style="display:block; margin-bottom:4px;" data-i18n="map.tileAttributionLabel">Attribution</label>
-        <input type="text" id="map-tile-attribution" style="width:100%;" data-i18n-placeholder="map.tileAttributionPlaceholder" placeholder="&amp;copy; OpenStreetMap contributors &amp;copy; CARTO" />
+        <div class="hint" style="margin-bottom:10px;" data-i18n="map.tileUrlHint">Optionnel — laisse vide pour les tuiles OSM gratuites (assombries automatiquement). Colle ici soit une URL de style vectoriel (style.json, ex. MapTiler) soit un gabarit d'URL de tuiles raster ({z}/{x}/{y}) — détecté automatiquement. Prend effet au prochain chargement de la page.</div>
+        <label class="hint" for="map-tile-url" style="display:block; margin-bottom:4px;" data-i18n="map.tileUrlLabel">URL des tuiles ou du style</label>
+        <input type="text" id="map-tile-url" style="width:100%; font-family:var(--font-mono); margin-bottom:10px;" data-i18n-placeholder="map.tileUrlPlaceholder" placeholder="https://api.maptiler.com/maps/…/style.json?key=… ou https://…/{z}/{x}/{y}.png" />
+        <label class="hint" for="map-tile-attribution" style="display:block; margin-bottom:4px;" data-i18n="map.tileAttributionLabel">Attribution (tuiles raster uniquement — un style.json apporte déjà la sienne)</label>
+        <input type="text" id="map-tile-attribution" style="width:100%;" data-i18n-placeholder="map.tileAttributionPlaceholder" placeholder="&amp;copy; OpenStreetMap contributors &amp;copy; MapTiler" />
       </div>
 
       <!-- Journal + outil de trame brute -- anciennement leur propre onglet
@@ -555,11 +561,12 @@
   <script src="/static/ble-client.js"></script>
   <script src="/static/ptt-audio.js"></script>
   <!-- No network access needed for the radio features above -- this is the
-       one exception: OpenStreetMap tiles for the Carte tab need Internet.
-       If this fails to load (offline server, no Internet at the client),
-       `L` stays undefined and app.js falls back to the dependency-free
-       radar view -- see its "GPS beacons / Map tab" section. -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+       one exception: map tiles for the Carte tab need Internet. If this
+       fails to load (offline server, no Internet at the client),
+       `maplibregl` stays undefined and app.js falls back to the
+       dependency-free radar view -- see its "GPS beacons / Map tab"
+       section. -->
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
