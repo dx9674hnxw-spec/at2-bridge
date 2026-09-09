@@ -73,16 +73,16 @@
      tokens, not literals inline in the rules -- each value is used more
      than once across that section, so a single source of truth here is
      what the CSS is supposed to look like, theme-swapped or not. */
-  --freq-crt-bg: #050a08;
-  --freq-crt-border: #14231f;
-  --freq-crt-scanline: rgba(190, 255, 220, .11);
-  --freq-crt-text-bright: #d7fff0;
-  --freq-crt-text-dim: #7fe8c4;
-  --freq-crt-text-blue: #8fd4ff;
+  --freq-crt-bg: #05070f;
+  --freq-crt-border: #16213a;
+  --freq-crt-scanline: rgba(150, 195, 255, .11);
+  --freq-crt-text-bright: #e3f1ff;
+  --freq-crt-text-dim: #7fb0e8;
+  --freq-crt-text-blue: #63a9ff;
   --freq-crt-aberration-red: rgba(255, 60, 60, .6);
-  --freq-crt-aberration-cyan: rgba(60, 220, 255, .6);
+  --freq-crt-aberration-cyan: rgba(70, 150, 255, .6);
   --freq-crt-aberration-red-soft: rgba(255, 60, 60, .4);
-  --freq-crt-aberration-cyan-soft: rgba(60, 220, 255, .4);
+  --freq-crt-aberration-cyan-soft: rgba(70, 150, 255, .4);
 }
 
 /* -- Light theme override -------------------------------------------------
@@ -892,8 +892,9 @@ tbody tr:hover { background: var(--color-surface-hover); }
 
 /* ---------------------------------------------------------------------
    VHS/CRT screen treatment for frequency readouts -- added to
-   .chan-freq-block (PTT panel) and .scan-display (Scan card) alongside
-   their existing class in index.html. Scanlines + animated static noise
+   .chan-freq-block (PTT panel), .scan-display (Scan card) and .ptt-wave
+   (the TX/RX audiograph strip) alongside their existing class in
+   index.html. Scanlines + animated static noise
    (an inline feTurbulence SVG, jittered in steps so it reads as static
    rather than a smooth pan), plus a chromatic-aberration text-shadow
    (red/cyan split) on the big digits.
@@ -914,7 +915,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
    physical device's own CRT/LCD readout, which doesn't relight itself
    for the room's light/dark preference, so those tokens are never
    redefined under [data-theme="light"] the way --color-* / --status-* are,
-   and it stays the same dark phosphor-green screen in both app themes.
+   and it stays the same dark phosphor-blue screen in both app themes.
 
    No !important anywhere: this block is appended after .chan-freq-block/
    .scan-display's own rules, and at equal specificity (one class each)
@@ -964,6 +965,12 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .freq-crt .scan-ch-freq {
   position: relative; z-index: 4; color: var(--freq-crt-text-blue);
   text-shadow: -1px 0 var(--freq-crt-aberration-red-soft), 1px 0 var(--freq-crt-aberration-cyan-soft);
+}
+.ptt-wave.freq-crt span {
+  /* flex items already paint above in-flow static content, but not above
+     the ::before noise overlay's positive z-index -- lift them explicitly
+     so the bars stay visible through the static instead of under it. */
+  position: relative; z-index: 4;
 }
 @keyframes freq-crt-flicker {
   0%, 92%, 100% { opacity: 1; transform: translateX(0); }
