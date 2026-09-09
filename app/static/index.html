@@ -189,7 +189,7 @@
             <label class="scan-range-label"><span data-i18n="scan.priorityLabel">Prioritaire</span>
               <select id="scan-priority-select"><option value="" data-i18n="scan.priorityNone">Aucun</option></select>
             </label>
-            <button class="btn-primary" id="scan-toggle-btn" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
+            <button class="btn-primary scan-toggle-btn scan-toggle-btn-toolbar" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
           </div>
         </div>
 
@@ -205,6 +205,7 @@
             <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
             <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
             <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+            <button class="btn-primary scan-toggle-btn scan-toggle-btn-display" data-i18n="scan.startBtn" disabled>Lancer le scan</button>
           </div>
           <div class="scan-chan-grid" id="scan-chan-table"></div>
           <p class="hint" style="margin:0;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>

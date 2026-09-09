@@ -616,6 +616,20 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .scan-progress { width: 100%; max-width: 280px; height: 4px; border-radius: 2px; background: var(--color-border); overflow: hidden; }
 .scan-progress-bar { height: 100%; background: var(--color-primary); width: 0%; transition: width 60ms linear; }
 .scan-display.hit .scan-progress-bar { background: var(--status-down); }
+/* Two copies of the same Start/Stop button (kept in sync by app.js via
+   the shared .scan-toggle-btn class, see renderScanState/startScan/
+   stopScan) -- .scan-toggle-btn-toolbar next to the sliders on wide
+   screens, .scan-toggle-btn-display inside the frequency screen on
+   narrow ones, where the toolbar row gets cramped and centered instead.
+   The display copy sits inside .freq-crt, so it needs the same
+   position:relative + z-index:4 lift as the digits/wave bars to clear
+   the noise overlay. */
+.scan-toggle-btn-display { display: none; position: relative; z-index: 4; width: 100%; max-width: 280px; margin-top: 2px; }
+@media (max-width: 480px) {
+  #scan-card .settings-toolbar { justify-content: center; }
+  .scan-toggle-btn-toolbar { display: none; }
+  .scan-toggle-btn-display { display: inline-flex; }
+}
 
 .scan-log { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; }
 .scan-log-row { display: flex; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--color-bg-alt); border: 1px solid var(--color-border); }

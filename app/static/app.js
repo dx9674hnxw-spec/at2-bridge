@@ -1373,7 +1373,7 @@ function renderScanState() {
   const hasChannels = lastReadChannels.some((c) => c.rx_mhz);
   $("#scan-empty-state").hidden = hasChannels;
   $("#scan-layout").hidden = !hasChannels;
-  $("#scan-toggle-btn").disabled = !hasChannels;
+  $$(".scan-toggle-btn").forEach((btn) => { btn.disabled = !hasChannels; });
   if (!hasChannels) { $("#scan-sub").textContent = t("scan.subEmpty"); return; }
   // Reseed the session-only include set only the first time real channels
   // show up (or after a fresh read replaces the list entirely) -- avoids
@@ -1509,8 +1509,7 @@ function startScan() {
   if (!scanOrderedChannels().length) { scanLog(t("scan.logNoChannels"), false); return; }
   scanChannelBeforeStart = activeChannel;
   scanRunning = true; scanPaused = false; scanStepIdx = -1;
-  $("#scan-toggle-btn").textContent = t("scan.stopBtn");
-  $("#scan-toggle-btn").classList.add("btn-danger");
+  $$(".scan-toggle-btn").forEach((btn) => { btn.textContent = t("scan.stopBtn"); btn.classList.add("btn-danger"); });
   updateScanSub();
   scanLog(t("scan.logStarted"), false);
   scanStep();
@@ -1518,8 +1517,7 @@ function startScan() {
 function stopScan() {
   scanRunning = false; scanPaused = false;
   clearTimeout(scanTimerId); cancelAnimationFrame(scanRafId);
-  $("#scan-toggle-btn").textContent = t("scan.startBtn");
-  $("#scan-toggle-btn").classList.remove("btn-danger");
+  $$(".scan-toggle-btn").forEach((btn) => { btn.textContent = t("scan.startBtn"); btn.classList.remove("btn-danger"); });
   $("#scan-progress-bar").style.width = "0%";
   setScanDisplay(null, t("scan.statusIdle"), false);
   updateScanSub();
@@ -1536,7 +1534,7 @@ function stopScan() {
   }
   scanChannelBeforeStart = null;
 }
-$("#scan-toggle-btn").addEventListener("click", () => { scanRunning ? stopScan() : startScan(); });
+$$(".scan-toggle-btn").forEach((btn) => btn.addEventListener("click", () => { scanRunning ? stopScan() : startScan(); }));
 
 // Always visible now (full-width card, no disclosure to expand into) --
 // render the real empty/ready state immediately instead of leaving the
