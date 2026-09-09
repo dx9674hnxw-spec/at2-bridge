@@ -48,6 +48,14 @@ const I18N_DICT = {
     "tab.messages": "Messagerie",
     "tab.map": "Carte",
     "tab.log": "Journal",
+    "tab.beta": "Beta",
+
+    // Beta tab -- isolated prototypes (app/static/beta/, its own README),
+    // each loaded in an <iframe> so a broken experiment can't take the
+    // rest of the app down with it. See BETA_PAGES in app.js.
+    "beta.flag": "expérimental",
+    "beta.hint": "Prototypes isolés (dossier app/static/beta/, code indépendant de l'appli principale) : on teste, on évalue, puis on porte ce qui marche dans l'appli.",
+    "beta.page.mapRedesign": "Carte (refonte)",
 
     // Debug: envoi de trame brute (expérimental)
     "debug.rawFrameTitle": "🧪 Debug — Envoi de trame brute (expérimental)",
@@ -276,6 +284,11 @@ const I18N_DICT = {
     "tab.messages": "Messaging",
     "tab.map": "Map",
     "tab.log": "Log",
+    "tab.beta": "Beta",
+
+    "beta.flag": "experimental",
+    "beta.hint": "Isolated prototypes (app/static/beta/ folder, code independent from the main app): test, evaluate, then port what works into the app.",
+    "beta.page.mapRedesign": "Map (redesign)",
 
     // Debug: raw frame send (experimental)
     "debug.rawFrameTitle": "🧪 Debug — Send raw frame (experimental)",

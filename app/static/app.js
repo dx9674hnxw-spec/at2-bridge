@@ -64,6 +64,7 @@ function refreshDynamicTranslations() {
   else updateLocalStatusUi();
   renderChanOpts();
   renderChanFreq();
+  refreshBetaLabels();
   applyModeUi();
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
@@ -901,7 +902,11 @@ function updateGpsFix(locked, label) {
   $("#gps-fix-label").textContent = label;
 }
 
-function requestLocation() {
+// `centerMap`: also pan/zoom the Leaflet view straight to the fresh fix and
+// re-arm auto-follow (see mapUserInteracted above). Only "Centrer sur moi"
+// wants that -- the automatic call below, on page load, shouldn't jump the
+// map before the user has even opened the Map tab.
+function requestLocation(centerMap) {
   if (!navigator.geolocation) { updateGpsFix(false, t("gps.unavailable")); return; }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -909,7 +914,13 @@ function requestLocation() {
       $("#gps-coords").textContent = formatCoords(lastCoords.lat, lastCoords.lon);
       $("#gps-accuracy").textContent = t("gps.accuracy", { meters: Math.round(lastCoords.acc) });
       updateGpsFix(true, t("gps.fixAcquired"));
+      if (centerMap) mapUserInteracted = false;
       renderMapIfActive(); // distances/bearings on the Map tab depend on lastCoords
+      if (centerMap && mapViewMode === "map" && leafletMap) {
+        mapProgrammaticMove = true;
+        leafletMap.setView([lastCoords.lat, lastCoords.lon], Math.max(leafletMap.getZoom(), 15));
+        mapProgrammaticMove = false;
+      }
     },
     () => updateGpsFix(false, t("gps.denied")),
     { enableHighAccuracy: true, timeout: 8000 }
@@ -1088,6 +1099,17 @@ if (!LEAFLET_AVAILABLE) {
   $("#map-view-toggle").title = t("map.leafletUnavailable");
 }
 
+// True once the user has panned/zoomed the map by hand. Every incoming
+// beacon used to re-run fitBounds() unconditionally, which yanked the view
+// back to "fit everyone" a second or two into any manual drag -- on a live
+// swarm of radios that beacon every few seconds this made the map feel
+// undraggable. Once the user has touched it, auto-fit backs off and only
+// resumes on an explicit "Centrer sur moi" click. mapProgrammaticMove tells
+// the dragstart/zoomstart listener below to ignore moves *we* trigger
+// (fitBounds/setView), so those don't get misread as user interaction.
+let mapUserInteracted = false;
+let mapProgrammaticMove = false;
+
 function ensureLeafletMap() {
   if (leafletMap || !LEAFLET_AVAILABLE) return;
   leafletMap = L.map("map-canvas").setView([0, 0], 2);
@@ -1095,6 +1117,9 @@ function ensureLeafletMap() {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap",
   }).addTo(leafletMap);
+  leafletMap.on("dragstart zoomstart", () => {
+    if (!mapProgrammaticMove) mapUserInteracted = true;
+  });
 }
 
 function renderMapBeaconList(list) {
@@ -1167,6 +1192,11 @@ function renderMap() {
     ensureLeafletMap();
     $("#map-canvas").hidden = false;
     $("#map-radar").hidden = true;
+    // Must run before fitBounds() below: Leaflet computes the fit against
+    // its cached container size, which is stale/zero the first time the
+    // tab becomes visible (or after the window was resized while another
+    // tab was open) and produces a wrongly centered/zoomed view otherwise.
+    leafletMap.invalidateSize();
     leafletMarkers.forEach((m) => leafletMap.removeLayer(m));
     leafletMarkers = [];
     const bounds = [];
@@ -1186,8 +1216,15 @@ function renderMap() {
       leafletMarkers.push(marker);
       bounds.push([b.lat, b.lon]);
     }
-    if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
-    leafletMap.invalidateSize();
+    // Only auto-fit while the user hasn't taken the wheel themselves --
+    // otherwise every beacon from a live swarm snaps the view back and the
+    // map effectively can't be dragged. "Centrer sur moi" resets the flag
+    // to explicitly opt back into auto-follow.
+    if (bounds.length && !mapUserInteracted) {
+      mapProgrammaticMove = true;
+      leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      mapProgrammaticMove = false;
+    }
   } else {
     $("#map-canvas").hidden = true;
     $("#map-radar").hidden = false;
@@ -1206,7 +1243,7 @@ $("#map-view-toggle").addEventListener("click", () => {
   renderMap();
 });
 $("#map-center-btn").addEventListener("click", () => {
-  requestLocation();
+  requestLocation(true);
   showToast(t("map.locating"), "info");
 });
 // The generic tab switcher (see "Tabs" above) only toggles .active classes;
@@ -1216,6 +1253,61 @@ $("#map-center-btn").addEventListener("click", () => {
 // anything received while another tab was open.
 $$(".tab").forEach((tabBtn) => {
   if (tabBtn.dataset.tab === "map") tabBtn.addEventListener("click", () => setTimeout(renderMap, 0));
+});
+// Keep the tile layer aligned with its container on viewport/orientation
+// changes -- otherwise resizing the window (or rotating a tablet) leaves
+// Leaflet's cached size stale until the next beacon triggers a re-render.
+window.addEventListener("resize", () => {
+  if (leafletMap && mapViewMode === "map") leafletMap.invalidateSize();
+});
+
+// ---------------------------------------------------------------------------
+// Beta tab: isolated prototypes, each its own static page under
+// app/static/beta/ (own HTML/CSS/JS -- see beta/README.md) loaded in an
+// <iframe> so a bug in an experiment can't reach the rest of the app.
+// Adding a new one to try is one line here plus the file itself; nothing
+// else in this app needs to change.
+// ---------------------------------------------------------------------------
+const BETA_PAGES = [
+  { id: "map-redesign", i18nKey: "beta.page.mapRedesign", src: "/static/beta/map-redesign.html" },
+];
+
+function buildBetaTab() {
+  const nav = $("#beta-subtabs");
+  const frames = $("#beta-frames");
+  nav.innerHTML = BETA_PAGES.map((p, i) => `<button class="beta-subtab ${i === 0 ? "active" : ""}" data-beta="${p.id}"></button>`).join("");
+  frames.innerHTML = BETA_PAGES.map((p, i) => `<iframe class="beta-frame ${i === 0 ? "active" : ""}" data-beta="${p.id}" loading="lazy"></iframe>`).join("");
+  nav.querySelectorAll(".beta-subtab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      nav.querySelectorAll(".beta-subtab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      frames.querySelectorAll(".beta-frame").forEach((f) => f.classList.toggle("active", f.dataset.beta === btn.dataset.beta));
+      activateBetaFrame(btn.dataset.beta);
+    });
+  });
+  refreshBetaLabels();
+}
+// iframe src is only set the first time a sub-tab is actually shown --
+// same reasoning as the Map tab's own lazy render: no point loading
+// Leaflet + OSM tiles for an experiment nobody opened this session.
+function activateBetaFrame(id) {
+  const frame = $(`.beta-frame[data-beta="${id}"]`);
+  const page = BETA_PAGES.find((p) => p.id === id);
+  if (frame && page && !frame.getAttribute("src")) frame.src = page.src;
+}
+function refreshBetaLabels() {
+  $$(".beta-subtab").forEach((btn) => {
+    const page = BETA_PAGES.find((p) => p.id === btn.dataset.beta);
+    if (page) btn.textContent = t(page.i18nKey);
+  });
+  $$(".beta-frame").forEach((f) => {
+    const page = BETA_PAGES.find((p) => p.id === f.dataset.beta);
+    if (page) f.title = t(page.i18nKey);
+  });
+}
+buildBetaTab();
+$$(".tab").forEach((tabBtn) => {
+  if (tabBtn.dataset.tab === "beta") tabBtn.addEventListener("click", () => activateBetaFrame(BETA_PAGES[0].id));
 });
 
 // ---------------------------------------------------------------------------

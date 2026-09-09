@@ -37,6 +37,7 @@
       <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
       <button class="tab" data-tab="map" data-i18n="tab.map">Carte</button>
       <button class="tab" data-tab="log" data-i18n="tab.log">Journal</button>
+      <button class="tab" data-tab="beta" data-i18n="tab.beta">Beta</button>
     </nav>
   </div>
 
@@ -369,7 +370,7 @@
       <p class="hint" style="margin-top:14px;" data-i18n="msg.hint">Groupes = canaux radio utilisés comme salons de discussion hors-réseau (sélectionner un groupe change le canal actif de la radio).</p>
     </section>
 
-    <section id="tab-map" class="tab-panel">
+    <section id="tab-map" class="tab-panel wide-panel">
       <div class="card">
         <div class="ptt-header">
           <div>
@@ -407,6 +408,23 @@
         <button class="btn-ghost" id="btn-log-export" data-i18n="log.export">Exporter (.txt)</button>
       </div>
       <pre id="log-console"></pre>
+    </section>
+
+    <!-- Isolated experiments -- see app/static/beta/README.md. Each
+         sub-tab is a standalone page under beta/, loaded in its own
+         <iframe> (populated by app.js's buildBetaTab()) so a bug in a
+         prototype can't reach the app around it. -->
+    <section id="tab-beta" class="tab-panel wide-panel">
+      <div class="card">
+        <div class="beta-head">
+          <div>
+            <div class="ptt-device-name">Beta <span class="beta-flag" data-i18n="beta.flag">expérimental</span></div>
+            <div class="ptt-device-sub" data-i18n="beta.hint">Prototypes isolés (dossier app/static/beta/, code indépendant de l'appli principale) : on teste, on évalue, puis on porte ce qui marche dans l'appli.</div>
+          </div>
+        </div>
+        <nav class="beta-subtabs" id="beta-subtabs"></nav>
+        <div class="beta-frames" id="beta-frames"></div>
+      </div>
     </section>
   </main>
 

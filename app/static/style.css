@@ -471,11 +471,26 @@ tbody tr:hover { background: var(--color-surface-hover); }
    dependency-free SVG "radar" (distance/bearing from your own fix, no
    basemap) when Leaflet didn't load, since this app is meant to work
    fully off-grid and tiles need Internet. ---------------------------- */
-.map-layout { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; margin-bottom: 12px; }
+/* Shared by any tab whose content wants more room than main's 1100px
+   column (full-bleed, gutter matching main's own 16px side padding) --
+   started as a Map-tab-only fix (a fixed-height map boxed into a small
+   area on a wide monitor) but the Beta tab's iframes want the same
+   breathing room, so it's a reusable class rather than an #tab-map rule.
+   .wide-panel > .card caps how wide that gets so it doesn't turn into an
+   unreadable ultra-wide strip on very large displays. */
+.wide-panel {
+  width: 100%; max-width: none;
+  margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
+  padding-left: calc(50vw - 50% + 16px); padding-right: calc(50vw - 50% + 16px);
+  box-sizing: border-box;
+}
+.wide-panel > .card { max-width: 1600px; margin-left: auto; margin-right: auto; }
+
+.map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
 
 .map-canvas-wrap {
-  position: relative; height: 420px; border-radius: var(--radius-lg);
+  position: relative; height: clamp(420px, 65vh, 760px); border-radius: var(--radius-lg);
   overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt);
 }
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -492,7 +507,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
-.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: clamp(420px, 65vh, 760px); overflow-y: auto; }
 .map-beacon-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px;
   border-radius: var(--radius-md); background-color: rgba(18, 18, 18, 0.92);
@@ -505,6 +520,25 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-beacon-info { min-width: 0; }
 .map-beacon-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
 .map-beacon-sub { font-size: 11px; color: var(--color-text-subtle); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* -- Beta tab: isolated prototypes, each its own static page under
+   app/static/beta/ loaded in an <iframe> (see app.js's BETA_PAGES /
+   buildBetaTab() and beta/README.md for the test-then-port workflow).
+   The sub-tab row is deliberately a smaller/nested echo of .tabs rather
+   than the same component, since it's a choice *within* the Beta tab. */
+.beta-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.beta-flag {
+  display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--status-degraded); background: var(--status-degraded-bg); border: 1px solid var(--status-degraded-border);
+  border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle;
+}
+.beta-subtabs { display: flex; gap: 4px; padding: 4px; background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-lg); margin-bottom: 12px; overflow-x: auto; }
+.beta-subtab { background: transparent; color: var(--color-text-dim); font-size: 12px; font-weight: 600; border-radius: var(--radius-md); padding: 7px 12px; white-space: nowrap; }
+.beta-subtab.active { background: var(--status-info-bg); color: #fff; }
+.beta-subtab:not(.active):hover { color: var(--color-text); }
+.beta-frames { position: relative; height: min(76vh, 820px); min-height: 480px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt); }
+.beta-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; display: none; background: var(--color-surface); }
+.beta-frame.active { display: block; }
 
 .group-list {
   background-color: rgba(18, 18, 18, 0.92);
