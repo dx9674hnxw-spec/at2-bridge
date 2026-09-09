@@ -573,12 +573,22 @@ tbody tr:hover { background: var(--color-surface-hover); }
    Leaflet's own default light gray instead of matching the dark theme. */
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--color-bg-alt); }
 
+/* Stock OSM tiles (see ensureLeafletMap() in app.js -- CARTO's dark
+   basemap turned out to need an API key now) are a light/day-mode
+   basemap; invert+rotate them back to a dark map with a CSS filter on
+   just the tile pane, the standard trick for a free dark-mode map
+   without a purpose-built dark tile set. Scoped to .leaflet-tile-pane
+   specifically (not e.g. .leaflet-layer or the map container), which
+   holds only the raster tile images -- markers/tooltips/circleMarkers
+   live in .leaflet-overlay-pane/.leaflet-marker-pane, untouched by this,
+   so their already-correct colors (see renderMap() in app.js) don't get
+   run through the same inversion and come out wrong. */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
+
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
-   light-mode design by default, on top of the tile layer itself now
-   being CARTO's dark basemap instead of stock light OSM tiles (see
-   ensureLeafletMap() in app.js) -- reskin all three to the app's own
+   light-mode design by default too -- reskin all three to the app's own
    surface/border/text tokens so nothing here still reads as a light-mode
-   rectangle dropped into an otherwise all-dark app. */
+   widget dropped into a dark app. */
 .leaflet-control-zoom a {
   border-radius: var(--radius-sm) !important;
   background: var(--color-surface) !important; color: var(--color-text) !important;

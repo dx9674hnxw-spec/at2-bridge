@@ -1317,15 +1317,17 @@ let mapProgrammaticMove = false;
 function ensureLeafletMap() {
   if (leafletMap || !LEAFLET_AVAILABLE) return;
   leafletMap = L.map("map-canvas").setView([0, 0], 2);
-  // CARTO's "Dark Matter" basemap instead of stock OSM tiles: same
-  // OpenStreetMap data, styled dark so it doesn't look like a bright
-  // light-mode rectangle dropped into an otherwise all-dark app. Free,
-  // no API key/account (unlike Mapbox or Stadia's hosted Stamen tiles) --
-  // matters here since this app has no backend account of its own to hold
-  // a key for. Attribution to both required by their terms.
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  // Tried CARTO's "Dark Matter" basemap here first (same OSM data,
+  // pre-styled dark) -- turned out to require an API key now (their
+  // anonymous basemaps.cartocdn.com access was retired), which stamped
+  // "API KEY REQUIRED" across every tile. Back to stock OSM tiles, which
+  // stay free/keyless, darkened with a CSS filter on the tile pane instead
+  // (see .leaflet-tile-pane in style.css) -- less refined than a
+  // purpose-built dark basemap, but doesn't depend on an account this app
+  // has nowhere to hold a key for.
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    attribution: "&copy; OpenStreetMap",
   }).addTo(leafletMap);
   leafletMap.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
