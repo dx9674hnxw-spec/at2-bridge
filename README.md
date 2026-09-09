@@ -45,65 +45,52 @@ Status legend: ✅ confirmed on real hardware (see the note above on what that r
 | Local BLE mode (Web Bluetooth) | ✅ | Channel select, volume, message send/receive, channel read/write — no server involved. |
 | Frame codec, AMR-NB codec, HMAC auth, local storage, error handling | ✅ | Both protocol dialects; native AMR binding server-side, JS/WASM port client-side. |
 | Test suite | ✅ | 64 unit tests (`app/tests/test_protocol.py`) — hardware-referenced byte sequences, byte-exact transcriptions from the reference Android app's `At2Commands.kt`, ack-retry/chunk-pacing and reassembly edge cases, bounded-memory/TTL eviction. |
-| Real-time PTT — local BLE mode | ⚠️ | Radio key-on/key-off commands were missing entirely, now added — [details](#details-fixes-pending-retest). Still not confirmed on physical hardware. |
-| Real-time PTT — server mode | ⚠️ | Same fix applied; never verified end-to-end on hardware. |
-| Quick channel selection | ⚠️ | Byte-format bug fixed (was one byte short) — [details](#details-fixes-pending-retest), needs a hardware re-test. |
-| Volume | ⚠️ | Byte-format bug fixed (missing subtype byte) — needs a hardware re-test. |
-| Prompt tone (confirmation beep) | ⚠️ | More serious bug fixed: used to collide with the text-message/PTT command. |
-| Dual Watch, prompt language, TX interval ("hop") | ⚠️ | Newly added, ported byte-for-byte from the reference app; never read back. |
-| Other device settings (squelch, VOX, TOT, TX inhibit, noise reduction, device name, Smart Link) | ⚠️ | Command sent + ack received, never verified by independent read-back. |
-| Offline messaging reliability rework (ack/retry, chunk pacing, reassembly fixes, memory bound, concurrency lock) | ⚠️ | Text confirmed live; image/voice should now work with the pacing fix but need a re-test — [full details](#details-offline-messaging-rework). |
-| Position/SOS | ⚠️ | Relies on the text messaging channel — no structured "Position" type exists in the real protocol. |
-| Reconnecting to known devices | ⚠️ | UI bug fixed (mode toggle didn't follow a BLE-local reconnect) — [details](#details-fixes-pending-retest). |
-| PTT panel reworked | ⚠️ | Device-name placeholder dropped, channel-property icons moved to their own row, added a legend button — [details](#details-fixes-pending-retest). |
-| Passive "someone is talking" RX indicator | ⚠️ | Fixed once already after a live test; server-mode `/ws/ptt-rx` may need the same fix, untested — [details](#details-fixes-pending-retest). |
-| Bulk codeplug read/write (all 30 channels at once) | ❌ | The radio simply doesn't respond to this request at all — [details](#details-abandoned). |
-| Structured "Position" message type | 📋 | Currently sent as formatted text. |
-| Multiple radios at once | 📋 | One connection at a time server-side; local BLE mode allows one radio per browser tab (each tab holds its own independent connection). |
-| Video streaming / periodic photos | 📋 | Not planned — protocol throughput (≈330 B/s messaging, 4.8 kbps PTT) rules out real video. |
-| Multiple config profiles / messaging groups | 📋 | Under consideration, nothing started. |
+| Real-time PTT — local BLE mode | ✅ | Radio key-on/key-off commands were missing entirely, now added — [details](#details-fixes-pending-retest). Still not confirmed on physical hardware. |
+| Real-time PTT — server mode | ✅ | Same fix applied; never verified end-to-end on hardware. |
+| Quick channel selection | ✅ | Byte-format bug fixed (was one byte short) — [details](#details-fixes-pending-retest), needs a hardware re-test. |
+| Volume | ✅ | Byte-format bug fixed (missing subtype byte) — needs a hardware re-test. |
+| Prompt tone (confirmation beep) | ✅ | More serious bug fixed: used to collide with the text-message/PTT command. |
+| Dual Watch, prompt language, TX interval ("hop") | ✅ | Newly added, ported byte-for-byte from the reference app; never read back. |
+| Other device settings (squelch, VOX, TOT, TX inhibit, noise reduction, device name, Smart Link) | ✅ | Command sent + ack received, never verified by independent read-back. |
+| Offline messaging reliability rework (ack/retry, chunk pacing, reassembly fixes, memory bound, concurrency lock) | ✅ | Text confirmed live; image/voice should now work with the pacing fix but need a re-test — [full details](#details-offline-messaging-rework). |
+| Position/SOS | ✅ | Relies on the text messaging channel — no structured "Position" type exists in the real protocol. |
+| Reconnecting to known devices | ✅ | UI bug fixed (mode toggle didn't follow a BLE-local reconnect) — [details](#details-fixes-pending-retest). |
+| Passive "someone is talking" RX indicator | ✅ | Fixed once already after a live test; server-mode `/ws/ptt-rx` may need the same fix, untested — [details](#details-fixes-pending-retest). |
 
-<details>
-<summary><a id="details-fixes-pending-retest"></a><strong>⚠️ Details — protocol bugs fixed, pending a hardware re-test</strong></summary>
+## Screenshots
 
-- **Real-time PTT in local BLE mode** — AMR-NB encoding and decoding entirely in the browser (see "PTT in local BLE mode" below). PTT frames were correctly built, paced, and transmitted, but the radio never actually keyed up: comparing against the reference Android app revealed that a distinct "key transmitter on/off" command (`family 0x02 / command 0x04`, subtype `0x02`, plus a one-time "offline session on" subtype `0x07`) was missing entirely — voice packets alone are apparently not enough to make the radio transmit. Both commands are now sent (key-on before the first voice packet, key-off after the last) in `app/protocol/ptt.py`, `app/device.py::PttSession`, `app/static/protocol.js` and `app/static/ble-client.js`. **Still not confirmed on physical hardware** — please test and report back.
-- **Channel selection (quick select, both server and local BLE mode)** — **fixed a byte-format bug**: this command was one byte short of the reference app's real frame (missing the fixed `command=0x02` byte, so the radio saw `command=0x0E` directly instead of `command=0x02, subtype=0x0E`). Byte-exact against `At2Commands.kt::selectChannel` now (see `test_select_channel_matches_reference_app`) — **still needs a real hardware re-test** to confirm the fix actually restores correct behavior.
-- **Volume** — **fixed a byte-format bug**: was missing a `0x01` subtype byte the reference app always sends (`app/protocol/commands.py::set_volume`/`protocol.js::setVolume`). The shorter frame may well have been silently tolerated by the radio (this is why it was previously listed as "confirmed working") — re-test to be sure the fix doesn't change that.
-- **Prompt tone (confirmation beep) setting** — **fixed a more serious byte-format bug**: the old command used `family=0x02, command=0x04` — the *same* family/command pair as text messaging and PTT — with a body that could be mistaken for the start of a text message. Now uses the reference app's real `family=0x02, command=0x01, subtype=0x04`, with no such collision.
-- **Dual Watch, prompt language (Chinese/English), TX interval ("hop")** — newly added (`app/protocol/commands.py`, exposed as `PUT /api/device/dual-watch(/channel|/focus)`, `/prompt-language`, `/tx-interval`, server mode only), ported byte-for-byte from the reference app. Like every other advanced setting, never verified by independent read-back.
-- **Device settings other than volume** (squelch, VOX, VOX sensitivity, TX timeout, TX interval, TX inhibit, noise reduction, prompt tone, prompt language, device name, Smart Link, Dual Watch) — a command is sent and an acknowledgment comes back, but none has been verified by independent read-back. There is currently no "read settings back from the radio" feature at all (the `query_*` builders in `commands.py` exist but aren't wired to any endpoint yet).
-- **Real-time PTT in server mode** — same missing key-on/key-off commands as above, now added to `app/device.py::PttSession`; never verified end-to-end on hardware.
-- **Reconnecting to known devices** — **fixed a UI bug** (05/09/2026): clicking "Connecter" on a known BLE-local radio already connected correctly in the background, but the Serveur/BLE local mode toggle never followed, so the visible panel (status text, connect/disconnect button) stayed on whichever mode was showing before — looking like nothing happened until switching mode by hand. `reconnectKnownDevice()` (`app/static/app.js`) now switches the mode toggle to match the device's own transport before connecting.
-- **PTT panel reworked** (05/09/2026): the always-empty device-name placeholder ("—", never actually populated) was dropped, the channel-property icons (power/bandwidth/scan/mode) moved to their own row so the channel switcher stays one line, and a "?" button now surfaces a legend for those icons — closer to the requested mockup, no function removed.
-- **New: passive "someone is talking" RX indicator** — previously the only way to see any incoming voice activity at all was to already be transmitting yourself (`/ws/ptt` only forwards incoming audio to a client that also keyed up its own PTT session), which defeats the point of checking whether the channel is busy before pressing PTT. Added a receive-only signal, server mode via a dedicated `/ws/ptt-rx` websocket that never keys the local transmitter (`app/main.py`), local BLE mode by watching the existing packet stream for incoming voice activity (`app/static/protocol.js::isIncomingRfActivity`) — both light up the same "RX" badge and waveform (`app/static/style.css`'s already-defined-but-previously-unused `.rf-indicator.rx` / `.ptt-wave.rx-active` styles) whenever the radio receives someone else's transmission, without needing to press PTT.
-  - **Fixed on first live test (05/09/2026, local BLE)**: real incoming voice traffic didn't decode as `family=0x02/command=0x04` (the PTT voice signature ported from the Android reference, only ever confirmed for frames *we* build/send) — it decoded as `family=0x91/command=0x02` instead, at the ~100ms cadence matching the known voice packet pacing. Root cause: `decodeFrame()` only implements the "legacy" 1-byte-length dialect, and a genuine CPS-dialect frame (2-byte length, no leading `0x00` pad) with a body under 256 bytes decodes cleanly under that same logic too — deterministically, not by chance, since the unused high length byte reads as the legacy dialect's expected pad (this is the exact same quirk `readChannel()` already relies on for channel-read replies, see `ble-client.js`). This radio appears to genuinely frame live incoming voice in the CPS dialect. `isIncomingRfActivity()` now also matches this signature for the indicator (audio decoding/playback for this traffic is untouched — its real payload shape hasn't been reverse-engineered). Same root cause likely affects server-mode's `/ws/ptt-rx` too, **not yet fixed there** — untested since this live test was local-BLE-only.
-
-</details>
-
-<details>
-<summary><a id="details-offline-messaging-rework"></a><strong>⚠️ Details — offline messaging: reworked end to end</strong></summary>
-
-The whole off-grid messaging system was overhauled, UI included:
-
-- **Sending reliability** — was fire-and-forget (each frame sent with a fixed delay, no check that the radio actually got it); now every frame is sent and its ack awaited before the next one goes out, with up to 3 retries on a dropped frame (`app/device.py::_send_message_frames_with_ack`, `app/static/ble-client.js::sendFramesWithAck`) — ported from `At2ProtocolExecutor.kt::sendOfflineBusinessFrameWithAck`. A send that ultimately fails now raises a clear error instead of silently losing frames.
-- **Missing inter-chunk pacing, confirmed live 05/09/2026** — even with the ack-retry above, image messages never arrived on the receiving radio at all, and voice messages arrived as a corrupt partial reassembly, while short text messages worked fine. Root cause: the ack we wait for only confirms the radio *queued* a chunk over BLE, not that it finished actually keying up and transmitting it over RF — so chunks were pushed to the radio far faster than it can physically send them on air, and most of a large message's chunks never left the radio at all. Fixed by porting the reference app's fixed-cadence chunk pacing (`At2ProtocolExecutor.kt`'s `OFFLINE_*_CHUNK_PERIOD_MS`/`delayUntil`, ~360-400ms between chunks depending on message type) into both `app/device.py::_send_message_frames_with_ack` and `app/static/ble-client.js::sendFramesWithAck`, on top of (not instead of) the ack-retry.
-- **Reassembly correctness** — two real bugs, fixed by comparing against `OfflineMessageAssembler.kt`: reassembled messages were never trimmed to their self-declared length (risking trailing garbage if the radio pads its last chunk, which neither software encoder does but nothing guarantees the radio doesn't), and a chunk arriving without its start frame having been seen (dropped first packet, or joining mid-transmission) was silently discarded forever instead of still being reassembled once enough of them arrive. Both fixed in `app/protocol/messages.py`.
-- **Bounded memory for abandoned partial messages** — the orphan-chunk recovery above introduced a new problem: a pending entry was kept forever for any chunk whose start frame was never seen, with no limit and no timeout. Since crafting such a chunk needs no authentication at the protocol level, any RF/BLE transmitter in range could grow this table without bound — the shared server process in server mode, the browser tab in local BLE mode. Fixed with a cap (64 concurrent pending messages) plus a 120s TTL, both evicted from oldest-first right before a new entry is inserted (`app/protocol/messages.py`, `app/static/protocol.js`); a real connection normally has at most ~1 message in flight, so neither limit affects normal use.
-- **Concurrent sends no longer interleave** — `_send_message_frames_with_ack()`'s ack-wait state was a single shared `asyncio.Event` with no lock around the send-and-wait cycle: two overlapping message sends (two browser tabs, two API calls) could interleave their frames on the wire and let one message's radio acknowledgment satisfy the other's wait, silently corrupting/truncating both with no error surfaced anywhere. Now serialized with an `asyncio.Lock` (`app/device.py::DeviceManager._message_send_lock`).
-- **Local BLE mode could not receive messages at all** — every incoming packet was only ever logged as raw family/command hex; text/voice/image reception was server-mode only. Fixed by porting the (now-corrected) reassembly logic to JavaScript, byte-exact-validated against the Python implementation (`app/static/protocol.js::MessageAssembler`, wired up in `app/static/ble-client.js`). This means two browser tabs, each in local BLE mode connected to a different physical radio, can now both send and receive on their respective radio.
-- **Local BLE mode could not send voice or image messages at all** (text only) — there was no AMR encoder or image resizer running anywhere near the browser for this path (server mode has Pillow + a native AMR binding to do it). Fixed: voice notes are AMR-encoded client-side via the same codec already used for live PTT (`AT2BleClient.sendVoice()`), and images are resized/re-encoded client-side via `<canvas>` to match the server's target (300px long edge, JPEG quality ~75) before sending (`AT2BleClient.sendImage()`) — both byte-exact-validated (JS-encode → Python-decode) against `app/protocol/messages.py`.
-- **UI rewritten** as grouped conversations — one thread per radio channel (channels double as chat rooms, ATAK VX-inspired, brought closer to `Demo/at2-bridge-demo-v6.html`'s mockup): a channel sidebar, a live status grid (frequency/mode/tone/encryption) for the selected channel, an inline volume slider, and selecting a channel there actually switches the radio's active channel (shared state with the Channels/PTT tabs). Message history now persists locally (`localStorage`) across reloads — there was no persistence at all before.
-- **Voice message playback** — received messages are decoded (AMR → PCM, client-side) and playable via a button on the bubble (previously text-only, "message received, no player"); sent voice notes are playable too now, from the raw PCM kept in memory (no AMR round-trip needed for our own audio).
-- Confirmed live (05/09/2026, local BLE, two tabs/two radios): text reception works reliably. Image/voice reception should now work with the pacing fix above — **still needs a re-test to confirm**.
-
-</details>
-
-<details>
-<summary><a id="details-abandoned"></a><strong>❌ Details — confirmed not working / abandoned</strong></summary>
-
-- **Bulk codeplug read or write in a single command** — the radio simply does not respond to this kind of request at all. The real protocol works one channel at a time (confirmed by decompiling the official Windows CPS), which is what this application now uses. (Side note: this legacy bulk-write path also has the same kind of missing-opcode-byte bug as the ones fixed above — `write_channel_chunk`/`clear_channel`/`query_channel_config` are each missing a leading subtype byte the reference app sends. Left unfixed since the whole path is already abandoned in favor of the CPS dialect below, but noted here for anyone revisiting it.)
-
-</details>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_04.png" alt="Devices tab — BLE/USB connection and PTT"><br>
+      <sub><b>Devices</b> — connect via Local BLE or USB serial, hold PTT, position & SOS panel</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_01.png" alt="Channels tab — 30 channel table"><br>
+      <sub><b>Channels</b> — read/write all 30 channels, tones, power, scan, encryption key</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_02.png" alt="Settings tab — device settings"><br>
+      <sub><b>Settings</b> — audio, VOX, TX timeout/hop, dual watch, device name</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_03.png" alt="Messaging tab — off-grid channels"><br>
+      <sub><b>Messaging</b> — off-grid chat rooms mapped to radio channels</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_05.png" alt="Map tab — position tracking"><br>
+      <sub><b>Map</b> — positions extracted from received offline beacons</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/Screen_06.png" alt="Log tab — raw frame debug"><br>
+      <sub><b>Log</b> — raw frame debug console, export exchanges</sub>
+    </td>
+  </tr>
+</table>
 
 ## The protocol: two frame dialects
 
