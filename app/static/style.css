@@ -471,11 +471,24 @@ tbody tr:hover { background: var(--color-surface-hover); }
    dependency-free SVG "radar" (distance/bearing from your own fix, no
    basemap) when Leaflet didn't load, since this app is meant to work
    fully off-grid and tiles need Internet. ---------------------------- */
-.map-layout { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; margin-bottom: 12px; }
+/* Map tab breaks out of main's 1100px column (full-bleed, gutter matching
+   main's own 16px side padding) -- on a wide monitor the fixed column left
+   the map a small box in a sea of empty margin. #tab-map__inner caps how
+   wide that can get so it doesn't turn into an unreadable ultra-wide strip
+   on very large displays. */
+#tab-map {
+  width: 100%; max-width: none;
+  margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
+  padding-left: calc(50vw - 50% + 16px); padding-right: calc(50vw - 50% + 16px);
+  box-sizing: border-box;
+}
+#tab-map .card { max-width: 1600px; margin-left: auto; margin-right: auto; }
+
+.map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
 
 .map-canvas-wrap {
-  position: relative; height: 420px; border-radius: var(--radius-lg);
+  position: relative; height: clamp(420px, 65vh, 760px); border-radius: var(--radius-lg);
   overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt);
 }
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -492,7 +505,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
-.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: clamp(420px, 65vh, 760px); overflow-y: auto; }
 .map-beacon-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px;
   border-radius: var(--radius-md); background-color: rgba(18, 18, 18, 0.92);
