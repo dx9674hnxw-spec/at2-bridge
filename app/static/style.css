@@ -876,9 +876,18 @@ tbody tr:hover { background: var(--color-surface-hover); }
    .chan-freq-block (PTT panel) and .scan-display (Scan card) alongside
    their existing class in index.html. Scanlines + animated static noise
    (an inline feTurbulence SVG, jittered in steps so it reads as static
-   rather than a smooth pan) + an intermittent brighter "tracking" band
-   that sweeps through every ~9s, like a mistracking VHS deck, plus a
-   chromatic-aberration text-shadow (red/cyan split) on the big digits.
+   rather than a smooth pan), plus a chromatic-aberration text-shadow
+   (red/cyan split) on the big digits.
+
+   There used to also be a brighter "tracking" band sweeping down through
+   the screen every ~9s. Removed: `top`/`height` in % on a position:
+   absolute element resolve against its containing block's *height*,
+   which is auto here (.chan-freq-block/.scan-display are sized by their
+   flex content, not a fixed height) -- an indeterminate height means the
+   spec has that percentage compute as if unspecified, and in practice
+   the browser fell back to the viewport, so the band swept across the
+   entire page instead of staying inside its card. Not a placement fix:
+   dropped outright, it didn't land well as an effect either.
 
    Deliberately theme-independent: every color below is a literal, not a
    --color-*/--status-* token, on purpose -- this is meant to look like a
@@ -922,20 +931,6 @@ tbody tr:hover { background: var(--color-surface-hover); }
   75% { background-position: 0 0, 61% -8%; }
   100% { background-position: 0 0, 0% 0%; }
 }
-.freq-crt::after {
-  content: ""; position: absolute; left: 0; right: 0; z-index: 3; pointer-events: none;
-  height: 24%; top: -30%;
-  background: linear-gradient(to bottom, transparent, rgba(210, 255, 235, .18) 45%, rgba(210, 255, 235, .28) 50%, rgba(210, 255, 235, .18) 55%, transparent);
-  filter: blur(.5px);
-  animation: freq-crt-track 9s cubic-bezier(.3, 0, .7, 1) infinite;
-  animation-delay: 1.5s;
-}
-@keyframes freq-crt-track {
-  0%, 55% { top: -30%; opacity: 0; }
-  60% { opacity: 1; }
-  78% { top: 115%; opacity: 1; }
-  82%, 100% { top: 115%; opacity: 0; }
-}
 .freq-crt .chan-freq-main, .freq-crt .scan-ch-num {
   position: relative; z-index: 4; color: #d7fff0;
   text-shadow: -1.5px 0 rgba(255, 60, 60, .6), 1.5px 0 rgba(60, 220, 255, .6);
@@ -956,6 +951,6 @@ tbody tr:hover { background: var(--color-surface-hover); }
   95% { opacity: .9; transform: translateX(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .freq-crt::before, .freq-crt::after, .freq-crt .chan-freq-main, .freq-crt .scan-ch-num { animation: none !important; }
+  .freq-crt::before, .freq-crt .chan-freq-main, .freq-crt .scan-ch-num { animation: none !important; }
 }
 
