@@ -517,10 +517,10 @@ tbody tr:hover { background: var(--color-surface-hover); }
 /* -- Map tab: last known position of every sender who has shared a GPS
    beacon (see app.js's beacon-parsing block for how these are extracted
    from plain-text position/SOS messages -- no structured location type
-   exists in the real protocol). Leaflet + OSM tiles when available; a
+   exists in the real protocol). MapLibre GL + tiles when available; a
    dependency-free SVG "radar" (distance/bearing from your own fix, no
-   basemap) when Leaflet didn't load, since this app is meant to work
-   fully off-grid and tiles need Internet. ---------------------------- */
+   basemap) when it didn't load, since this app is meant to work fully
+   off-grid and tiles need Internet. ------------------------------------ */
 /* Shared by any tab whose content wants more room than main's 1100px
    column (full-bleed, gutter matching main's own 16px side padding) --
    started as a Map-tab-only fix (a fixed-height map boxed into a small
@@ -566,56 +566,77 @@ tbody tr:hover { background: var(--color-surface-hover); }
   position: relative; height: clamp(420px, 65vh, 760px); border-radius: var(--radius-lg);
   overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt);
 }
-/* Dark background behind the tile layer itself (not just the wrapper card
-   around it): this app is explicitly meant to work off-grid (see
-   LEAFLET_AVAILABLE's comment in app.js), so a slow/failed tile fetch is
-   an expected case, not an edge case -- without this, the gap flashes
-   Leaflet's own default light gray instead of matching the dark theme. */
+/* Dark background behind the map itself (not just the wrapper card around
+   it): this app is explicitly meant to work off-grid (see MAP_AVAILABLE's
+   comment in app.js), so a slow/failed tile fetch is an expected case,
+   not an edge case -- without this, the gap flashes light gray instead of
+   matching the dark theme. */
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--color-bg-alt); }
 
-/* Stock OSM tiles (see ensureLeafletMap() in app.js -- every free,
-   no-API-key dark basemap has been retiring that free tier one by one,
-   CARTO included) are a light/day-mode basemap; darken them with a CSS
-   filter on just the tile pane instead of a purpose-built dark tile set.
+/* Stock OSM tiles (see buildMapStyle() in app.js -- every free, no-
+   account dark basemap we tried turned out to gate raster tiles behind a
+   paid plan, CARTO and MapTiler both) are a light/day-mode basemap;
+   darken them with a CSS filter instead of a purpose-built dark tile set.
    grayscale() FIRST, before invert() -- inverting a still-in-color map
    (green parks, blue water, orange roads) and hue-rotating to compensate
    only approximately restores the original hues, and saturated colors
    come out muddy/purplish. Desaturating first sidesteps that entirely:
    the result is a clean monochrome map, light roads/labels on a near-
-   black ground, same idea as e.g. CARTO's own Dark Matter but achieved
-   without needing their tiles (or their now-required API key) at all.
-   Scoped to .leaflet-tile-pane specifically (not e.g. .leaflet-layer or
-   the map container), which holds only the raster tile images --
-   markers/tooltips/circleMarkers live in .leaflet-overlay-pane/
-   .leaflet-marker-pane, untouched by this, so their already-correct
-   colors (see renderMap() in app.js) don't get run through the same
-   filter and come out wrong. */
-.leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+   black ground, same idea as e.g. a purpose-built dark basemap but
+   achieved with plain OSM tiles.
 
-/* Leaflet's own chrome (zoom control, attribution, tooltips) is a
-   light-mode design by default too -- reskin all three to the app's own
-   surface/border/text tokens so nothing here still reads as a light-mode
-   widget dropped into a dark app. */
-.leaflet-control-zoom a {
-  border-radius: var(--radius-sm) !important;
-  background: var(--color-surface) !important; color: var(--color-text) !important;
-  border-color: var(--color-border) !important;
+   On .maplibregl-canvas (the actual WebGL canvas MapLibre paints into),
+   not a container/pane ancestor of it -- this exact mistake (filter on
+   the pane Leaflet transforms for panning, not the tiles themselves)
+   broke drag/scroll-zoom entirely in the previous Leaflet-based version,
+   even though it looked and built fine here (the Beta map-redesign
+   prototype, no filter anywhere on its map, dragged fine, was the tell).
+   MapLibre doesn't have that failure mode at all -- it pans/zooms by
+   redrawing the WebGL scene from its own internal camera matrix every
+   frame, not by CSS-transforming DOM panes, so a filter on the canvas (or
+   even the container) can't fight that positioning math the way it could
+   with Leaflet's DOM tile grid. Markers are separate DOM elements
+   (.map-marker-dot below) painted over the canvas, not inside it, so they
+   never ran through this filter regardless.
+
+   Skipped when #map-canvas carries .using-custom-basemap -- a user-
+   supplied tile/style URL (Settings > Carte, e.g. a real MapTiler style)
+   is presumably already styled the way its owner wants, not stock light
+   OSM needing to be darkened. */
+#map-canvas:not(.using-custom-basemap) .maplibregl-canvas { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+
+/* Colored dot marker (see addMapMarker() in app.js) -- MapLibre markers
+   are plain DOM elements you style yourself, no default look to override
+   the way Leaflet's circleMarker had one built in. Dark ring instead of a
+   same-color stroke (the old Leaflet look) so it stays visible against
+   any basemap, not just ones close to its own fill color. */
+.map-marker-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
 }
-.leaflet-control-zoom a:hover { background: var(--color-surface-hover) !important; }
-.leaflet-bar { border-radius: var(--radius-sm) !important; overflow: hidden; border-color: var(--color-border) !important; }
-.leaflet-control-attribution {
+
+/* MapLibre's own chrome (zoom control, attribution) is a light-mode
+   design by default too -- reskin both to the app's own surface/border/
+   text tokens so nothing here still reads as a light-mode widget dropped
+   into a dark app. */
+.maplibregl-ctrl-group {
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important; overflow: hidden;
+}
+.maplibregl-ctrl-group button { background: transparent !important; }
+.maplibregl-ctrl-group button:not(:first-child) { border-top: 1px solid var(--color-border) !important; }
+.maplibregl-ctrl-group button:hover { background: var(--color-surface-hover) !important; }
+/* The zoom +/- glyphs are background-image data URIs drawn dark, meant
+   for light chrome -- invert them to read against the now-dark buttons. */
+.maplibregl-ctrl-icon { filter: invert(1) brightness(1.8); }
+.maplibregl-ctrl-attrib {
   background: rgba(18, 18, 18, 0.75) !important; color: var(--color-text-faint) !important;
 }
-.leaflet-control-attribution a { color: var(--color-text-dim) !important; }
-.leaflet-tooltip {
-  background: var(--color-surface) !important; color: var(--color-text) !important;
-  border: 1px solid var(--color-border) !important; border-radius: var(--radius-sm) !important;
-  box-shadow: var(--shadow-card) !important;
-}
-.leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before,
-.leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
-  border-top-color: var(--color-border) !important; border-bottom-color: var(--color-border) !important;
-}
+.maplibregl-ctrl-attrib a { color: var(--color-text-dim) !important; }
+.maplibregl-ctrl-attrib-button { filter: invert(1); }
 
 .radar-ring { fill: none; stroke: var(--color-border); stroke-width: 1; }
 .radar-axis { stroke: var(--color-border); stroke-width: 1; }

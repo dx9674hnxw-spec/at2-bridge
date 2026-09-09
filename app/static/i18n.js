@@ -229,6 +229,7 @@ const I18N_DICT = {
     "settings.sectionTransmission": "Transmission",
     "settings.sectionDualWatch": "Dual Watch",
     "settings.sectionDevice": "Appareil",
+    "settings.sectionMap": "Carte",
     "settings.dualWatchEnable": "Activer le Dual Watch",
     "settings.voxSensitivity": "Sensibilité VOX (1–5)",
     "settings.tot": "Temporisation TX — secondes (0 = désactivé, max 240)",
@@ -255,6 +256,11 @@ const I18N_DICT = {
 
     // Map tab
     "map.title": "Carte",
+    "map.tileUrlHint": "Optionnel — laisse vide pour les tuiles OSM gratuites (assombries automatiquement). Colle ici soit une URL de style vectoriel (style.json, ex. MapTiler) soit un gabarit d'URL de tuiles raster ({z}/{x}/{y}) — détecté automatiquement. Prend effet au prochain chargement de la page.",
+    "map.tileUrlLabel": "URL des tuiles ou du style",
+    "map.tileUrlPlaceholder": "https://api.maptiler.com/maps/…/style.json?key=… ou https://…/{z}/{x}/{y}.png",
+    "map.tileAttributionLabel": "Attribution (tuiles raster uniquement — un style.json apporte déjà la sienne)",
+    "map.tileAttributionPlaceholder": "&copy; OpenStreetMap contributors &copy; MapTiler",
     "map.viewRadar": "Vue radar",
     "map.viewMap": "Vue carte",
     "map.centerOnMe": "Centrer sur moi",
@@ -492,6 +498,7 @@ const I18N_DICT = {
     "settings.sectionTransmission": "Transmission",
     "settings.sectionDualWatch": "Dual Watch",
     "settings.sectionDevice": "Device",
+    "settings.sectionMap": "Map",
     "settings.dualWatchEnable": "Enable Dual Watch",
     "settings.voxSensitivity": "VOX sensitivity (1–5)",
     "settings.tot": "TX timeout — seconds (0 = disabled, max 240)",
@@ -517,6 +524,11 @@ const I18N_DICT = {
 
     // Map tab
     "map.title": "Map",
+    "map.tileUrlHint": "Optional — leave blank for the free OSM tiles (darkened automatically). Paste either a vector style URL (style.json, e.g. MapTiler) or a raster tile URL template ({z}/{x}/{y}) — auto-detected. Takes effect on the next page load.",
+    "map.tileUrlLabel": "Tile or style URL",
+    "map.tileUrlPlaceholder": "https://api.maptiler.com/maps/…/style.json?key=… or https://…/{z}/{x}/{y}.png",
+    "map.tileAttributionLabel": "Attribution (raster tiles only — a style.json already carries its own)",
+    "map.tileAttributionPlaceholder": "&copy; OpenStreetMap contributors &copy; MapTiler",
     "map.viewRadar": "Radar view",
     "map.viewMap": "Map view",
     "map.centerOnMe": "Center on me",

@@ -986,7 +986,7 @@ function updateGpsFix(locked, label) {
   $("#gps-fix-label").textContent = label;
 }
 
-// `centerMap`: also pan/zoom the Leaflet view straight to the fresh fix and
+// `centerMap`: also pan/zoom the map view straight to the fresh fix and
 // re-arm auto-follow (see mapUserInteracted above). Only "Centrer sur moi"
 // wants that -- the automatic call below, on page load, shouldn't jump the
 // map before the user has even opened the Map tab.
@@ -1000,9 +1000,9 @@ function requestLocation(centerMap) {
       updateGpsFix(true, t("gps.fixAcquired"));
       if (centerMap) mapUserInteracted = false;
       renderMapIfActive(); // distances/bearings on the Map tab depend on lastCoords
-      if (centerMap && mapViewMode === "map" && leafletMap) {
+      if (centerMap && mapViewMode === "map" && mapInstance) {
         mapProgrammaticMove = true;
-        leafletMap.setView([lastCoords.lat, lastCoords.lon], Math.max(leafletMap.getZoom(), 15));
+        mapInstance.jumpTo({ center: [lastCoords.lon, lastCoords.lat], zoom: Math.max(mapInstance.getZoom(), 15) });
         mapProgrammaticMove = false;
       }
     },
@@ -1287,20 +1287,89 @@ function timeAgoLabel(ms) {
   return t("map.daysAgo", { n: Math.round(s / 86400) });
 }
 
-// Leaflet loaded (see index.html's script tag) only if the client had
-// Internet access to fetch it from cdnjs -- `L` stays undefined otherwise
-// (this app runs off-grid by design, so that's an expected, not
+// MapLibre GL JS loaded (see index.html's script tag) only if the client
+// had Internet access to fetch it -- `maplibregl` stays undefined
+// otherwise (this app runs off-grid by design, so that's an expected, not
 // exceptional, outcome). Falls back to the dependency-free radar view,
 // user-toggleable rather than auto-detected: there's no reliable, cheap
 // way to tell "the library loaded fine but tiles themselves are
 // unreachable" after the fact.
-const LEAFLET_AVAILABLE = typeof L !== "undefined";
-let leafletMap = null;
-let leafletMarkers = [];
-let mapViewMode = LEAFLET_AVAILABLE ? "map" : "radar";
-if (!LEAFLET_AVAILABLE) {
+//
+// MapLibre, not Leaflet: every free-tier tile provider we tried (CARTO,
+// MapTiler) turned out to gate raster {z}/{x}/{y} tiles -- the only kind
+// Leaflet can render -- behind a paid plan, serving only a vector style
+// (style.json, Mapbox/MapLibre style spec) for free. MapLibre GL renders
+// that style directly, and can still fall back to plain raster tiles
+// (wrapped in a one-layer style, see buildMapStyle() below) for the
+// no-account-needed OSM default, so one engine covers both cases.
+const MAP_AVAILABLE = typeof maplibregl !== "undefined";
+let mapInstance = null;
+let mapMarkers = [];
+let mapViewMode = MAP_AVAILABLE ? "map" : "radar";
+if (!MAP_AVAILABLE) {
   $("#map-view-toggle").disabled = true;
   $("#map-view-toggle").title = t("map.leafletUnavailable");
+}
+
+// Optional user-supplied tile/style URL + attribution (Settings > Carte),
+// so someone willing to sign up for a free MapTiler/Stadia/etc. account
+// and key can get that provider's actual dark basemap instead of the
+// CSS-filtered OSM fallback -- see buildMapStyle()/ensureMap() below.
+// Stored client-side only (localStorage), read fresh at map-init time
+// rather than cached in a top-level const, since the settings inputs can
+// be edited any time after this script has already run once. Never sent
+// anywhere -- this app has no backend of its own to relay it through, it
+// goes straight from the browser to whichever host the URL points at,
+// same as the default OSM fallback already does.
+const MAP_TILE_URL_KEY = "at2_map_tile_url";
+const MAP_TILE_ATTRIBUTION_KEY = "at2_map_tile_attribution";
+// Fallback if a custom *raster* tile URL is set but the attribution field
+// was left blank -- a fixed technical default, not user-facing copy, so
+// it can't drift out of correctness if map.tileAttributionPlaceholder's
+// *example* text ever gets reworded/retranslated for clarity independent
+// of this. Not used for a vector style URL -- those carry their own
+// attribution as part of the style itself.
+const DEFAULT_CUSTOM_TILE_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; MapTiler";
+
+function getMapTilePrefs() {
+  try {
+    return {
+      url: (localStorage.getItem(MAP_TILE_URL_KEY) || "").trim(),
+      attribution: (localStorage.getItem(MAP_TILE_ATTRIBUTION_KEY) || "").trim(),
+    };
+  } catch (e) {
+    return { url: "", attribution: "" };
+  }
+}
+
+// A raster XYZ template always contains the {z}/{x}/{y} placeholders; a
+// vector style URL (style.json) never does -- good enough to tell the two
+// apart without asking the user which kind of URL they pasted.
+function isRasterTileTemplate(url) {
+  return /\{z\}/.test(url) && /\{x\}/.test(url) && /\{y\}/.test(url);
+}
+
+// Returns a MapLibre `style` value (either a URL string for MapLibre to
+// fetch itself, or an inline style object) plus whether it's a custom
+// basemap (skips the dark CSS filter meant only for the light OSM
+// fallback -- see #map-canvas.using-custom-basemap in style.css).
+function buildMapStyle() {
+  const { url: customUrl, attribution: customAttribution } = getMapTilePrefs();
+  if (customUrl && !isRasterTileTemplate(customUrl)) {
+    return { style: customUrl, usingCustomBasemap: true };
+  }
+  const attribution = customUrl ? (customAttribution || DEFAULT_CUSTOM_TILE_ATTRIBUTION) : "&copy; OpenStreetMap";
+  const tiles = customUrl
+    ? [customUrl]
+    : ["a", "b", "c"].map((s) => `https://${s}.tile.openstreetmap.org/{z}/{x}/{y}.png`);
+  return {
+    style: {
+      version: 8,
+      sources: { "raster-tiles": { type: "raster", tiles, tileSize: 256, attribution } },
+      layers: [{ id: "raster-tiles", type: "raster", source: "raster-tiles" }],
+    },
+    usingCustomBasemap: !!customUrl,
+  };
 }
 
 // True once the user has panned/zoomed the map by hand. Every incoming
@@ -1309,43 +1378,47 @@ if (!LEAFLET_AVAILABLE) {
 // swarm of radios that beacon every few seconds this made the map feel
 // undraggable. Once the user has touched it, auto-fit backs off and only
 // resumes on an explicit "Centrer sur moi" click. mapProgrammaticMove tells
-// the dragstart/zoomstart listener below to ignore moves *we* trigger
-// (fitBounds/setView), so those don't get misread as user interaction.
+// the movestart listener below to ignore moves *we* trigger
+// (fitBounds/jumpTo), so those don't get misread as user interaction --
+// MapLibre's movestart fires for both, same as Leaflet's dragstart/
+// zoomstart did.
 let mapUserInteracted = false;
 let mapProgrammaticMove = false;
 
-function ensureLeafletMap() {
-  if (leafletMap || !LEAFLET_AVAILABLE) return;
-  // Every pan/zoom interaction explicit rather than relying on Leaflet's
-  // own defaults (which already match this, so functionally a no-op) --
-  // ruling out a version/build quirk silently disabling one of them was
-  // cheap enough to just do rather than argue about from reading the code.
-  leafletMap = L.map("map-canvas", {
-    dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
-    boxZoom: true, touchZoom: true, tap: true,
-  }).setView([0, 0], 2);
-  // Tried CARTO's "Dark Matter" basemap here first (same OSM data,
-  // pre-styled dark) -- turned out to require an API key now (their
-  // anonymous basemaps.cartocdn.com access was retired), which stamped
-  // "API KEY REQUIRED" across every tile. Every other free-without-a-key
-  // dark basemap (Esri included) has been trending the same way industry-
-  // wide, so rather than gamble on a second one, stock OSM tiles stay --
-  // genuinely free, no account, always has been -- darkened with a CSS
-  // filter on the tile pane instead (see .leaflet-tile-pane in style.css).
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(leafletMap);
-  // Belt-and-suspenders for the options above: explicitly re-enable the
-  // interaction handlers Leaflet exposes for this, in case something about
-  // how/when this map gets constructed (built inside a tab that was
-  // hidden a moment ago, invalidateSize() running after rather than
-  // before first paint, ...) leaves one of them not actually armed even
-  // though the constructor options said to turn it on.
-  leafletMap.dragging.enable();
-  leafletMap.scrollWheelZoom.enable();
-  leafletMap.on("dragstart zoomstart", () => {
+function addMapMarker(lat, lon, color, label) {
+  const el = document.createElement("div");
+  el.className = "map-marker-dot";
+  el.style.backgroundColor = color;
+  el.title = label;
+  return new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(mapInstance);
+}
+
+function ensureMap() {
+  if (mapInstance || !MAP_AVAILABLE) return;
+  const { style, usingCustomBasemap } = buildMapStyle();
+  $("#map-canvas").classList.toggle("using-custom-basemap", usingCustomBasemap);
+  mapInstance = new maplibregl.Map({ container: "map-canvas", style, center: [0, 0], zoom: 2 });
+  mapInstance.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+  mapInstance.on("movestart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
+  });
+}
+
+// Settings > Carte fields -- just persist to localStorage on change.
+// ensureMap() only ever runs once (guarded by `if (mapInstance)` above),
+// so a change here doesn't retroactively swap an already-built map's
+// style; the hint text next to these inputs says as much.
+{
+  const urlInput = $("#map-tile-url");
+  const attributionInput = $("#map-tile-attribution");
+  const prefs = getMapTilePrefs();
+  urlInput.value = prefs.url;
+  attributionInput.value = prefs.attribution;
+  urlInput.addEventListener("change", () => {
+    try { localStorage.setItem(MAP_TILE_URL_KEY, urlInput.value.trim()); } catch (e) {}
+  });
+  attributionInput.addEventListener("change", () => {
+    try { localStorage.setItem(MAP_TILE_ATTRIBUTION_KEY, attributionInput.value.trim()); } catch (e) {}
   });
 }
 
@@ -1371,7 +1444,7 @@ function renderMapBeaconList(list) {
     row.addEventListener("click", () => {
       const lat = parseFloat(row.dataset.lat);
       const lon = parseFloat(row.dataset.lon);
-      if (mapViewMode === "map" && leafletMap) leafletMap.setView([lat, lon], 14);
+      if (mapViewMode === "map" && mapInstance) mapInstance.jumpTo({ center: [lon, lat], zoom: 14 });
     });
   });
 }
@@ -1415,41 +1488,38 @@ function renderMap() {
   $("#map-sub").textContent = t("map.knownCount", { n: list.length });
   renderMapBeaconList(list);
 
-  if (mapViewMode === "map" && LEAFLET_AVAILABLE) {
-    ensureLeafletMap();
+  if (mapViewMode === "map" && MAP_AVAILABLE) {
+    ensureMap();
     $("#map-canvas").hidden = false;
     $("#map-radar").hidden = true;
-    // Must run before fitBounds() below: Leaflet computes the fit against
+    // Must run before fitBounds() below: MapLibre computes the fit against
     // its cached container size, which is stale/zero the first time the
     // tab becomes visible (or after the window was resized while another
     // tab was open) and produces a wrongly centered/zoomed view otherwise.
-    leafletMap.invalidateSize();
-    leafletMarkers.forEach((m) => leafletMap.removeLayer(m));
-    leafletMarkers = [];
-    const bounds = [];
+    mapInstance.resize();
+    mapMarkers.forEach((m) => m.remove());
+    mapMarkers = [];
+    const bounds = new maplibregl.LngLatBounds();
+    let hasBounds = false;
     if (lastCoords) {
-      const mine = L.circleMarker([lastCoords.lat, lastCoords.lon], {
-        radius: 7, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1, weight: 2,
-      }).addTo(leafletMap).bindTooltip(t("map.you"));
-      leafletMarkers.push(mine);
-      bounds.push([lastCoords.lat, lastCoords.lon]);
+      mapMarkers.push(addMapMarker(lastCoords.lat, lastCoords.lon, "#3b82f6", t("map.you")));
+      bounds.extend([lastCoords.lon, lastCoords.lat]);
+      hasBounds = true;
     }
     for (const b of list) {
       if (b.mine) continue; // already drawn from lastCoords above (more current than the last beacon sent)
       const color = b.sos ? "#ef4444" : "#10b981";
-      const marker = L.circleMarker([b.lat, b.lon], {
-        radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 2,
-      }).addTo(leafletMap).bindTooltip(`${b.sender}${b.sos ? " 🆘" : ""}`);
-      leafletMarkers.push(marker);
-      bounds.push([b.lat, b.lon]);
+      mapMarkers.push(addMapMarker(b.lat, b.lon, color, `${b.sender}${b.sos ? " 🆘" : ""}`));
+      bounds.extend([b.lon, b.lat]);
+      hasBounds = true;
     }
     // Only auto-fit while the user hasn't taken the wheel themselves --
     // otherwise every beacon from a live swarm snaps the view back and the
     // map effectively can't be dragged. "Centrer sur moi" resets the flag
     // to explicitly opt back into auto-follow.
-    if (bounds.length && !mapUserInteracted) {
+    if (hasBounds && !mapUserInteracted) {
       mapProgrammaticMove = true;
-      leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      mapInstance.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 0 });
       mapProgrammaticMove = false;
     }
   } else {
@@ -1464,7 +1534,7 @@ function renderMapIfActive() {
 }
 
 $("#map-view-toggle").addEventListener("click", () => {
-  if (!LEAFLET_AVAILABLE) return showToast(t("map.leafletUnavailable"), "info");
+  if (!MAP_AVAILABLE) return showToast(t("map.leafletUnavailable"), "info");
   mapViewMode = mapViewMode === "map" ? "radar" : "map";
   $("#map-view-toggle").textContent = mapViewMode === "map" ? t("map.viewRadar") : t("map.viewMap");
   renderMap();
@@ -1475,17 +1545,17 @@ $("#map-center-btn").addEventListener("click", () => {
 });
 // The generic tab switcher (see "Tabs" above) only toggles .active classes;
 // hook the Map tab specifically to (re)render once its panel is actually
-// visible -- Leaflet reports a zero-size map until invalidateSize() runs
-// against a visible container, and the beacon list should reflect
-// anything received while another tab was open.
+// visible -- MapLibre reports a zero-size map until resize() runs against
+// a visible container, and the beacon list should reflect anything
+// received while another tab was open.
 $$(".tab").forEach((tabBtn) => {
   if (tabBtn.dataset.tab === "map") tabBtn.addEventListener("click", () => setTimeout(renderMap, 0));
 });
-// Keep the tile layer aligned with its container on viewport/orientation
-// changes -- otherwise resizing the window (or rotating a tablet) leaves
-// Leaflet's cached size stale until the next beacon triggers a re-render.
+// Keep the map aligned with its container on viewport/orientation changes
+// -- otherwise resizing the window (or rotating a tablet) leaves
+// MapLibre's cached size stale until the next beacon triggers a re-render.
 window.addEventListener("resize", () => {
-  if (leafletMap && mapViewMode === "map") leafletMap.invalidateSize();
+  if (mapInstance && mapViewMode === "map") mapInstance.resize();
 });
 
 // ---------------------------------------------------------------------------
