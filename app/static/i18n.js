@@ -109,6 +109,7 @@ const I18N_DICT = {
     "alerts.historyTitle": "Historique des alertes",
     "alerts.close": "Fermer",
     "alerts.empty": "Aucune alerte pour l'instant.",
+    "alerts.idle": "Aucune alerte pour l'instant — cliquez pour voir l'historique.",
 
     // Devices tab
     "devices.empty": "Aucun appareil connu pour l'instant — scanne en BLE ou connecte-toi en série pour en enregistrer un.",
@@ -373,6 +374,7 @@ const I18N_DICT = {
     "alerts.historyTitle": "Alert history",
     "alerts.close": "Close",
     "alerts.empty": "No alerts yet.",
+    "alerts.idle": "No alerts yet — click to see the history.",
 
     "devices.empty": "No known devices yet — scan over BLE or connect via serial to remember one.",
     "devices.connect": "Connect",
