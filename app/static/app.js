@@ -1316,19 +1316,34 @@ let mapProgrammaticMove = false;
 
 function ensureLeafletMap() {
   if (leafletMap || !LEAFLET_AVAILABLE) return;
-  leafletMap = L.map("map-canvas").setView([0, 0], 2);
+  // Every pan/zoom interaction explicit rather than relying on Leaflet's
+  // own defaults (which already match this, so functionally a no-op) --
+  // ruling out a version/build quirk silently disabling one of them was
+  // cheap enough to just do rather than argue about from reading the code.
+  leafletMap = L.map("map-canvas", {
+    dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
+    boxZoom: true, touchZoom: true, tap: true,
+  }).setView([0, 0], 2);
   // Tried CARTO's "Dark Matter" basemap here first (same OSM data,
   // pre-styled dark) -- turned out to require an API key now (their
   // anonymous basemaps.cartocdn.com access was retired), which stamped
-  // "API KEY REQUIRED" across every tile. Back to stock OSM tiles, which
-  // stay free/keyless, darkened with a CSS filter on the tile pane instead
-  // (see .leaflet-tile-pane in style.css) -- less refined than a
-  // purpose-built dark basemap, but doesn't depend on an account this app
-  // has nowhere to hold a key for.
+  // "API KEY REQUIRED" across every tile. Every other free-without-a-key
+  // dark basemap (Esri included) has been trending the same way industry-
+  // wide, so rather than gamble on a second one, stock OSM tiles stay --
+  // genuinely free, no account, always has been -- darkened with a CSS
+  // filter on the tile pane instead (see .leaflet-tile-pane in style.css).
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap",
   }).addTo(leafletMap);
+  // Belt-and-suspenders for the options above: explicitly re-enable the
+  // interaction handlers Leaflet exposes for this, in case something about
+  // how/when this map gets constructed (built inside a tab that was
+  // hidden a moment ago, invalidateSize() running after rather than
+  // before first paint, ...) leaves one of them not actually armed even
+  // though the constructor options said to turn it on.
+  leafletMap.dragging.enable();
+  leafletMap.scrollWheelZoom.enable();
   leafletMap.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
   });
