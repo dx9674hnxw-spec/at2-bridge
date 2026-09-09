@@ -1270,6 +1270,9 @@ window.addEventListener("resize", () => {
 // ---------------------------------------------------------------------------
 const BETA_PAGES = [
   { id: "map-redesign", i18nKey: "beta.page.mapRedesign", src: "/static/beta/map-redesign.html" },
+  { id: "frequency-scan", i18nKey: "beta.page.frequencyScan", src: "/static/beta/frequency-scan.html" },
+  { id: "spectrum", i18nKey: "beta.page.spectrum", src: "/static/beta/spectrum.html" },
+  { id: "record-replay", i18nKey: "beta.page.recordReplay", src: "/static/beta/record-replay.html" },
 ];
 
 function buildBetaTab() {

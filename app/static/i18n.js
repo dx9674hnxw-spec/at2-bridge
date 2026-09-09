@@ -56,6 +56,9 @@ const I18N_DICT = {
     "beta.flag": "expérimental",
     "beta.hint": "Prototypes isolés (dossier app/static/beta/, code indépendant de l'appli principale) : on teste, on évalue, puis on porte ce qui marche dans l'appli.",
     "beta.page.mapRedesign": "Carte (refonte)",
+    "beta.page.frequencyScan": "Scan de canaux",
+    "beta.page.spectrum": "Spectromètre",
+    "beta.page.recordReplay": "Enregistrement / lecture",
 
     // Debug: envoi de trame brute (expérimental)
     "debug.rawFrameTitle": "🧪 Debug — Envoi de trame brute (expérimental)",
@@ -289,6 +292,9 @@ const I18N_DICT = {
     "beta.flag": "experimental",
     "beta.hint": "Isolated prototypes (app/static/beta/ folder, code independent from the main app): test, evaluate, then port what works into the app.",
     "beta.page.mapRedesign": "Map (redesign)",
+    "beta.page.frequencyScan": "Channel scan",
+    "beta.page.spectrum": "Spectrum",
+    "beta.page.recordReplay": "Record / replay",
 
     // Debug: raw frame send (experimental)
     "debug.rawFrameTitle": "🧪 Debug — Send raw frame (experimental)",

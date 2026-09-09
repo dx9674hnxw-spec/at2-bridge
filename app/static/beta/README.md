@@ -32,6 +32,20 @@ une page d'ici peut lire/écrire cet état partagé.
    rien à faire dans le code principal). Le fichier ici est ensuite retiré
    de `BETA_PAGES` et supprimé.
 
+## Honnêteté matérielle
+
+Le README principal est très strict sur la distinction "acquittement du
+protocole" ≠ "confirmé sur le matériel réel" — même règle ici. Chaque page
+dit explicitement dans son propre bandeau ce qui est **réel** (une vraie
+commande du protocole, une vraie API navigateur) et ce qui est **simulé**
+(données d'exemple, mesure inexistante côté radio). Le protocole AT2
+reverse-engineered (`app/protocol/commands.py`) n'expose ni RSSI, ni scan
+large-bande, ni capture spectrale — seulement sélection de canal et
+réglages. Une page qui prétendrait mesurer un vrai signal serait trompeuse ;
+mieux vaut prototyper l'ergonomie avec des données simulées, clairement
+annoncées, en attendant de savoir si/comment une vraie mesure serait un
+jour possible.
+
 ## Prototypes actuels
 
 - `map-redesign.html` — refonte de l'onglet Carte : bascule "Suivi auto"
@@ -41,3 +55,24 @@ une page d'ici peut lire/écrire cet état partagé.
   tester sans matériel (`+ Balise de test` / `🧹 Suppr. balises de test`,
   qui écrivent/nettoient des entrées taguées `synthetic:true` dans
   `at2_beacons`).
+- `frequency-scan.html` — scan des canaux configurés (respecte un flag
+  `scanAdd` par canal, comme `channel.py`), canal prioritaire, vitesse et
+  délai de pause réglables, journal des passages. La sélection de canal
+  serait réelle à porter (`select_channel()` existe déjà côté protocole) ;
+  la "détection d'activité" pendant le scan est un tirage aléatoire
+  (**aucune donnée RSSI/occupation réelle n'existe dans ce protocole**),
+  clairement annoncé dans la page.
+- `spectrum.html` — concept de spectromètre/waterfall (trace + cascade en
+  Canvas, pics simulés, hold max, span/fréquence centrale réglables).
+  Entièrement simulé et annoncé comme tel : le matériel actuel ne peut
+  physiquement pas fournir ces données (pas de récepteur large-bande, pas
+  de RSSI exposé) — à évaluer uniquement comme interface, pas comme
+  fonctionnalité portable telle quelle.
+- `record-replay.html` — enregistrement/lecture via le micro du
+  navigateur (`MediaRecorder`, même famille d'API que `ptt-audio.js`) :
+  fonctionne réellement, lecture réelle, rien de persistant (tout est
+  perdu au rechargement). "Renvoyer en PTT" est volontairement désactivé
+  avec une explication — cette page n'a pas accès à la connexion
+  série/BLE active de l'appli ; porter cette action réelle nécessiterait
+  de relier un clip au pipeline PTT existant (`ptt-amr-codec.js`,
+  WebSocket `/ws/ptt`).
