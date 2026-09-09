@@ -770,9 +770,29 @@ async def ws_ptt_rx(websocket: WebSocket):
 # Static frontend
 # ---------------------------------------------------------------------------
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# Plain StaticFiles sets no Cache-Control header at all, which leaves
+# browsers free to use *heuristic* caching (RFC 7234 -- roughly 10% of the
+# time since Last-Modified) and, for a file that's gone a while between
+# edits, silently keep serving a stale cached copy of app.js/i18n.js/
+# style.css indefinitely without ever asking the server again -- even
+# across a normal reload, since that mainly revalidates the top-level
+# document, not its subresources. Confirmed live: after a same-day
+# i18n.js update, a user's browser rendered raw "scan.*" keys instead of
+# their French text -- the dictionary was already correct on disk, the
+# browser just never refetched the script. `no-cache` (not `no-store`)
+# forces a conditional GET every time instead: still cheap (a 304 when
+# nothing changed, via the Last-Modified Starlette already sets) but the
+# server is always the one deciding freshness, not the browser's guess.
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", NoCacheStaticFiles(directory="app/static"), name="static")
 
 
 @app.get("/")
 async def index():
-    return FileResponse("app/static/index.html")
+    return FileResponse("app/static/index.html", headers={"Cache-Control": "no-cache"})
