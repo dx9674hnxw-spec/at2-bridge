@@ -2589,6 +2589,39 @@ function handleIncomingMessage(msg) {
     width: msg.width || null,
     height: msg.height || null,
   });
+  // addMessage() above already stores the beacon (map) and the bubble
+  // (messaging thread) via recordBeaconFromMessage()/renderThread() -- both
+  // silent, only visible to someone already looking at that tab/channel.
+  // An incoming SOS needs to be noticed regardless of what's on screen, so
+  // it also gets the two pieces that were entirely missing: a footer toast,
+  // and the alert tone actually playing here instead of sitting behind a
+  // manual ▶ on a voice bubble the sender's own separate sendAlertTone()
+  // call may or may not have arrived/decoded yet. Synthesized locally
+  // rather than waiting on that voice message so the sound is instant and
+  // doesn't depend on a second, uncorrelated message landing first.
+  if (msg.kind === "text") {
+    const parsed = parsePositionText(msg.text);
+    if (parsed && parsed.sos) announceIncomingSos(msg.sender, parsed.note);
+  }
+}
+
+function announceIncomingSos(sender, note) {
+  showToast(t("gps.sosReceived", { sender: sender || "?", note: note || "" }), "error");
+  try {
+    const src = playPcm(generateAlertTonePcm().pcm);
+    // This fires from a WS/BLE notification, not a click, so there's no
+    // user gesture on the call stack -- some browsers keep a freshly
+    // created AudioContext (or one that's never played anything yet)
+    // suspended until one happens. resume() doesn't itself need a
+    // gesture to be *called*, it just may not actually unmute without
+    // one depending on the browser's autoplay policy; this is the best
+    // effort available without requiring the user to have clicked
+    // something (e.g. play a voice message) earlier in the session.
+    if (src.context.state === "suspended") src.context.resume().catch(() => {});
+    src.start();
+  } catch (e) {
+    appendLog(`⚠️ Échec de lecture de la tonalité d'alerte reçue: ${e.message}`);
+  }
 }
 
 function connectMessagesSocket() {
