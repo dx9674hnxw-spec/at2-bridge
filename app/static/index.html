@@ -199,19 +199,19 @@
         </div>
 
         <div class="scan-layout" id="scan-layout" hidden>
+          <div class="scan-display freq-crt" id="scan-display">
+            <div class="scan-status" id="scan-status" data-i18n="scan.statusIdle">À l'arrêt</div>
+            <div class="scan-ch-num" id="scan-ch-num">—</div>
+            <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
+            <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
+            <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+          </div>
+          <div class="scan-chan-grid" id="scan-chan-table"></div>
+          <p class="hint" style="margin:0;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>
           <div>
-            <div class="scan-display freq-crt" id="scan-display">
-              <div class="scan-status" id="scan-status" data-i18n="scan.statusIdle">À l'arrêt</div>
-              <div class="scan-ch-num" id="scan-ch-num">—</div>
-              <div class="scan-ch-name" id="scan-ch-name" data-i18n="scan.idleHint">Sélectionnez « Lancer le scan »</div>
-              <div class="scan-ch-freq" id="scan-ch-freq">&nbsp;</div>
-              <div class="scan-progress"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
-            </div>
-            <p class="hint" style="margin:10px 0 8px;" data-i18n="scan.activityNote">Détecte le trafic PTT relayé par l'appli sur le canal en cours, pas une mesure RSSI/squelch générale (le protocole AT2 n'en expose aucune).</p>
             <div class="hint" style="margin-bottom:6px;" data-i18n="scan.logHeading">Journal du scan</div>
             <div class="scan-log" id="scan-log"></div>
           </div>
-          <div class="scan-chan-table" id="scan-chan-table"></div>
         </div>
       </div>
     </section>

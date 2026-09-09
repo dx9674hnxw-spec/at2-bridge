@@ -1390,29 +1390,20 @@ function renderScanState() {
 }
 
 function renderScanChannelTable() {
-  const table = $("#scan-chan-table");
+  const grid = $("#scan-chan-table");
   const rows = lastReadChannels.filter((c) => c.rx_mhz);
-  table.innerHTML = rows.map((c) => {
+  grid.innerHTML = rows.map((c) => {
     const name = channelNames[c.channel] || c.name || "";
     return `
-    <div class="scan-chan-row ${!scanIncluded.has(c.channel) ? "excluded" : ""} ${c.channel === scanPriorityCh ? "priority" : ""} ${scanCurrentKey === c.channel ? "current" : ""}" data-ch="${c.channel}">
-      <input type="checkbox" ${scanIncluded.has(c.channel) ? "checked" : ""} data-ch="${c.channel}" title="${t("scan.includeInScan")}" />
-      <div class="scan-chan-info">
-        <div class="scan-chan-name">CH${String(c.channel).padStart(2, "0")}${name ? " · " + escapeHtml(name) : ""}</div>
-        <div class="scan-chan-sub">${formatMhz(c.rx_mhz)} MHz</div>
-      </div>
-      <button class="scan-chan-star ${c.channel === scanPriorityCh ? "active" : ""}" data-ch="${c.channel}" title="${t("scan.priorityStar")}">★</button>
+    <div class="scan-chan-chip ${!scanIncluded.has(c.channel) ? "excluded" : ""} ${c.channel === scanPriorityCh ? "priority" : ""} ${scanCurrentKey === c.channel ? "current" : ""}" data-ch="${c.channel}" title="${t("scan.includeInScan")}">
+      <div class="scan-chan-num">CH${String(c.channel).padStart(2, "0")}</div>
+      ${name ? `<div class="scan-chan-chip-name">${escapeHtml(name)}</div>` : ""}
     </div>`;
   }).join("");
-  table.querySelectorAll("input[type=checkbox]").forEach((cb) => cb.addEventListener("change", () => {
-    const ch = Number(cb.dataset.ch);
-    if (cb.checked) scanIncluded.add(ch); else scanIncluded.delete(ch);
+  grid.querySelectorAll(".scan-chan-chip").forEach((chip) => chip.addEventListener("click", () => {
+    const ch = Number(chip.dataset.ch);
+    if (scanIncluded.has(ch)) scanIncluded.delete(ch); else scanIncluded.add(ch);
     renderScanChannelTable(); renderScanPrioritySelect(); updateScanSub();
-  }));
-  table.querySelectorAll(".scan-chan-star").forEach((btn) => btn.addEventListener("click", () => {
-    const ch = Number(btn.dataset.ch);
-    scanPriorityCh = scanPriorityCh === ch ? null : ch;
-    renderScanChannelTable(); renderScanPrioritySelect();
   }));
 }
 function renderScanPrioritySelect() {
@@ -1458,7 +1449,7 @@ function setScanDisplay(c, statusText, hit) {
   $("#scan-ch-name").textContent = c ? (name || "—") : t("scan.idleHint");
   $("#scan-ch-freq").textContent = c ? `${formatMhz(c.rx_mhz)} MHz` : " ";
   scanCurrentKey = c ? c.channel : null;
-  $$(".scan-chan-row").forEach((r) => r.classList.toggle("current", c && Number(r.dataset.ch) === c.channel));
+  $$(".scan-chan-chip").forEach((r) => r.classList.toggle("current", c && Number(r.dataset.ch) === c.channel));
 }
 
 function animateScanProgress(durationMs) {
