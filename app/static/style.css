@@ -585,20 +585,27 @@ tbody tr:hover { background: var(--color-surface-hover); }
 
    On .leaflet-tile (each tile <img>) rather than .leaflet-tile-pane (the
    pane wrapping all of them) -- filter establishes a new containing
-   block for its element, same as transform, and Leaflet pans by applying
-   translate3d to *descendants* of the tile pane (each zoom level's
-   .leaflet-tile-container); a filter on the pane itself sits above those
-   in the tree and fights Leaflet's own positioning math on every drag
-   frame (confirmed against the real app: broke drag/scroll-zoom
-   entirely, even though it looked and built fine here -- the Beta
-   map-redesign prototype, no filter anywhere on its map, dragged fine,
-   was the tell). Individual tile <img> elements are leaves with nothing
-   transformed underneath them, so the filter can't intercept anything
-   there. Markers/tooltips live in .leaflet-overlay-pane/.leaflet-marker-
-   pane, a sibling of the tile pane entirely -- untouched either way, so
-   their already-correct colors (see addMapMarker() in app.js) never run
+   block for its element, same as transform, and a filter on the pane
+   sits above the translate3d'd descendants Leaflet actually pans (each
+   zoom level's .leaflet-tile-container), fighting that positioning math.
+   Markers/tooltips live in .leaflet-overlay-pane/.leaflet-marker-pane, a
+   sibling of the tile pane entirely -- untouched either way, so their
+   already-correct colors (see addMapMarker() in app.js) never run
    through this filter. */
 .leaflet-tile { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+
+/* Dragging still didn't work after the fix above, but only from empty
+   map area -- starting the same drag on top of a marker (an SVG
+   .leaflet-overlay-pane element) worked fine. That split is the classic
+   tell for the browser's *native* image-drag gesture hijacking the mouse
+   sequence: an <img> element (every map tile) starts an HTML5 drag-and-
+   drop operation on mousedown-and-move by default, which intercepts the
+   gesture before Leaflet's own JS mousemove-based pan handler ever sees
+   it -- an SVG marker has no such built-in behavior, so dragging from one
+   reaches Leaflet normally. Leaflet's own CSS is supposed to disable this
+   already; setting it again here explicitly rather than trying to figure
+   out why that isn't taking effect. */
+.leaflet-tile { -webkit-user-drag: none; user-drag: none; -webkit-user-select: none; user-select: none; }
 
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
    light-mode design by default too -- reskin all three to the app's own
