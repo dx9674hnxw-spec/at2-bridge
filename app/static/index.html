@@ -489,7 +489,25 @@
             <button class="btn-ghost" id="map-view-toggle" data-i18n="map.viewRadar">Vue radar</button>
             <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
             <button class="btn-ghost" id="map-codes-toggle" data-i18n="map.codesToggle">📻 Codes</button>
+            <button class="btn-ghost" id="map-add-nato-toggle" data-i18n="map.addNatoToggle">🎖️ + Marqueur</button>
           </div>
+        </div>
+
+        <!-- Type/label picked here, then either a click on the map
+             (armed via #nato-add-place-map, see app.js's natoPlacingOnMap)
+             or "poser à ma position" actually sends it -- same text
+             channel as positions/SOS (🎯NATO: prefix), so every radio on
+             this channel gets it too, not just this device. -->
+        <div class="nato-add-panel" id="nato-add-panel" hidden>
+          <div class="nato-add-row">
+            <select id="nato-add-type" class="nato-add-type"></select>
+            <input type="text" id="nato-add-label" data-i18n-placeholder="map.natoLabelPlaceholder" placeholder="Étiquette (optionnel)" maxlength="40" />
+          </div>
+          <div class="nato-add-row">
+            <button class="btn-ghost" id="nato-add-place-map" data-i18n="map.natoPlaceOnMap">Cliquer sur la carte pour placer</button>
+            <button class="btn-ghost" id="nato-add-place-here" data-i18n="map.natoPlaceHere">Poser à ma position</button>
+          </div>
+          <p class="hint" data-i18n="map.natoHint">Partagé avec toute l'équipe sur ce canal, comme une position ou un SOS. Clique sur un marqueur pour voir ses détails et le supprimer (localement, sur cet appareil).</p>
         </div>
 
         <!-- Read-only reference, not an input: this app has no addressed

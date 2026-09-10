@@ -69,6 +69,7 @@ function refreshDynamicTranslations() {
   applyModeUi();
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
+  populateNatoTypeSelect();
 }
 
 // ---------------------------------------------------------------------------
@@ -1233,6 +1234,23 @@ $("#map-codes-toggle").addEventListener("click", () => {
   $("#codes-panel").hidden = !$("#codes-panel").hidden;
 });
 
+$("#map-add-nato-toggle").addEventListener("click", () => {
+  $("#nato-add-panel").hidden = !$("#nato-add-panel").hidden;
+});
+
+$("#nato-add-place-map").addEventListener("click", () => {
+  if (!MAP_AVAILABLE || mapViewMode !== "map") { showToast(t("map.natoNeedMapView"), "info"); return; }
+  natoPlacingOnMap = !natoPlacingOnMap;
+  $("#nato-add-place-map").classList.toggle("armed", natoPlacingOnMap);
+});
+
+$("#nato-add-place-here").addEventListener("click", async () => {
+  if (!lastCoords) { showToast(t("gps.noCoords"), "error"); return; }
+  try {
+    await sendNatoMarker(lastCoords.lat, lastCoords.lon);
+  } catch (e) { showToast(e.message, "error"); }
+});
+
 // ---------------------------------------------------------------------------
 // Map tab: last known position of every sender who has shared a GPS
 // beacon. There's no structured "Position" message type in the real
@@ -1283,6 +1301,10 @@ let nextBeaconId = 1;
 // channel bucketing isn't meaningful here.
 function recordBeaconFromMessage(msg) {
   if (msg.kind !== "text") return;
+  // NATO marker text (🎯NATO:<TYPE> ... 📍 lat,lon) also matches
+  // POSITION_RE below -- claim it here first so it's recorded once, as a
+  // marker, not also as a bogus extra "position" for whoever sent it.
+  if (recordNatoMarkerFromMessage(msg)) return;
   const parsed = parsePositionText(msg.text);
   if (!parsed) return;
   beacons.push({
@@ -1293,6 +1315,167 @@ function recordBeaconFromMessage(msg) {
   if (beacons.length > BEACON_MAX) beacons.splice(0, beacons.length - BEACON_MAX);
   saveBeacons();
   renderMapIfActive();
+}
+
+// ---------------------------------------------------------------------------
+// Map tab: NATO-style tactical markers. Unlike a beacon above (one
+// auto-replacing GPS fix per sender), these are deliberately placed by
+// someone -- a checkpoint, a medical point, a spotted vehicle -- so there
+// can be any number of them per sender and a new one never erases an
+// older one. Curated subset of MIL-STD-2525/APP-6-style categories (not
+// the full catalogue), covering command plus the unit/support types most
+// relevant to a small dispatch team. Same wire trick as positions/SOS:
+// no structured message type in the real protocol (see README), so this
+// rides the existing text channel with its own 🎯NATO: prefix and reuses
+// parsePositionText() for the 📍/label parsing it already does -- shared
+// with the whole team on the channel, exactly like a position beacon.
+// `shape` selects the CSS frame in style.css (.nato-chip-<shape>);
+// anything not listed there (there is no unlisted case today) would fall
+// back to the plain rectangle.
+// ---------------------------------------------------------------------------
+
+const NATO_MARKER_TYPES = [
+  { id: "HQ", shape: "rect" },
+  { id: "UNIT", shape: "rect" },
+  { id: "INF", shape: "rect" },
+  { id: "MIF", shape: "rect" },
+  { id: "ARM", shape: "oval" },
+  { id: "RCN", shape: "rect" },
+  { id: "ART", shape: "rect" },
+  { id: "MOR", shape: "rect" },
+  { id: "AD", shape: "rect" },
+  { id: "AT", shape: "rect" },
+  { id: "ENG", shape: "rect" },
+  { id: "EOD", shape: "rect" },
+  { id: "MED", shape: "rect" },
+  { id: "SUP", shape: "rect" },
+  { id: "COM", shape: "rect" },
+  { id: "MP", shape: "rect" },
+  { id: "SEC", shape: "rect" },
+  { id: "SOF", shape: "rect" },
+  { id: "AVN", shape: "circle" },
+  { id: "UAV", shape: "circle" },
+];
+
+const NATO_MARKER_STORE_KEY = "at2_nato_markers";
+const NATO_MARKER_MAX = 200;
+const NATO_RE = /^🎯\s*NATO:([A-Z0-9]{2,5})\s*/;
+
+function parseNatoMarkerText(text) {
+  if (!text) return null;
+  const m = NATO_RE.exec(text);
+  if (!m) return null;
+  const type = m[1];
+  if (!NATO_MARKER_TYPES.some((nt) => nt.id === type)) return null;
+  const pos = parsePositionText(text.slice(m[0].length));
+  if (!pos) return null;
+  return { type, label: pos.note, lat: pos.lat, lon: pos.lon };
+}
+
+function loadNatoMarkers() {
+  try {
+    const raw = localStorage.getItem(NATO_MARKER_STORE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveNatoMarkers() {
+  try { localStorage.setItem(NATO_MARKER_STORE_KEY, JSON.stringify(natoMarkers)); } catch (e) {}
+}
+let natoMarkers = loadNatoMarkers();
+let nextNatoMarkerLocalId = 1;
+
+function recordNatoMarkerFromMessage(msg) {
+  const parsed = parseNatoMarkerText(msg.text);
+  if (!parsed) return false;
+  natoMarkers.push({
+    id: `${Date.now()}-${nextNatoMarkerLocalId++}`, type: parsed.type, label: parsed.label,
+    lat: parsed.lat, lon: parsed.lon, sender: msg.sender, mine: !!msg.mine, time: Date.now(),
+  });
+  if (natoMarkers.length > NATO_MARKER_MAX) natoMarkers.splice(0, natoMarkers.length - NATO_MARKER_MAX);
+  saveNatoMarkers();
+  renderMapIfActive();
+  return true;
+}
+
+function deleteNatoMarker(id) {
+  natoMarkers = natoMarkers.filter((m) => m.id !== id);
+  saveNatoMarkers();
+  renderMapIfActive();
+}
+
+function natoShapeFor(type) {
+  const def = NATO_MARKER_TYPES.find((nt) => nt.id === type);
+  return def ? def.shape : "rect";
+}
+
+function addNatoMarker(nm) {
+  const icon = L.divIcon({
+    className: "nato-marker-icon",
+    html: `<div class="nato-chip nato-chip-${natoShapeFor(nm.type)}">${escapeHtml(nm.type)}</div>`,
+    iconSize: [36, 22], iconAnchor: [18, 11],
+  });
+  const marker = L.marker([nm.lat, nm.lon], { icon }).addTo(mapInstance);
+  const titleLine = nm.label ? `${escapeHtml(nm.type)} — ${escapeHtml(nm.label)}` : escapeHtml(nm.type);
+  marker.bindPopup(
+    `<div class="nato-popup">` +
+      `<div class="nato-popup-title">${titleLine}</div>` +
+      `<div class="nato-popup-sub">${escapeHtml(nm.sender || "")} · ${timeAgoLabel(nm.time)}</div>` +
+      `<button type="button" class="btn-ghost nato-popup-delete" data-nato-id="${escapeHtml(nm.id)}">${t("map.natoDelete")}</button>` +
+    `</div>`
+  );
+  // Delegated rather than bound once at creation: bindPopup() re-renders
+  // its content into a detached-then-reattached DOM node each time it
+  // opens, so a listener attached before the first open can end up on a
+  // node that's no longer the one showing.
+  marker.on("popupopen", () => {
+    const btn = document.querySelector(`.nato-popup-delete[data-nato-id="${CSS.escape(nm.id)}"]`);
+    if (btn) btn.addEventListener("click", () => { mapInstance.closePopup(); deleteNatoMarker(nm.id); });
+  });
+  return marker;
+}
+
+// True while "place on map" mode is armed (#nato-add-place-map clicked,
+// see below) -- the next click on the Leaflet map consumes it instead of
+// panning/whatever a plain click there would otherwise do.
+let natoPlacingOnMap = false;
+
+function populateNatoTypeSelect() {
+  const sel = $("#nato-add-type");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = NATO_MARKER_TYPES.map((nt) => `<option value="${nt.id}">${nt.id} — ${t(`map.natoType${nt.id}`)}</option>`).join("");
+  if (prev && NATO_MARKER_TYPES.some((nt) => nt.id === prev)) sel.value = prev;
+}
+
+async function sendNatoMarker(lat, lon) {
+  const type = $("#nato-add-type").value;
+  const label = $("#nato-add-label").value.trim();
+  // Fixed, non-localized wire prefix -- same reasoning as 📍/🆘/✅ Code 4:
+  // every radio on the channel must recognize it regardless of that
+  // device's own UI language. The type code itself (INF, ARM, ...) is
+  // already language-neutral by design (see NATO_MARKER_TYPES).
+  const note = `🎯NATO:${type}${label ? " " + label : ""}`;
+  await sendPositionAt(lat, lon, note);
+  $("#nato-add-label").value = "";
+}
+
+// sendPositionPayload() always sends *this device's own* current GPS fix
+// (lastCoords) -- fine for "my position"/SOS/Code 4, but a NATO marker is
+// placed at an arbitrary point (a map click), not necessarily where this
+// device is standing. Same wire format and transports, just a caller-
+// supplied lat/lon instead of lastCoords.
+async function sendPositionAt(lat, lon, note) {
+  const username = $("#msg-username")?.value || "AT2Bridge";
+  const transport = activeTransport();
+  if (transport === "server") {
+    await api("POST", "/api/position/send", { username, lat, lon, note });
+  } else if (transport === "local") {
+    const posText = `${note} 📍 ${lat.toFixed(5)},${lon.toFixed(5)}`;
+    await AT2BleClient.sendText(username, posText);
+    appendLog(`Message texte envoyé (BLE local): "${posText}"`);
+  } else {
+    throw new Error(t("gps.noActiveConnection"));
+  }
 }
 
 // One marker per sender (the most recent beacon they've sent), not a full
@@ -1433,6 +1616,14 @@ function ensureMap() {
   mapInstance.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
   });
+  mapInstance.on("click", async (e) => {
+    if (!natoPlacingOnMap) return;
+    natoPlacingOnMap = false;
+    $("#nato-add-place-map").classList.remove("armed");
+    try {
+      await sendNatoMarker(e.latlng.lat, e.latlng.lng);
+    } catch (err) { showToast(err.message, "error"); }
+  });
 }
 
 function renderMapBeaconList(list) {
@@ -1462,7 +1653,7 @@ function renderMapBeaconList(list) {
   });
 }
 
-function renderRadar(list) {
+function renderRadar(list, natoList) {
   const svg = $("#map-radar");
   const size = 320;
   const center = size / 2;
@@ -1470,9 +1661,10 @@ function renderRadar(list) {
     .map((f) => `<circle cx="${center}" cy="${center}" r="${center * f - 4}" class="radar-ring" />`)
     .join("");
   let parts = [];
-  if (lastCoords && list.length) {
+  if (lastCoords && (list.length || natoList.length)) {
     let maxKm = 1;
     for (const b of list) maxKm = Math.max(maxKm, haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon));
+    for (const n of natoList) maxKm = Math.max(maxKm, haversineKm(lastCoords.lat, lastCoords.lon, n.lat, n.lon));
     const scale = (center - 28) / maxKm;
     for (const b of list) {
       const km = haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon);
@@ -1485,6 +1677,20 @@ function renderRadar(list) {
       parts.push(`<circle cx="${x}" cy="${y}" r="6" class="radar-point ${b.sos ? "sos" : ""}" />`);
       parts.push(`<text x="${x}" y="${y - 10}" class="radar-label">${escapeHtml(label)}</text>`);
     }
+    // Rendered as small squares (vs. beacons' circles) so the two kinds
+    // are tellable apart at a glance even on this abstract, no-basemap
+    // view. Radar has no Leaflet popup to delete through -- a plain
+    // confirm() dialog stands in, see the click listener wired below.
+    for (const n of natoList) {
+      const km = haversineKm(lastCoords.lat, lastCoords.lon, n.lat, n.lon);
+      const brg = bearingDegrees(lastCoords.lat, lastCoords.lon, n.lat, n.lon);
+      const rad = ((brg - 90) * Math.PI) / 180;
+      const r = km * scale;
+      const x = center + r * Math.cos(rad);
+      const y = center + r * Math.sin(rad);
+      parts.push(`<rect x="${x - 6}" y="${y - 6}" width="12" height="12" class="radar-point nato" data-nato-id="${n.id}" />`);
+      parts.push(`<text x="${x}" y="${y - 10}" class="radar-label">${escapeHtml(n.type)}</text>`);
+    }
   }
   svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
   svg.innerHTML = `
@@ -1494,6 +1700,34 @@ function renderRadar(list) {
     <circle cx="${center}" cy="${center}" r="5" class="radar-self" />
     ${parts.join("")}
   `;
+  svg.querySelectorAll("[data-nato-id]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (confirm(t("map.natoConfirmDelete"))) deleteNatoMarker(el.dataset.natoId);
+    });
+  });
+}
+
+// Direct inline style.display, not the `hidden` attribute/property --
+// found the hard way while building NATO markers: this Chromium build
+// (confirmed with a bare, app-free repro; presumably the same underlying
+// engine bug the drag fix a few commits ago was already working around
+// from the CSS side) desyncs the two for an <svg> element -- setting
+// `el.hidden = false` flips the IDL property but the `hidden="" `
+// content attribute silently stays put, so #map-radar[hidden]{display:
+// none} (added for that earlier fix) never lets go once the map has been
+// hidden once. Inline style always wins the cascade outright and never
+// touches the attribute at all, so it can't be caught by that same trap
+// in either direction.
+function setMapLayerVisible(el, visible) {
+  // Explicit "block", never "" (== "no inline override, fall through to
+  // the cascade") -- an empty string would let the still-present [hidden]
+  // attribute's own display:none rule (see #map-radar[hidden] in
+  // style.css) win right back, since that attribute never actually gets
+  // removed (see this function's caller-side comment). Correct either
+  // way visually: both elements are position:absolute; inset:0 inside
+  // their wrap, so block vs. SVG's own default inline makes no
+  // difference to the result.
+  el.style.display = visible ? "block" : "none";
 }
 
 function renderMap() {
@@ -1503,8 +1737,8 @@ function renderMap() {
 
   if (mapViewMode === "map" && MAP_AVAILABLE) {
     ensureMap();
-    $("#map-canvas").hidden = false;
-    $("#map-radar").hidden = true;
+    setMapLayerVisible($("#map-canvas"), true);
+    setMapLayerVisible($("#map-radar"), false);
     // Must run before mapFitToPoints() below: both engines compute the
     // fit against their cached container size, which is stale/zero the
     // first time the tab becomes visible (or after the window was
@@ -1523,15 +1757,19 @@ function renderMap() {
       mapMarkers.push(addMapMarker(b.lat, b.lon, color, `${b.sender}${b.sos ? " 🆘" : ""}`));
       points.push([b.lat, b.lon]);
     }
+    for (const nm of natoMarkers) {
+      mapMarkers.push(addNatoMarker(nm));
+      points.push([nm.lat, nm.lon]);
+    }
     // Only auto-fit while the user hasn't taken the wheel themselves --
     // otherwise every beacon from a live swarm snaps the view back and the
     // map effectively can't be dragged. "Centrer sur moi" resets the flag
     // to explicitly opt back into auto-follow.
     if (points.length && !mapUserInteracted) mapFitToPoints(points);
   } else {
-    $("#map-canvas").hidden = true;
-    $("#map-radar").hidden = false;
-    renderRadar(list);
+    setMapLayerVisible($("#map-canvas"), false);
+    setMapLayerVisible($("#map-radar"), true);
+    renderRadar(list, natoMarkers);
   }
 }
 
@@ -2836,4 +3074,6 @@ function startApp() {
 }
 
 checkAuthStatus().then((ok) => { if (ok) startApp(); });
+
+populateNatoTypeSelect();
 
