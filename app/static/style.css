@@ -609,17 +609,55 @@ tbody tr:hover { background: var(--color-surface-hover); }
 }
 .layers-panel[hidden] { display: none; }
 .layers-panel-title { font-weight: 700; font-size: 13px; }
-.layers-import-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.layers-import-row input[type=file] { flex: 1 1 220px; }
+.layers-import-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .layers-import-row input[type=text] { flex: 2 1 260px; }
+/* Native <input type=file> renders as an unstyled OS-chrome button by
+   default (Chrome/Safari/Firefox all expose the button part as this
+   pseudo-element) -- everything else on this screen is themed, so left
+   alone this was the one obviously-unstyled control on the page. */
+.layers-import-row input[type=file] {
+  flex: 1 1 220px; font-size: 12.5px; color: var(--color-text-dim);
+}
+.layers-import-row input[type=file]::file-selector-button {
+  margin-right: 10px; padding: 7px 12px; border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border);
+  font-size: 12.5px; cursor: pointer;
+}
+.layers-import-row input[type=file]::file-selector-button:hover { background: var(--color-surface-hover); }
 .layers-list { display: flex; flex-direction: column; gap: 6px; }
 .map-layer-row {
   display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-  border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+}
+.map-layer-color {
+  flex-shrink: 0; width: 26px; height: 26px; padding: 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+/* Chrome/Safari's <input type=color> otherwise keeps its own internal
+   padding around the swatch regardless of the box's own border-radius
+   above, leaving a visible ring of the input's default background
+   inside it -- strip that so the swatch fills the whole rounded box. */
+.map-layer-color::-webkit-color-swatch-wrapper { padding: 0; }
+.map-layer-color::-webkit-color-swatch { border: none; border-radius: var(--radius-sm); }
+.map-layer-color::-moz-color-swatch { border: none; border-radius: var(--radius-sm); }
+.map-layer-icon {
+  flex-shrink: 0; width: 52px; padding: 4px 6px; font-size: 13px;
 }
 .map-layer-label { flex: 1; font-size: 13px; }
 .map-layer-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-faint); }
 .map-layer-delete { font-size: 13px; }
+
+/* Leaflet divIcon marker for a data-layer point with an icon chosen
+   (see renderMapLayerMarkers() in app.js) -- same idea as .nato-chip,
+   just round instead of the NATO frame shapes since these aren't
+   military-symbology markers. Background color is set inline per point
+   (the layer's own chosen color, see #map-layer-color), not here. */
+.layer-marker-icon { background: transparent; border: none; }
+.layer-chip {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
+  border-radius: 50%; font-size: 13px; border: 1.5px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
 
 .map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }

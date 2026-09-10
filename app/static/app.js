@@ -1415,16 +1415,25 @@ function saveNatoMarkers() {
 let natoMarkers = loadNatoMarkers();
 let nextNatoMarkerLocalId = 1;
 
-function recordNatoMarkerFromMessage(msg) {
-  const parsed = parseNatoMarkerText(msg.text);
-  if (!parsed) return false;
+// Shared by both ways a NATO marker enters this device's own list: it
+// arrived over the radio (recordNatoMarkerFromMessage below) or it was
+// just placed by this device itself (sendNatoMarker further down, which
+// records locally *before* it knows whether broadcasting it will even
+// work -- see that function's own comment).
+function recordNatoMarker({ type, label, lat, lon, sender, mine }) {
   natoMarkers.push({
-    id: `${Date.now()}-${nextNatoMarkerLocalId++}`, type: parsed.type, label: parsed.label,
-    lat: parsed.lat, lon: parsed.lon, sender: msg.sender, mine: !!msg.mine, time: Date.now(),
+    id: `${Date.now()}-${nextNatoMarkerLocalId++}`, type, label, lat, lon,
+    sender, mine: !!mine, time: Date.now(),
   });
   if (natoMarkers.length > NATO_MARKER_MAX) natoMarkers.splice(0, natoMarkers.length - NATO_MARKER_MAX);
   saveNatoMarkers();
   renderMapIfActive();
+}
+
+function recordNatoMarkerFromMessage(msg) {
+  const parsed = parseNatoMarkerText(msg.text);
+  if (!parsed) return false;
+  recordNatoMarker({ ...parsed, sender: msg.sender, mine: !!msg.mine });
   return true;
 }
 
@@ -1481,13 +1490,31 @@ function populateNatoTypeSelect() {
 async function sendNatoMarker(lat, lon) {
   const type = $("#nato-add-type").value;
   const label = $("#nato-add-label").value.trim();
+  const username = $("#msg-username")?.value || "AT2Bridge";
+  // Recorded on this device right away, *before* even trying to send it
+  // out -- a dispatch station with no radio connected at all (or one
+  // that's just temporarily down) still needs to be able to place its
+  // own markers; unlike a position/SOS beacon there's no fallback
+  // "current position" to fall back on for a NATO marker; only this
+  // click/tap. sendTextMessage() (chat) does the exact same thing for
+  // the same reason: nothing echoes a device's own sent message back to
+  // itself, so the sender has to record it locally itself either way.
+  recordNatoMarker({ type, label, lat, lon, sender: username, mine: true });
+  $("#nato-add-label").value = "";
   // Fixed, non-localized wire prefix -- same reasoning as 📍/🆘/✅ Code 4:
   // every radio on the channel must recognize it regardless of that
   // device's own UI language. The type code itself (INF, ARM, ...) is
   // already language-neutral by design (see NATO_MARKER_TYPES).
   const note = `🎯NATO:${type}${label ? " " + label : ""}`;
-  await sendPositionAt(lat, lon, note);
-  $("#nato-add-label").value = "";
+  try {
+    await sendPositionAt(lat, lon, note);
+  } catch (e) {
+    // Best-effort, same as sendAlertTone() above: the marker is already
+    // placed and visible on this device regardless, so a missing/failed
+    // connection is worth a heads-up, not a hard failure that makes it
+    // look like nothing happened at all.
+    showToast(t("map.natoLocalOnly"), "info");
+  }
 }
 
 // sendPositionPayload() always sends *this device's own* current GPS fix
@@ -1785,6 +1812,30 @@ let mapLayersActive = new Set(); // layer ids currently toggled on
 let mapLayersPointsCache = new Map(); // id -> points[], fetched lazily once per id
 let mapLayerMarkers = []; // kept separate from mapMarkers (beacons/NATO) -- toggling a layer shouldn't force those to redraw, or vice versa
 
+// Per-viewer display choices (color/icon), not part of the layer's
+// stored data (see main.py/app/kml.py) -- "what dot color do *I* want
+// for this layer" is a personal preference, not team-shared state, so
+// it lives in this device's own localStorage rather than being another
+// field on the server-side layer record.
+const LAYER_STYLE_KEY = "at2_layer_style";
+const LAYER_ICON_CHOICES = ["", "📷", "📍", "⚠️", "🚨", "🏢"]; // "" = plain colored dot, no icon
+const LAYER_DEFAULT_COLOR = "#a855f7";
+
+function loadLayerStyles() {
+  try {
+    const raw = localStorage.getItem(LAYER_STYLE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function saveLayerStyles() {
+  try { localStorage.setItem(LAYER_STYLE_KEY, JSON.stringify(layerStyles)); } catch (e) {}
+}
+let layerStyles = loadLayerStyles(); // { [layerId]: { color, icon } }
+
+function layerStyleFor(id) {
+  return layerStyles[id] || { color: LAYER_DEFAULT_COLOR, icon: "" };
+}
+
 function slugifyLayerId(label) {
   const slug = (label || "layer")
     .toLowerCase()
@@ -1810,18 +1861,47 @@ function renderMapLayersList() {
     el.innerHTML = `<div class="hint">${t("map.layersEmpty")}</div>`;
     return;
   }
-  el.innerHTML = mapLayersMeta.map((l) => `
-    <label class="map-layer-row">
-      <input type="checkbox" data-layer-id="${escapeHtml(l.id)}" ${mapLayersActive.has(l.id) ? "checked" : ""} />
+  // A plain <div> row, not a <label> wrapping the checkbox: this row also
+  // holds a color <input> and an icon <select>, and a label's implicit
+  // "click anywhere in me toggles my control" behavior is one interaction
+  // too many once there's more than one control inside it -- explicit
+  // listeners on each control below instead.
+  el.innerHTML = mapLayersMeta.map((l) => {
+    const style = layerStyleFor(l.id);
+    const idAttr = escapeHtml(l.id);
+    return `
+    <div class="map-layer-row">
+      <input type="checkbox" data-layer-id="${idAttr}" ${mapLayersActive.has(l.id) ? "checked" : ""} title="${t("map.layerToggle")}" />
+      <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${style.color}" title="${t("map.layerColor")}" />
+      <select class="map-layer-icon" data-layer-id="${idAttr}" title="${t("map.layerIcon")}">
+        ${LAYER_ICON_CHOICES.map((ic) => `<option value="${ic}" ${ic === style.icon ? "selected" : ""}>${ic || "●"}</option>`).join("")}
+      </select>
       <span class="map-layer-label">${escapeHtml(l.label)}</span>
       <span class="map-layer-count">${l.count}</span>
-      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${escapeHtml(l.id)}" title="${t("map.layerDelete")}">🗑</button>
-    </label>
-  `).join("");
+      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${idAttr}" title="${t("map.layerDelete")}">🗑</button>
+    </div>
+  `;
+  }).join("");
   el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", (e) => {
       const id = e.target.dataset.layerId;
       if (e.target.checked) mapLayersActive.add(id); else mapLayersActive.delete(id);
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-color").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const id = e.target.dataset.layerId;
+      layerStyles[id] = { ...layerStyleFor(id), color: e.target.value };
+      saveLayerStyles();
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-icon").forEach((sel) => {
+    sel.addEventListener("change", (e) => {
+      const id = e.target.dataset.layerId;
+      layerStyles[id] = { ...layerStyleFor(id), icon: e.target.value };
+      saveLayerStyles();
       renderMapLayerMarkers();
     });
   });
@@ -1833,6 +1913,8 @@ function renderMapLayersList() {
         await api("DELETE", `/api/map/layers/${encodeURIComponent(id)}`);
         mapLayersActive.delete(id);
         mapLayersPointsCache.delete(id);
+        delete layerStyles[id];
+        saveLayerStyles();
         await refreshMapLayersList();
         renderMapLayerMarkers();
       } catch (e) { showToast(e.message, "error"); }
@@ -1860,10 +1942,22 @@ async function renderMapLayerMarkers() {
   for (const id of mapLayersActive) {
     let points;
     try { points = await ensureLayerPointsLoaded(id); } catch (e) { showToast(e.message, "error"); continue; }
+    const style = layerStyleFor(id);
     for (const p of points) {
-      const marker = L.circleMarker([p.lat, p.lon], {
-        radius: 5, color: "#a855f7", fillColor: "#a855f7", fillOpacity: 0.85, weight: 1.5,
-      }).addTo(mapInstance);
+      // <input type=color> only ever yields a well-formed #rrggbb string
+      // (the browser enforces the format), safe to drop straight into an
+      // inline style attribute below with no separate escaping needed.
+      const marker = style.icon
+        ? L.marker([p.lat, p.lon], {
+            icon: L.divIcon({
+              className: "layer-marker-icon",
+              html: `<div class="layer-chip" style="background:${style.color}">${style.icon}</div>`,
+              iconSize: [24, 24], iconAnchor: [12, 12],
+            }),
+          }).addTo(mapInstance)
+        : L.circleMarker([p.lat, p.lon], {
+            radius: 5, color: style.color, fillColor: style.color, fillOpacity: 0.85, weight: 1.5,
+          }).addTo(mapInstance);
       const title = p.name ? escapeHtml(p.name) : "•";
       marker.bindPopup(p.description ? `<b>${title}</b><br>${escapeHtml(p.description)}` : `<b>${title}</b>`);
       mapLayerMarkers.push(marker);
