@@ -587,6 +587,20 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .codes-code { flex-shrink: 0; min-width: 54px; font-family: var(--font-mono); font-weight: 700; color: var(--color-primary); }
 .codes-highlight .codes-code, .codes-highlight { color: var(--status-up); }
 
+/* Same [hidden] situation and fix as .codes-panel just above. */
+.nato-add-panel {
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+  padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.nato-add-panel[hidden] { display: none; }
+.nato-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.nato-add-row > * { flex: 1 1 200px; }
+/* "Place on map" click-to-place mode is armed (app.js's natoPlacingOnMap)
+   -- visually distinct from the plain hover state so it reads as "waiting
+   for your next click on the map", not just a focused button. */
+#nato-add-place-map.armed { background: var(--status-info-bg); color: #fff; border-color: var(--color-primary); }
+
 .map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
 
@@ -670,10 +684,47 @@ tbody tr:hover { background: var(--color-surface-hover); }
   border-top-color: var(--color-border) !important; border-bottom-color: var(--color-border) !important;
 }
 
+/* First thing in this app to use a Leaflet *popup* (NATO markers, see
+   addNatoMarker() in app.js) rather than just a tooltip -- same reskin
+   treatment as .leaflet-tooltip above, this one just has more chrome
+   (its own close button, content wrapper, tip) to override. */
+.leaflet-popup-content-wrapper {
+  background: var(--color-surface) !important; color: var(--color-text) !important;
+  border: 1px solid var(--color-border) !important; border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.leaflet-popup-tip { background: var(--color-surface) !important; border: 1px solid var(--color-border) !important; box-shadow: none !important; }
+.leaflet-popup-close-button { color: var(--color-text-dim) !important; }
+.leaflet-popup-close-button:hover { color: var(--color-text) !important; }
+.nato-popup { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; min-width: 140px; }
+.nato-popup-title { font-weight: 700; }
+.nato-popup-sub { color: var(--color-text-faint); font-size: 11px; }
+.nato-popup-delete { font-size: 11.5px; padding: 5px 8px; align-self: flex-start; }
+
+/* Blue "friendly" frame color, matching the standard APP-6/MIL-STD-2525
+   affiliation convention -- everything placed from this app is assumed
+   friendly (there's no "hostile"/"unknown" affiliation picker, this is a
+   dispatch tool for one's own team). oval/circle variants (armour,
+   aviation/UAV) exist purely to make those two categories tellable apart
+   from the rest at a glance -- not a claim of full symbology fidelity,
+   see NATO_MARKER_TYPES's own comment in app.js for why this is a
+   curated subset, not the real MIL-STD-2525 catalogue. */
+.nato-marker-icon { background: transparent; border: none; }
+.nato-chip {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
+  background: rgba(59, 130, 246, 0.85); color: #fff; border: 1.5px solid #1d4ed8;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.nato-chip-rect { border-radius: 3px; }
+.nato-chip-oval { border-radius: 50%; }
+.nato-chip-circle { border-radius: 50%; width: 26px; height: 26px; margin: 0 auto; }
+
 .radar-ring { fill: none; stroke: var(--color-border); stroke-width: 1; }
 .radar-axis { stroke: var(--color-border); stroke-width: 1; }
 .radar-self { fill: var(--color-primary); stroke: var(--color-bg); stroke-width: 2; }
 .radar-point { fill: var(--status-up); stroke: var(--color-bg); stroke-width: 2; }
+.radar-point.nato { fill: #3b82f6; stroke: var(--color-bg); stroke-width: 2; cursor: pointer; }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
