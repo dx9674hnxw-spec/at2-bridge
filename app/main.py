@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import auth, kml, store
+from app import auth, bundled_layers, kml, store
 from app.device import device_manager
 from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_CHUNK_BYTES, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
@@ -21,6 +21,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("at2.main")
 
 app = FastAPI(title="AT2 Bridge")
+
+
+@app.on_event("startup")
+async def _load_bundled_map_layers() -> None:
+    """See app/bundled_layers.py + app/map_layers/README.md: KML files
+    shipped in the repo, seeded into the same store as a manually
+    uploaded layer so they show up in the Map tab's layers list without
+    anyone having to re-import them after every deploy."""
+    bundled_layers.load_bundled_layers()
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +651,12 @@ async def import_map_layer(
 async def list_map_layers(_: None = Depends(auth.require_auth)):
     layers = store.get_map_layers()
     return [
-        {"id": lid, "label": l["label"], "count": len(l["points"]), "imported_at": l["imported_at"]}
+        {
+            "id": lid, "label": l["label"], "count": len(l["points"]), "imported_at": l["imported_at"],
+            # .get(), not l[...]: a layer saved before this field existed
+            # (an already-running deployment's store.json) won't have it.
+            "icon": l.get("icon"), "color": l.get("color"),
+        }
         for lid, l in layers.items()
     ]
 

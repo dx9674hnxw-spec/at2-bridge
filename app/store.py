@@ -85,12 +85,23 @@ def get_map_layers() -> dict:
     return _read()["map_layers"]
 
 
-def save_map_layer(layer_id: str, label: str, points: list[dict]) -> None:
+def save_map_layer(
+    layer_id: str, label: str, points: list[dict], icon: str | None = None, color: str | None = None
+) -> None:
+    """`icon`/`color` are this layer's *default* display style (e.g. set
+    in app/map_layers/config.json for a bundled layer) -- the Map tab
+    lets each viewer override them for themselves in their own
+    localStorage (a personal display preference, not shared data), and
+    that override wins over whatever's stored here. None/None for a
+    layer with no configured default (a plain upload through the UI)
+    means the frontend falls back to its own generic default instead."""
     data = _read()
     data["map_layers"][layer_id] = {
         "label": label,
         "imported_at": datetime.now(timezone.utc).isoformat(),
         "points": points,
+        "icon": icon,
+        "color": color,
     }
     _write(data)
 
