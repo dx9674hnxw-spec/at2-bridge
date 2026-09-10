@@ -6,12 +6,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AT2 Bridge</title>
-  <!-- MapLibre GL JS, not Leaflet -- see ensureMap()/app.js's comment for
-       why: Leaflet only speaks raster {z}/{x}/{y} tile grids, and every
-       free-tier tile provider we found (CARTO, MapTiler) gates raster
-       tiles behind a paid plan now, serving only a vector style.json
-       (Mapbox/MapLibre style spec) on the free tier instead. MapLibre GL
-       renders that style.json directly. -->
+  <!-- Both Leaflet and MapLibre GL -- see mapEngineFor()/app.js for which
+       one actually gets used: Leaflet for the free OSM raster default (or
+       an explicit raster {z}/{x}/{y} URL), MapLibre GL for a real vector
+       style.json (e.g. a MapTiler account) if one's configured in
+       Settings > Carte. Not a redundant pair -- MapLibre's WebGL raster
+       rendering needs the tile host to send CORS headers to read tile
+       pixels into a texture, and OSM's own tile servers don't reliably do
+       that (confirmed against the real app: a MapLibre-only version
+       painted a blank canvas for the free default, controls/attribution
+       aside, since those don't touch tile pixels), so the free/no-account
+       path stays on Leaflet's plain-<img>-tag approach instead, which
+       never needed CORS to begin with. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -561,11 +568,12 @@
   <script src="/static/ble-client.js"></script>
   <script src="/static/ptt-audio.js"></script>
   <!-- No network access needed for the radio features above -- this is the
-       one exception: map tiles for the Carte tab need Internet. If this
-       fails to load (offline server, no Internet at the client),
-       `maplibregl` stays undefined and app.js falls back to the
+       one exception: map tiles for the Carte tab need Internet. If these
+       fail to load (offline server, no Internet at the client), `L`/
+       `maplibregl` stay undefined and app.js falls back to the
        dependency-free radar view -- see its "GPS beacons / Map tab"
        section. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="/static/app.js"></script>
 </body>
