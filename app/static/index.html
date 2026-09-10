@@ -151,6 +151,23 @@
 
           <button class="btn-ghost gps-send-btn" id="gps-send-now" data-i18n="gps.sendNow">Envoyer ma position maintenant</button>
 
+          <!-- Declares a personal status (what you're doing right now,
+               not an emergency) -- reuses the exact same mechanism as
+               Code 4 (#sos-resolve-btn below): resends your position
+               with the chosen code as its note, visible to everyone on
+               the map wherever your beacon shows up (see
+               statusLabelFor() in app.js -- map-beacon-list row and the
+               marker's own tooltip). Curated subset of STATUS_CODES
+               (app.js), not every code in every category: not every
+               code (e.g. 10-9 "répétez") makes sense as a standing
+               status to broadcast. -->
+          <div class="status-block">
+            <div class="section-label" data-i18n="gps.statusSectionLabel">Statut</div>
+            <select id="status-select" class="status-select"></select>
+            <button class="btn-ghost" id="status-declare-btn" data-i18n="gps.statusDeclareBtn">Déclarer mon statut</button>
+            <div class="hint" id="status-status" data-i18n="gps.statusIdleHint">Envoie ta position avec ce code, visible par les autres sur la carte.</div>
+          </div>
+
           <!-- Redesigned: used to be a single click on a small button
                right next to a dropdown -- one misclick sent a real SOS.
                Now a hold-to-confirm button (same interaction language as
@@ -594,26 +611,16 @@
                  from this panel -- Code 4 is only ever self-reported by
                  the unit whose own SOS it is, from the Code 4 button next
                  to the SOS hold button itself (see #sos-resolve-btn in
-                 the Appareils tab). Keeping the two apart avoids this
-                 panel looking like it can close someone else's alert when
-                 it can't. The category <select> has one option today
-                 (Basic) -- there only to leave room for more code sets
-                 later without a UI change, not a real choice yet. -->
+                 the Appareils tab); declaring a general status (any other
+                 code) is #status-declare-btn in the same Appareils tab
+                 instead. Category <select> and code <ul> are both built
+                 by renderCodesPanel() (app.js) from CODE_CATEGORIES, not
+                 static markup -- that's the same data status labels on
+                 the map are looked up from (see statusLabelFor()), so
+                 there's one list of codes, not two that could drift. -->
             <div class="codes-panel" id="codes-panel" hidden>
-              <select id="codes-category" class="codes-category">
-                <option value="basic" data-i18n="map.codesCategoryBasic">Basic</option>
-              </select>
-              <ul class="codes-list">
-                <li><span class="codes-code">10-1</span><span data-i18n="map.code10_1">Signal faible / mal reçu</span></li>
-                <li><span class="codes-code">10-4</span><span data-i18n="map.code10_4">Bien reçu, affirmatif</span></li>
-                <li><span class="codes-code">10-7</span><span data-i18n="map.code10_7">Hors service</span></li>
-                <li><span class="codes-code">10-8</span><span data-i18n="map.code10_8">En service, disponible</span></li>
-                <li><span class="codes-code">10-9</span><span data-i18n="map.code10_9">Répétez, mal compris</span></li>
-                <li><span class="codes-code">10-20</span><span data-i18n="map.code10_20">Donner sa position</span></li>
-                <li><span class="codes-code">10-23</span><span data-i18n="map.code10_23">Arrivé sur les lieux</span></li>
-                <li><span class="codes-code">10-33</span><span data-i18n="map.code10_33">Urgence, trafic prioritaire</span></li>
-                <li class="codes-highlight"><span class="codes-code">Code 4</span><span data-i18n="map.codeStatus4">Terminé — aucune assistance supplémentaire (RAS), fait passer le point du rouge au vert</span></li>
-              </ul>
+              <select id="codes-category" class="codes-category"></select>
+              <ul class="codes-list" id="codes-list"></ul>
               <p class="hint" data-i18n="map.codesHint">Référence rapide, hors-ligne. Pour clore une alerte SOS en cours, utilise le bouton Code 4 dans l'onglet Appareils (Position &amp; urgence) — seule la personne à l'origine du SOS peut la clore.</p>
             </div>
           </div>

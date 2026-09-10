@@ -70,6 +70,8 @@ function refreshDynamicTranslations() {
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
   populateNatoTypeSelect();
+  populateStatusSelect();
+  if (!$("#codes-panel").hidden) renderCodesPanel();
 }
 
 // ---------------------------------------------------------------------------
@@ -1240,6 +1242,25 @@ $("#sos-resolve-btn").addEventListener("click", async () => {
 
 $("#map-codes-toggle").addEventListener("click", () => {
   $("#codes-panel").hidden = !$("#codes-panel").hidden;
+  if (!$("#codes-panel").hidden) renderCodesPanel();
+});
+$("#codes-category").addEventListener("change", renderCodesPanel);
+
+$("#status-declare-btn").addEventListener("click", async () => {
+  const code = $("#status-select").value;
+  const btn = $("#status-declare-btn");
+  btn.disabled = true;
+  try {
+    // Fixed, non-localized wire text -- codes are already language-
+    // neutral by design (a "10-8" reads the same regardless of the
+    // receiving device's UI language), same reasoning as 📍/🆘/✅ Code 4.
+    await sendPositionPayload("/api/position/send", code);
+    $("#status-status").textContent = t("gps.statusDeclared", { code, label: statusLabelFor(code) });
+  } catch (e) {
+    showToast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $("#map-add-nato-toggle").addEventListener("click", () => {
@@ -1371,6 +1392,109 @@ function recordBeaconFromMessage(msg) {
   if (beacons.length > BEACON_MAX) beacons.splice(0, beacons.length - BEACON_MAX);
   saveBeacons();
   renderMapIfActive();
+}
+
+// ---------------------------------------------------------------------------
+// Radio codes reference (Map tab's Codes panel) + personal status
+// declaration (#status-declare-btn, Position & urgence -- Devices tab).
+// One data source (CODE_CATEGORIES) for both: the Codes panel is a
+// read-only reference built from it, and declaring a status just resends
+// your position (same non-SOS /api/position/send path as "Envoyer ma
+// position maintenant") with one of these codes as its note -- no new
+// wire format at all, exactly how Code 4 already worked before this.
+// Whoever receives that beacon looks the code back up in this same list
+// (statusLabelFor()) to show a human label next to the sender wherever
+// their beacon appears (map-beacon-list row, marker tooltip) instead of
+// a bare "10-23".
+//
+// Three categories: Basic (already existed), Extended (more common 10-
+// codes), and Phonetic (the NATO/ICAO spelling alphabet) -- the last one
+// is reference-only, its "codes" are single letters, not a status
+// anyone would broadcast, so it's excluded from STATUS_CODES below.
+// ---------------------------------------------------------------------------
+
+const CODE_CATEGORIES = [
+  {
+    id: "basic", labelKey: "map.codesCategoryBasic",
+    codes: [
+      { code: "10-1", labelKey: "map.code10_1" },
+      { code: "10-4", labelKey: "map.code10_4" },
+      { code: "10-7", labelKey: "map.code10_7" },
+      { code: "10-8", labelKey: "map.code10_8" },
+      { code: "10-9", labelKey: "map.code10_9" },
+      { code: "10-20", labelKey: "map.code10_20" },
+      { code: "10-23", labelKey: "map.code10_23" },
+      { code: "10-33", labelKey: "map.code10_33" },
+      { code: "Code 4", labelKey: "map.codeStatus4", highlight: true },
+    ],
+  },
+  {
+    id: "extended", labelKey: "map.codesCategoryExtended",
+    codes: [
+      { code: "10-2", labelKey: "map.code10_2" },
+      { code: "10-3", labelKey: "map.code10_3" },
+      { code: "10-5", labelKey: "map.code10_5" },
+      { code: "10-6", labelKey: "map.code10_6" },
+      { code: "10-10", labelKey: "map.code10_10" },
+      { code: "10-18", labelKey: "map.code10_18" },
+      { code: "10-19", labelKey: "map.code10_19" },
+      { code: "10-21", labelKey: "map.code10_21" },
+      { code: "10-22", labelKey: "map.code10_22" },
+      { code: "10-42", labelKey: "map.code10_42" },
+    ],
+  },
+  {
+    id: "phonetic", labelKey: "map.codesCategoryPhonetic",
+    codes: [
+      { code: "A", labelKey: "map.phoneticA" }, { code: "B", labelKey: "map.phoneticB" },
+      { code: "C", labelKey: "map.phoneticC" }, { code: "D", labelKey: "map.phoneticD" },
+      { code: "E", labelKey: "map.phoneticE" }, { code: "F", labelKey: "map.phoneticF" },
+      { code: "G", labelKey: "map.phoneticG" }, { code: "H", labelKey: "map.phoneticH" },
+      { code: "I", labelKey: "map.phoneticI" }, { code: "J", labelKey: "map.phoneticJ" },
+      { code: "K", labelKey: "map.phoneticK" }, { code: "L", labelKey: "map.phoneticL" },
+      { code: "M", labelKey: "map.phoneticM" }, { code: "N", labelKey: "map.phoneticN" },
+      { code: "O", labelKey: "map.phoneticO" }, { code: "P", labelKey: "map.phoneticP" },
+      { code: "Q", labelKey: "map.phoneticQ" }, { code: "R", labelKey: "map.phoneticR" },
+      { code: "S", labelKey: "map.phoneticS" }, { code: "T", labelKey: "map.phoneticT" },
+      { code: "U", labelKey: "map.phoneticU" }, { code: "V", labelKey: "map.phoneticV" },
+      { code: "W", labelKey: "map.phoneticW" }, { code: "X", labelKey: "map.phoneticX" },
+      { code: "Y", labelKey: "map.phoneticY" }, { code: "Z", labelKey: "map.phoneticZ" },
+    ],
+  },
+];
+
+// Selectable as a personal status (#status-select) -- a curated subset
+// across the categories above, not every code (e.g. 10-9 "répétez" or
+// any phonetic letter isn't something you'd stand behind as your status
+// for the next several minutes).
+const STATUS_CODES = ["10-8", "10-6", "10-23", "10-19", "10-7"];
+
+function statusLabelFor(code) {
+  if (!code) return null;
+  for (const cat of CODE_CATEGORIES) {
+    const entry = cat.codes.find((c) => c.code === code);
+    if (entry) return t(entry.labelKey);
+  }
+  return null;
+}
+
+function renderCodesPanel() {
+  const categorySel = $("#codes-category");
+  const prevCategory = categorySel.value;
+  categorySel.innerHTML = CODE_CATEGORIES.map((cat) => `<option value="${cat.id}">${t(cat.labelKey)}</option>`).join("");
+  if (CODE_CATEGORIES.some((c) => c.id === prevCategory)) categorySel.value = prevCategory;
+
+  const cat = CODE_CATEGORIES.find((c) => c.id === categorySel.value) || CODE_CATEGORIES[0];
+  $("#codes-list").innerHTML = cat.codes.map((c) => `
+    <li class="${c.highlight ? "codes-highlight" : ""}"><span class="codes-code">${escapeHtml(c.code)}</span><span>${t(c.labelKey)}</span></li>
+  `).join("");
+}
+
+function populateStatusSelect() {
+  const sel = $("#status-select");
+  const prev = sel.value;
+  sel.innerHTML = STATUS_CODES.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(code)} — ${statusLabelFor(code)}</option>`).join("");
+  if (STATUS_CODES.includes(prev)) sel.value = prev;
 }
 
 // ---------------------------------------------------------------------------
@@ -1757,12 +1881,21 @@ function renderMapBeaconList(list) {
   el.innerHTML = list.map((b) => {
     const dist = lastCoords ? t("map.distanceKm", { km: haversineKm(lastCoords.lat, lastCoords.lon, b.lat, b.lon).toFixed(2) }) : "—";
     const label = b.mine ? t("map.you") : b.sender;
+    // A status-declared beacon's note is just a bare code ("10-23") --
+    // same field an SOS preset or a free-text note also uses, so this
+    // only renders as a status badge when the note actually matches a
+    // known code (statusLabelFor()); anything else (a real SOS reason,
+    // e.g.) still shows as plain text exactly as before this existed.
+    const statusLabel = !b.sos ? statusLabelFor(b.note) : null;
+    const noteHtml = statusLabel
+      ? ` · <span class="map-beacon-status">${escapeHtml(b.note)} — ${escapeHtml(statusLabel)}</span>`
+      : (b.note ? " · " + escapeHtml(b.note) : "");
     return `
       <div class="map-beacon-row ${b.sos ? "sos" : ""}" data-lat="${b.lat}" data-lon="${b.lon}">
         <span class="map-beacon-dot"></span>
         <div class="map-beacon-info">
           <div class="map-beacon-name">${escapeHtml(label)}${b.sos ? " 🆘" : ""}</div>
-          <div class="map-beacon-sub">${dist} · ${timeAgoLabel(b.time)}${b.note ? " · " + escapeHtml(b.note) : ""}</div>
+          <div class="map-beacon-sub">${dist} · ${timeAgoLabel(b.time)}${noteHtml}</div>
         </div>
       </div>`;
   }).join("");
@@ -2081,7 +2214,9 @@ function renderMap() {
     for (const b of list) {
       if (b.mine) continue; // already drawn from lastCoords above (more current than the last beacon sent)
       const color = b.sos ? "#ef4444" : "#10b981";
-      mapMarkers.push(addMapMarker(b.lat, b.lon, color, `${b.sender}${b.sos ? " 🆘" : ""}`));
+      const statusLabel = !b.sos ? statusLabelFor(b.note) : null;
+      const statusSuffix = statusLabel ? ` — ${b.note} ${statusLabel}` : "";
+      mapMarkers.push(addMapMarker(b.lat, b.lon, color, `${b.sender}${b.sos ? " 🆘" : ""}${statusSuffix}`));
       points.push([b.lat, b.lon]);
     }
     for (const nm of natoMarkers) {
@@ -3411,4 +3546,5 @@ function startApp() {
 checkAuthStatus().then((ok) => { if (ok) startApp(); });
 
 populateNatoTypeSelect();
+populateStatusSelect();
 
