@@ -1864,6 +1864,40 @@ async function refreshMapLayersList() {
     mapLayersMeta = [];
   }
   renderMapLayersList();
+  renderMapLayerToggles();
+}
+
+// Single place that flips a layer on/off, called from either UI that can
+// do it (the sidebar's quick toggle list and the detailed manage panel's
+// own checkbox both call this) -- keeps mapLayersActive and both
+// renderings in sync regardless of which one the click came from.
+function setLayerActive(id, active) {
+  if (active) mapLayersActive.add(id); else mapLayersActive.delete(id);
+  renderMapLayersList();
+  renderMapLayerToggles();
+  renderMapLayerMarkers();
+}
+
+// Sidebar quick list (#map-layer-toggles, next to the beacon list) --
+// just on/off + a color dot for orientation, no color/icon editing or
+// delete here: that's what the detailed panel below (#map-layers-panel,
+// renderMapLayersList()) is for. Kept deliberately light so the sidebar
+// stays a glance-and-go list, not another settings form.
+function renderMapLayerToggles() {
+  const el = $("#map-layer-toggles");
+  if (!mapLayersMeta.length) { el.innerHTML = ""; return; }
+  el.innerHTML = mapLayersMeta.map((l) => {
+    const style = layerStyleFor(l.id);
+    return `
+    <label class="map-layer-toggle">
+      <input type="checkbox" data-layer-id="${escapeHtml(l.id)}" ${mapLayersActive.has(l.id) ? "checked" : ""} />
+      <span class="map-layer-toggle-dot" style="background:${style.color}"></span>
+      <span class="map-layer-toggle-label">${escapeHtml(l.label)}</span>
+    </label>`;
+  }).join("");
+  el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", (e) => setLayerActive(e.target.dataset.layerId, e.target.checked));
+  });
 }
 
 function renderMapLayersList() {
@@ -1895,17 +1929,14 @@ function renderMapLayersList() {
   `;
   }).join("");
   el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.addEventListener("change", (e) => {
-      const id = e.target.dataset.layerId;
-      if (e.target.checked) mapLayersActive.add(id); else mapLayersActive.delete(id);
-      renderMapLayerMarkers();
-    });
+    cb.addEventListener("change", (e) => setLayerActive(e.target.dataset.layerId, e.target.checked));
   });
   el.querySelectorAll(".map-layer-color").forEach((input) => {
     input.addEventListener("input", (e) => {
       const id = e.target.dataset.layerId;
       layerStyles[id] = { ...layerStyleFor(id), color: e.target.value };
       saveLayerStyles();
+      renderMapLayerToggles(); // its color dot needs to pick up the change too
       renderMapLayerMarkers();
     });
   });

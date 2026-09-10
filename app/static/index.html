@@ -494,23 +494,30 @@
           </div>
         </div>
 
-        <!-- Imported data layers (KML upload -- see /api/map/layers/*
-             in main.py + app/kml.py). Static/local, not a live feed: the
-             KML gets uploaded once here, parsed and stored server-side,
-             and rendered from that stored copy from then on -- see
-             main.py's own comment on why this isn't a live re-fetch of
-             wherever the KML originally came from. -->
-        <div class="layers-panel" id="map-layers-panel" hidden>
-          <div class="layers-panel-title" data-i18n="map.layersTitle">Couches de données (KML)</div>
-          <div class="layers-import-row">
-            <input type="file" id="map-layer-file" accept=".kml" />
-            <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
-            <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
+        <!-- Map + sidebar: always right under the header, never pushed
+             down by whichever panel below happens to be open -- those
+             panels (marker/codes/layers, further down the page) are
+             deliberately *below* this, not above it. The sidebar itself
+             holds only the two things worth glancing at often (which
+             layers are on, who's on the map); anything that's more of a
+             one-off setup action (importing a layer, picking its color,
+             placing a NATO marker, reading the codes reference) lives in
+             the panels below instead. -->
+        <div class="map-layout">
+          <div class="map-canvas-wrap">
+            <div id="map-canvas"></div>
+            <svg id="map-radar" hidden></svg>
           </div>
-          <div class="layers-list" id="map-layers-list"></div>
-          <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
-          <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
+          <div class="map-side-panel">
+            <div class="map-layer-toggles" id="map-layer-toggles"></div>
+            <div class="map-beacon-list" id="map-beacon-list"></div>
+          </div>
         </div>
+        <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
+
+        <!-- Everything below is toggled by the toolbar buttons above and
+             stays out of the way until asked for -- see this section's
+             own opening comment for why it's ordered after the map. -->
 
         <!-- Type/label picked here, then either a click on the map
              (armed via #nato-add-place-map, see app.js's natoPlacingOnMap)
@@ -553,14 +560,26 @@
           <p class="hint" data-i18n="map.codesHint">Référence rapide, hors-ligne. Pour clore une alerte SOS en cours, utilise le bouton Code 4 dans l'onglet Appareils (Position &amp; urgence) — seule la personne à l'origine du SOS peut la clore.</p>
         </div>
 
-        <div class="map-layout">
-          <div class="map-canvas-wrap">
-            <div id="map-canvas"></div>
-            <svg id="map-radar" hidden></svg>
+        <!-- Imported data layers (KML upload -- see /api/map/layers/*
+             in main.py + app/kml.py). Static/local, not a live feed: the
+             KML gets uploaded once here, parsed and stored server-side,
+             and rendered from that stored copy from then on -- see
+             main.py's own comment on why this isn't a live re-fetch of
+             wherever the KML originally came from. This is the "manage"
+             view (import, per-layer color/icon, delete) -- day-to-day
+             on/off toggling happens in #map-layer-toggles in the sidebar
+             above instead, so this doesn't need opening for that. -->
+        <div class="layers-panel" id="map-layers-panel" hidden>
+          <div class="layers-panel-title" data-i18n="map.layersTitle">Couches de données (KML)</div>
+          <div class="layers-import-row">
+            <input type="file" id="map-layer-file" accept=".kml" />
+            <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
+            <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
           </div>
-          <div class="map-beacon-list" id="map-beacon-list"></div>
+          <div class="layers-list" id="map-layers-list"></div>
+          <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
+          <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
         </div>
-        <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
       </div>
     </section>
 
