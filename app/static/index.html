@@ -489,124 +489,136 @@
             <div class="ptt-device-name" data-i18n="map.title">Carte</div>
             <div class="ptt-device-sub" id="map-sub">—</div>
           </div>
+          <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
         </div>
 
-        <!-- Map row: always right under the header, first thing on the
-             page, and stays there -- nothing below it (the toolbar, or
-             any panel the toolbar opens) can push it down. Left sidebar
-             = which layers are on; right sidebar = who's on the map
-             (beacons). Both are glance-and-go lists; actually managing
-             a layer (import, color, delete) or placing a NATO marker or
-             reading the codes reference is one level down, in the
-             toolbar + panels below this whole row. -->
+        <!-- Map row, always right under the header and staying there --
+             every other control lives inside one of the two side
+             columns instead of in a panel that could push the map
+             around. Left = layers (toggle list, plus the manage/import
+             panels it opens) and placing a NATO marker; right = who's
+             on the map (beacons) and the codes reference. Icons:
+             Iconoir (iconoir.com, MIT, see THIRD_PARTY_NOTICES.md),
+             inline so there's no extra request/CDN dependency.
+             stroke="currentColor" so each one inherits its own button's
+             text color/hover state for free. data-i18n stays on inner
+             <span>s, not the buttons themselves -- applyTranslations()
+             sets .textContent, which would silently wipe an icon out if
+             it were on the same element. -->
         <div class="map-layout">
-          <div class="map-side-panel">
+          <div class="map-side-panel map-side-left">
+            <div class="map-side-toolbar">
+              <button class="btn-ghost btn-icon" id="map-layers-toggle">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 9.6V20.4C21 20.7314 20.7314 21 20.4 21H9.6C9.26863 21 9 20.7314 9 20.4V9.6C9 9.26863 9.26863 9 9.6 9H20.4C20.7314 9 21 9.26863 21 9.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3.6V14.4C15 14.7314 14.7314 15 14.4 15H3.6C3.26863 15 3 14.7314 3 14.4V3.6C3 3.26863 3.26863 3 3.6 3H14.4C14.7314 3 15 3.26863 15 3.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span data-i18n="map.layersToggle">Couches</span>
+              </button>
+              <button class="btn-ghost btn-icon" id="map-layer-import-toggle">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 20L18 20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16V4M12 4L15.5 7.5M12 4L8.5 7.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span data-i18n="map.layerImportToggle">Importer</span>
+              </button>
+            </div>
             <div class="map-layer-toggles" id="map-layer-toggles"></div>
+            <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
+
+            <!-- "Manage" -- per-layer color + delete. On/off toggling
+                 lives only in #map-layer-toggles above (no checkbox here
+                 too -- the same control in two places was confusing,
+                 reported live), and no per-point icon choice either: a
+                 few hundred/thousand real DOM marker icons is what
+                 actually made panning/zooming choppy on an iPad, not
+                 which glyph was on them -- see renderMapLayerMarkers()
+                 in app.js. -->
+            <div class="layers-panel" id="map-layers-panel" hidden>
+              <div class="layers-list" id="map-layers-list"></div>
+            </div>
+
+            <!-- Import -- separate from managing existing layers above,
+                 own toggle (#map-layer-import-toggle). KML gets uploaded
+                 here, parsed and stored server-side, and rendered from
+                 that stored copy from then on -- see main.py's own
+                 comment on why this isn't a live re-fetch of wherever it
+                 originally came from. -->
+            <div class="layers-import-panel" id="map-layer-import-panel" hidden>
+              <input type="file" id="map-layer-file" accept=".kml" />
+              <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
+              <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
+              <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
+            </div>
+
+            <button class="btn-ghost btn-icon" id="map-add-nato-toggle">
+              <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 9.2C16 13.1765 9 20 9 20C9 20 2 13.1765 2 9.2C2 5.22355 5.13401 2 9 2C12.866 2 16 5.22355 16 9.2Z" stroke="currentColor"/><path d="M9 10C9.55228 10 10 9.55228 10 9C10 8.44772 9.55228 8 9 8C8.44772 8 8 8.44772 8 9C8 9.55228 8.44772 10 9 10Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H19M22 19H19M19 19V16M19 19V22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span data-i18n="map.addNatoToggle">+ Marqueur</span>
+            </button>
+            <!-- Type/affiliation/label picked here, then either a click
+                 on the map (armed via #nato-add-place-map, see app.js's
+                 natoPlacingOnMap) or "poser à ma position" actually sends
+                 it -- same text channel as positions/SOS (🎯NATO: prefix),
+                 so every radio on this channel gets it too, not just this
+                 device. Affiliation only changes the marker's *color*
+                 (BLUFOR blue / OPFOR red / Neutral green, the standard
+                 APP-6/MIL-STD-2525 convention) -- it rides along in the
+                 same wire text (an optional `:B`/`:O`/`:N` suffix on the
+                 type, see NATO_RE in app.js) so every radio sees the same
+                 color, not just this device; a marker sent before this
+                 existed (no suffix) still parses fine and defaults to
+                 BLUFOR. -->
+            <div class="nato-add-panel" id="nato-add-panel" hidden>
+              <select id="nato-add-type" class="nato-add-type"></select>
+              <div class="nato-affil-row">
+                <button type="button" class="affil-btn affil-blufor active" data-affil="B" data-i18n="map.affilBlufor">BLUFOR</button>
+                <button type="button" class="affil-btn affil-opfor" data-affil="O" data-i18n="map.affilOpfor">OPFOR</button>
+                <button type="button" class="affil-btn affil-neutral" data-affil="N" data-i18n="map.affilNeutral">Neutral</button>
+              </div>
+              <input type="text" id="nato-add-label" data-i18n-placeholder="map.natoLabelPlaceholder" placeholder="Étiquette (optionnel)" maxlength="40" />
+              <button class="btn-ghost" id="nato-add-place-map" data-i18n="map.natoPlaceOnMap">Cliquer sur la carte pour placer</button>
+              <button class="btn-ghost" id="nato-add-place-here" data-i18n="map.natoPlaceHere">Poser à ma position</button>
+              <p class="hint" data-i18n="map.natoHint">Partagé avec toute l'équipe sur ce canal, comme une position ou un SOS. Clique sur un marqueur pour voir ses détails et le supprimer (localement, sur cet appareil).</p>
+            </div>
           </div>
+
           <div class="map-canvas-wrap">
             <div id="map-canvas"></div>
             <svg id="map-radar" hidden></svg>
           </div>
-          <div class="map-side-panel">
+
+          <div class="map-side-panel map-side-right">
             <div class="map-beacon-list" id="map-beacon-list"></div>
+
+            <button class="btn-ghost btn-icon" id="map-codes-toggle">
+              <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L20 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6.01L4.01 5.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12.01L4.01 11.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18.01L4.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 18L20 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span data-i18n="map.codesToggle">Codes</span>
+            </button>
+            <!-- Read-only reference, not an input: this app has no
+                 addressed "close this specific alert" message type (see
+                 README/map.hint below), so a code here never gets sent
+                 from this panel -- Code 4 is only ever self-reported by
+                 the unit whose own SOS it is, from the Code 4 button next
+                 to the SOS hold button itself (see #sos-resolve-btn in
+                 the Appareils tab). Keeping the two apart avoids this
+                 panel looking like it can close someone else's alert when
+                 it can't. The category <select> has one option today
+                 (Basic) -- there only to leave room for more code sets
+                 later without a UI change, not a real choice yet. -->
+            <div class="codes-panel" id="codes-panel" hidden>
+              <select id="codes-category" class="codes-category">
+                <option value="basic" data-i18n="map.codesCategoryBasic">Basic</option>
+              </select>
+              <ul class="codes-list">
+                <li><span class="codes-code">10-1</span><span data-i18n="map.code10_1">Signal faible / mal reçu</span></li>
+                <li><span class="codes-code">10-4</span><span data-i18n="map.code10_4">Bien reçu, affirmatif</span></li>
+                <li><span class="codes-code">10-7</span><span data-i18n="map.code10_7">Hors service</span></li>
+                <li><span class="codes-code">10-8</span><span data-i18n="map.code10_8">En service, disponible</span></li>
+                <li><span class="codes-code">10-9</span><span data-i18n="map.code10_9">Répétez, mal compris</span></li>
+                <li><span class="codes-code">10-20</span><span data-i18n="map.code10_20">Donner sa position</span></li>
+                <li><span class="codes-code">10-23</span><span data-i18n="map.code10_23">Arrivé sur les lieux</span></li>
+                <li><span class="codes-code">10-33</span><span data-i18n="map.code10_33">Urgence, trafic prioritaire</span></li>
+                <li class="codes-highlight"><span class="codes-code">Code 4</span><span data-i18n="map.codeStatus4">Terminé — aucune assistance supplémentaire (RAS), fait passer le point du rouge au vert</span></li>
+              </ul>
+              <p class="hint" data-i18n="map.codesHint">Référence rapide, hors-ligne. Pour clore une alerte SOS en cours, utilise le bouton Code 4 dans l'onglet Appareils (Position &amp; urgence) — seule la personne à l'origine du SOS peut la clore.</p>
+            </div>
           </div>
         </div>
         <span class="hint" data-i18n="map.hint">Positions extraites des balises hors-ligne reçues (voir README : pas d'adressage GPS structuré dans le protocole, seulement du texte formaté 📍/🆘).</span>
-
-        <!-- Toolbar + everything it opens live below the map, not above
-             it -- see this section's own opening comment for why. -->
-        <div class="settings-toolbar map-toolbar-below">
-          <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
-          <!-- Icons: Iconoir (iconoir.com, MIT), inline so there's no
-               extra request/CDN dependency -- "list"/"map-pin-plus"/
-               "combine" (closest available to an actual "layers" icon,
-               Iconoir doesn't have one). stroke="currentColor" so each
-               one inherits this button's own text color/hover state
-               for free, same as the plain-text label next to it.
-               data-i18n stays on the inner <span>, not the <button>
-               itself -- applyTranslations() sets .textContent, which
-               would silently wipe the icon out if it were on the same
-               element. -->
-          <button class="btn-ghost btn-icon" id="map-codes-toggle">
-            <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L20 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6.01L4.01 5.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12.01L4.01 11.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18.01L4.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 18L20 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="map.codesToggle">Codes</span>
-          </button>
-          <button class="btn-ghost btn-icon" id="map-add-nato-toggle">
-            <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 9.2C16 13.1765 9 20 9 20C9 20 2 13.1765 2 9.2C2 5.22355 5.13401 2 9 2C12.866 2 16 5.22355 16 9.2Z" stroke="currentColor"/><path d="M9 10C9.55228 10 10 9.55228 10 9C10 8.44772 9.55228 8 9 8C8.44772 8 8 8.44772 8 9C8 9.55228 8.44772 10 9 10Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H19M22 19H19M19 19V16M19 19V22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="map.addNatoToggle">+ Marqueur</span>
-          </button>
-          <button class="btn-ghost btn-icon" id="map-layers-toggle">
-            <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 9.6V20.4C21 20.7314 20.7314 21 20.4 21H9.6C9.26863 21 9 20.7314 9 20.4V9.6C9 9.26863 9.26863 9 9.6 9H20.4C20.7314 9 21 9.26863 21 9.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3.6V14.4C15 14.7314 14.7314 15 14.4 15H3.6C3.26863 15 3 14.7314 3 14.4V3.6C3 3.26863 3.26863 3 3.6 3H14.4C14.7314 3 15 3.26863 15 3.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-i18n="map.layersToggle">Couches</span>
-          </button>
-        </div>
-
-        <!-- Type/label picked here, then either a click on the map
-             (armed via #nato-add-place-map, see app.js's natoPlacingOnMap)
-             or "poser à ma position" actually sends it -- same text
-             channel as positions/SOS (🎯NATO: prefix), so every radio on
-             this channel gets it too, not just this device. -->
-        <div class="nato-add-panel" id="nato-add-panel" hidden>
-          <div class="nato-add-row">
-            <select id="nato-add-type" class="nato-add-type"></select>
-            <input type="text" id="nato-add-label" data-i18n-placeholder="map.natoLabelPlaceholder" placeholder="Étiquette (optionnel)" maxlength="40" />
-          </div>
-          <div class="nato-add-row">
-            <button class="btn-ghost" id="nato-add-place-map" data-i18n="map.natoPlaceOnMap">Cliquer sur la carte pour placer</button>
-            <button class="btn-ghost" id="nato-add-place-here" data-i18n="map.natoPlaceHere">Poser à ma position</button>
-          </div>
-          <p class="hint" data-i18n="map.natoHint">Partagé avec toute l'équipe sur ce canal, comme une position ou un SOS. Clique sur un marqueur pour voir ses détails et le supprimer (localement, sur cet appareil).</p>
-        </div>
-
-        <!-- Read-only reference, not an input: this app has no addressed
-             "close this specific alert" message type (see README/map.hint
-             below), so a code here never gets sent from this panel -- Code
-             4 is only ever self-reported by the unit whose own SOS it is,
-             from the Code 4 button next to the SOS hold button itself (see
-             #sos-resolve-btn in the Appareils tab). Keeping the two apart
-             avoids this panel looking like it can close someone else's
-             alert when it can't. -->
-        <div class="codes-panel" id="codes-panel" hidden>
-          <div class="codes-panel-title" data-i18n="map.codesTitle">Codes radio essentiels</div>
-          <ul class="codes-list">
-            <li><span class="codes-code">10-1</span><span data-i18n="map.code10_1">Signal faible / mal reçu</span></li>
-            <li><span class="codes-code">10-4</span><span data-i18n="map.code10_4">Bien reçu, affirmatif</span></li>
-            <li><span class="codes-code">10-7</span><span data-i18n="map.code10_7">Hors service</span></li>
-            <li><span class="codes-code">10-8</span><span data-i18n="map.code10_8">En service, disponible</span></li>
-            <li><span class="codes-code">10-9</span><span data-i18n="map.code10_9">Répétez, mal compris</span></li>
-            <li><span class="codes-code">10-20</span><span data-i18n="map.code10_20">Donner sa position</span></li>
-            <li><span class="codes-code">10-23</span><span data-i18n="map.code10_23">Arrivé sur les lieux</span></li>
-            <li><span class="codes-code">10-33</span><span data-i18n="map.code10_33">Urgence, trafic prioritaire</span></li>
-            <li class="codes-highlight"><span class="codes-code">Code 4</span><span data-i18n="map.codeStatus4">Terminé — aucune assistance supplémentaire (RAS), fait passer le point du rouge au vert</span></li>
-          </ul>
-          <p class="hint" data-i18n="map.codesHint">Référence rapide, hors-ligne. Pour clore une alerte SOS en cours, utilise le bouton Code 4 dans l'onglet Appareils (Position &amp; urgence) — seule la personne à l'origine du SOS peut la clore.</p>
-        </div>
-
-        <!-- Imported data layers (KML upload -- see /api/map/layers/*
-             in main.py + app/kml.py). Static/local, not a live feed: the
-             KML gets uploaded once here, parsed and stored server-side,
-             and rendered from that stored copy from then on -- see
-             main.py's own comment on why this isn't a live re-fetch of
-             wherever the KML originally came from. This is the "manage"
-             view (import, per-layer color, delete) -- on/off toggling
-             lives only in #map-layer-toggles in the sidebar (no checkbox
-             here too -- having the same control in two places was
-             confusing), and per-point icons were dropped entirely (not
-             just here): a few hundred/thousand real DOM marker icons is
-             what actually made panning/zooming choppy on an iPad, not
-             which glyph was on them -- see renderMapLayerMarkers() in
-             app.js. -->
-        <div class="layers-panel" id="map-layers-panel" hidden>
-          <div class="layers-panel-title" data-i18n="map.layersTitle">Couches de données (KML)</div>
-          <div class="layers-import-row">
-            <input type="file" id="map-layer-file" accept=".kml" />
-            <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
-            <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
-          </div>
-          <div class="layers-list" id="map-layers-list"></div>
-          <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
-          <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
-        </div>
       </div>
     </section>
 

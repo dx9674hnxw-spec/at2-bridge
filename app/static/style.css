@@ -577,59 +577,62 @@ tbody tr:hover { background: var(--color-surface-hover); }
 }
 .wide-panel > .card { max-width: 1600px; margin-left: auto; margin-right: auto; }
 
-/* Toggled by #map-codes-toggle (app.js). display:flex below is an
+/* Left/right sidebar toolbar row (Couches/Importer on the left, see
+   index.html) -- two roughly-equal buttons side by side, wrapping to
+   stacked if the sidebar is ever narrower than that (small screens,
+   see .map-layout's own breakpoint). */
+.map-side-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.map-side-toolbar > * { flex: 1 1 auto; }
+
+/* Toggled by #map-codes-toggle et al (app.js). display:flex below is an
    unconditional author rule, so -- same bug/fix as .scan-empty-state[hidden]
-   a few hundred lines up -- it needs its own [hidden] override or the
-   browser's own default never gets a chance to apply. */
-.codes-panel {
-  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+   a few hundred lines up -- each needs its own [hidden] override or the
+   browser's own default never gets a chance to apply. Narrow single-
+   column stacking throughout this whole group (not the flex-wrap rows
+   this used when these lived in a wide panel below the map) -- these
+   now live in a ~200-300px sidebar column, see .map-layout. */
+.codes-panel, .nato-add-panel, .layers-panel, .layers-import-panel {
+  display: flex; flex-direction: column; gap: 10px; margin-top: 10px;
   padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
-.codes-panel[hidden] { display: none; }
-.codes-panel-title { font-weight: 700; font-size: 13px; }
+.codes-panel[hidden], .nato-add-panel[hidden], .layers-panel[hidden], .layers-import-panel[hidden] { display: none; }
+
+.codes-category { align-self: flex-start; }
 .codes-list { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .codes-list li { display: flex; align-items: baseline; gap: 10px; }
 .codes-code { flex-shrink: 0; min-width: 54px; font-family: var(--font-mono); font-weight: 700; color: var(--color-primary); }
 .codes-highlight .codes-code, .codes-highlight { color: var(--status-up); }
 
-/* Same [hidden] situation and fix as .codes-panel just above. */
-.nato-add-panel {
-  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
-  padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
-  background: var(--color-surface);
+/* Affiliation picker (BLUFOR/OPFOR/Neutral) for a NATO marker not yet
+   placed -- see natoSelectedAffiliation in app.js. Colors match
+   NATO_AFFILIATIONS there (kept in sync by hand, both are small/stable
+   enough that a shared source of truth isn't worth the indirection). */
+.nato-affil-row { display: flex; gap: 6px; }
+.affil-btn {
+  flex: 1; padding: 6px 4px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700;
+  text-align: center; cursor: pointer; background: var(--color-surface); color: var(--color-text-dim);
+  border: 1.5px solid var(--color-border);
 }
-.nato-add-panel[hidden] { display: none; }
-.nato-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.nato-add-row > * { flex: 1 1 200px; }
+.affil-blufor.active { background: rgba(59, 130, 246, 0.18); color: #3b82f6; border-color: #1d4ed8; }
+.affil-opfor.active { background: rgba(239, 68, 68, 0.18); color: #ef4444; border-color: #b91c1c; }
+.affil-neutral.active { background: rgba(34, 197, 94, 0.18); color: #22c55e; border-color: #15803d; }
 /* "Place on map" click-to-place mode is armed (app.js's natoPlacingOnMap)
    -- visually distinct from the plain hover state so it reads as "waiting
    for your next click on the map", not just a focused button. */
 #nato-add-place-map.armed { background: var(--status-info-bg); color: #fff; border-color: var(--color-primary); }
 
-/* Same [hidden] situation and fix as .codes-panel/.nato-add-panel above. */
-.layers-panel {
-  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
-  padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-.layers-panel[hidden] { display: none; }
-.layers-panel-title { font-weight: 700; font-size: 13px; }
-.layers-import-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.layers-import-row input[type=text] { flex: 2 1 260px; }
 /* Native <input type=file> renders as an unstyled OS-chrome button by
    default (Chrome/Safari/Firefox all expose the button part as this
    pseudo-element) -- everything else on this screen is themed, so left
    alone this was the one obviously-unstyled control on the page. */
-.layers-import-row input[type=file] {
-  flex: 1 1 220px; font-size: 12.5px; color: var(--color-text-dim);
-}
-.layers-import-row input[type=file]::file-selector-button {
+.layers-import-panel input[type=file] { font-size: 12.5px; color: var(--color-text-dim); }
+.layers-import-panel input[type=file]::file-selector-button {
   margin-right: 10px; padding: 7px 12px; border-radius: var(--radius-sm);
   background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border);
   font-size: 12.5px; cursor: pointer;
 }
-.layers-import-row input[type=file]::file-selector-button:hover { background: var(--color-surface-hover); }
+.layers-import-panel input[type=file]::file-selector-button:hover { background: var(--color-surface-hover); }
 .layers-list { display: flex; flex-direction: column; gap: 6px; }
 .map-layer-row {
   display: flex; align-items: center; gap: 8px; padding: 7px 9px;
@@ -646,7 +649,7 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-layer-color::-webkit-color-swatch-wrapper { padding: 0; }
 .map-layer-color::-webkit-color-swatch { border: none; border-radius: var(--radius-sm); }
 .map-layer-color::-moz-color-swatch { border: none; border-radius: var(--radius-sm); }
-.map-layer-label { flex: 1; font-size: 13px; }
+.map-layer-label { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-layer-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-faint); }
 .map-layer-delete { font-size: 13px; }
 
@@ -773,14 +776,16 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .nato-popup-sub { color: var(--color-text-faint); font-size: 11px; }
 .nato-popup-delete { font-size: 11.5px; padding: 5px 8px; align-self: flex-start; }
 
-/* Blue "friendly" frame color, matching the standard APP-6/MIL-STD-2525
-   affiliation convention -- everything placed from this app is assumed
-   friendly (there's no "hostile"/"unknown" affiliation picker, this is a
-   dispatch tool for one's own team). oval/circle variants (armour,
-   aviation/UAV) exist purely to make those two categories tellable apart
-   from the rest at a glance -- not a claim of full symbology fidelity,
-   see NATO_MARKER_TYPES's own comment in app.js for why this is a
-   curated subset, not the real MIL-STD-2525 catalogue. */
+/* background/border-color set inline per marker (see addNatoMarker() in
+   app.js) from its own affiliation -- BLUFOR/OPFOR/Neutral, the
+   standard APP-6/MIL-STD-2525 blue/red/green convention (NATO_AFFILIATIONS
+   in app.js). The blue below is only the fallback for the (currently
+   impossible) case of an unrecognized affiliation slipping through.
+   oval/circle variants (armour, aviation/UAV) exist purely to make
+   those two categories tellable apart from the rest at a glance -- not
+   a claim of full symbology fidelity, see NATO_MARKER_TYPES's own
+   comment in app.js for why this is a curated subset, not the real
+   MIL-STD-2525 catalogue. */
 .nato-marker-icon { background: transparent; border: none; }
 .nato-chip {
   display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
@@ -800,16 +805,21 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
-/* Two side columns in .map-layout, same wrapper class for both -- left
-   holds the quick layer on/off list (renderMapLayerToggles() in
-   app.js; empty/collapsed via :empty when no layer has been imported/
-   bundled yet, see app/map_layers/), right holds the beacon list.
-   Detailed layer management (import, color, delete) lives in
-   #map-layers-panel further down the page instead, not either sidebar
-   -- both stay a glance-and-go list, matching the map's own fixed
-   height so the whole row lines up. */
-.map-side-panel { display: flex; flex-direction: column; gap: 10px; height: clamp(420px, 65vh, 760px); }
-.map-layer-toggles { display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; overflow-y: auto; }
+/* Two side columns in .map-layout -- left (.map-side-left) holds the
+   quick layer on/off list plus everything #map-side-toolbar opens
+   (manage/import/+marker, all collapsible, see index.html); right
+   (.map-side-right) holds the beacon list plus the codes reference.
+   Different height strategies on purpose: the right column's content
+   (beacons, codes) is naturally list-shaped and bounded like the map
+   itself, so it keeps a fixed height matching the canvas with its own
+   internal scroll; the left column can grow well past that once a
+   panel is open (import form, NATO marker form with its affiliation
+   picker), so it's just as tall as it needs to be instead -- capping
+   it would either clip a panel or force a second scrollbar inside a
+   sidebar that's already inside the page's own scroll. */
+.map-side-panel { display: flex; flex-direction: column; gap: 10px; }
+.map-side-right { height: clamp(420px, 65vh, 760px); }
+.map-layer-toggles { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
 .map-layer-toggles:empty { display: none; }
 .map-layer-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12.5px; }
 .map-layer-toggle:hover { background: var(--color-surface-hover); }
