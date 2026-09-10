@@ -2035,6 +2035,21 @@ let mapLayerMarkers = []; // kept separate from mapMarkers (beacons/NATO) -- tog
 const LAYER_STYLE_KEY = "at2_layer_style";
 const LAYER_DEFAULT_COLOR = "#a855f7";
 
+// Per-layer line-of-sight "zone" settings -- see coverageStyleFor() below
+// and the per-point coverage block further down (computeCameraCoverage(),
+// showCameraCoverage()). Declared up here, ahead of every function that
+// reads them, rather than down next to the ray-casting code itself:
+// coverageStyleFor() is defined right after layerColorFor() just below,
+// and this file's own convention (see the TDZ notes elsewhere in this
+// codebase) is that a top-level const referenced by a function only has
+// to be declared before that function is ever *called* -- but there's no
+// reason to lean on that here when just moving these up removes the
+// question entirely.
+const COVERAGE_DEFAULT_COLOR = "#facc15";
+const COVERAGE_DEFAULT_RADIUS_M = 50; // assumed max range if a layer doesn't override it -- a plausible fixed-camera distance, not a real spec
+const COVERAGE_MIN_RADIUS_M = 5; // matches the server's own floor (main.py's get_buildings_near)
+const COVERAGE_MAX_RADIUS_M = 300; // matches the server's own cap (_COVERAGE_MAX_RADIUS_M in main.py) -- asking for more client-side would just get clamped down anyway
+
 function loadLayerStyles() {
   try {
     const raw = localStorage.getItem(LAYER_STYLE_KEY);
@@ -2056,6 +2071,23 @@ function layerColorFor(id) {
   if (layerStyles[id]?.color) return layerStyles[id].color;
   const meta = mapLayersMeta.find((l) => l.id === id);
   return meta?.color || LAYER_DEFAULT_COLOR;
+}
+
+// Same per-viewer-preference pattern as layerColorFor() above, for this
+// layer's line-of-sight "zone" (see renderMapLayerMarkers() /
+// showCameraCoverage() further down): whether clicking a point in it
+// should draw its visibility zone right away instead of needing the
+// popup's button, and what color/range to use either way. A personal
+// display choice, not shared layer data, same reasoning as the color.
+function coverageStyleFor(id) {
+  const c = layerStyles[id]?.coverage;
+  return {
+    enabled: !!c?.enabled,
+    color: c?.color || COVERAGE_DEFAULT_COLOR,
+    radiusM: Number.isFinite(c?.radiusM) && c.radiusM > 0
+      ? Math.min(COVERAGE_MAX_RADIUS_M, Math.max(COVERAGE_MIN_RADIUS_M, c.radiusM))
+      : COVERAGE_DEFAULT_RADIUS_M,
+  };
 }
 
 function slugifyLayerId(label) {
@@ -2121,12 +2153,24 @@ function renderMapLayersList() {
   }
   el.innerHTML = mapLayersMeta.map((l) => {
     const idAttr = escapeHtml(l.id);
+    const cov = coverageStyleFor(l.id);
     return `
-    <div class="map-layer-row">
-      <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${layerColorFor(l.id)}" title="${t("map.layerColor")}" />
-      <span class="map-layer-label">${escapeHtml(l.label)}</span>
-      <span class="map-layer-count">${l.count}</span>
-      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${idAttr}" title="${t("map.layerDelete")}">${ICON_TRASH}</button>
+    <div class="map-layer-card">
+      <div class="map-layer-row">
+        <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${layerColorFor(l.id)}" title="${t("map.layerColor")}" />
+        <span class="map-layer-label">${escapeHtml(l.label)}</span>
+        <span class="map-layer-count">${l.count}</span>
+        <button type="button" class="icon-btn map-layer-delete" data-layer-id="${idAttr}" title="${t("map.layerDelete")}">${ICON_TRASH}</button>
+      </div>
+      <div class="map-layer-zone-row">
+        <label class="map-layer-zone-toggle">
+          <input type="checkbox" class="map-layer-zone-enabled" data-layer-id="${idAttr}" ${cov.enabled ? "checked" : ""} />
+          <span>${t("map.layerZoneToggle")}</span>
+        </label>
+        <input type="color" class="map-layer-zone-color" data-layer-id="${idAttr}" value="${cov.color}" title="${t("map.layerZoneColor")}" />
+        <input type="number" class="map-layer-zone-radius" data-layer-id="${idAttr}" value="${cov.radiusM}" min="${COVERAGE_MIN_RADIUS_M}" max="${COVERAGE_MAX_RADIUS_M}" step="5" title="${t("map.layerZoneRadius")}" />
+        <span class="map-layer-zone-unit">m</span>
+      </div>
     </div>
   `;
   }).join("");
@@ -2136,6 +2180,34 @@ function renderMapLayersList() {
       layerStyles[id] = { ...layerStyles[id], color: e.target.value };
       saveLayerStyles();
       renderMapLayerToggles(); // its color dot needs to pick up the change too
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-zone-enabled").forEach((input) => {
+    input.addEventListener("change", (e) => {
+      const id = e.target.dataset.layerId;
+      layerStyles[id] = { ...layerStyles[id], coverage: { ...coverageStyleFor(id), enabled: e.target.checked } };
+      saveLayerStyles();
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-zone-color").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const id = e.target.dataset.layerId;
+      layerStyles[id] = { ...layerStyles[id], coverage: { ...coverageStyleFor(id), color: e.target.value } };
+      saveLayerStyles();
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-zone-radius").forEach((input) => {
+    input.addEventListener("change", (e) => {
+      const id = e.target.dataset.layerId;
+      let radiusM = parseFloat(e.target.value);
+      if (!Number.isFinite(radiusM) || radiusM <= 0) radiusM = COVERAGE_DEFAULT_RADIUS_M;
+      radiusM = Math.min(COVERAGE_MAX_RADIUS_M, Math.max(COVERAGE_MIN_RADIUS_M, radiusM));
+      e.target.value = radiusM; // reflect any clamping back into the field
+      layerStyles[id] = { ...layerStyles[id], coverage: { ...coverageStyleFor(id), radiusM } };
+      saveLayerStyles();
       renderMapLayerMarkers();
     });
   });
@@ -2183,11 +2255,11 @@ async function ensureLayerPointsLoaded(id) {
 //
 // No orientation/field-of-view data exists in the source KML (see
 // app/kml.py's own comment), so this is necessarily omnidirectional:
-// how far visibility reaches in *every* direction up to
-// COVERAGE_RADIUS_M, not a real camera's actual cone.
+// how far visibility reaches in *every* direction up to the configured
+// radius (COVERAGE_DEFAULT_RADIUS_M, or a per-layer override -- see
+// coverageStyleFor() above), not a real camera's actual cone.
 // ---------------------------------------------------------------------------
 
-const COVERAGE_RADIUS_M = 50; // assumed max range -- a plausible fixed-camera distance, not a real spec (see above)
 const COVERAGE_RAYS = 180; // angular resolution (2° steps) -- enough to read as a smooth shadowed area, cheap enough for one point on a tap
 const METERS_PER_DEGREE_LAT = 111320;
 
@@ -2219,8 +2291,9 @@ function rayHitsSegment(dx, dy, ax, ay, bx, by) {
   return t;
 }
 
-async function computeCameraCoverage(lat, lon) {
-  const data = await api("GET", `/api/map/buildings-near?lat=${lat}&lon=${lon}&radius_m=${COVERAGE_RADIUS_M}`);
+async function computeCameraCoverage(lat, lon, radiusM = COVERAGE_DEFAULT_RADIUS_M) {
+  radiusM = Math.min(COVERAGE_MAX_RADIUS_M, Math.max(COVERAGE_MIN_RADIUS_M, radiusM));
+  const data = await api("GET", `/api/map/buildings-near?lat=${lat}&lon=${lon}&radius_m=${radiusM}`);
   const origin = { lat, lon };
   // Every building ring turned into local-XY segments once, not
   // re-projected on every one of the COVERAGE_RAYS casts below.
@@ -2235,7 +2308,7 @@ async function computeCameraCoverage(lat, lon) {
   for (let i = 0; i < COVERAGE_RAYS; i++) {
     const angle = (i / COVERAGE_RAYS) * 2 * Math.PI;
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    let closest = COVERAGE_RADIUS_M;
+    let closest = radiusM;
     for (const [ax, ay, bx, by] of segments) {
       const t = rayHitsSegment(dx, dy, ax - 0, ay - 0, bx, by);
       // (ax,ay)/(bx,by) are already relative to the origin (0,0), so no
@@ -2250,16 +2323,26 @@ async function computeCameraCoverage(lat, lon) {
 
 let coveragePolygonLayer = null; // only one shown at a time -- a new click replaces it, doesn't stack
 
-async function showCameraCoverage(lat, lon, btn) {
+// `style` ({ color, radiusM }) is this layer's configured zone style
+// (see coverageStyleFor()) -- falls back to the app-wide default if
+// omitted. `btn` is only passed for the manual (popup button) trigger;
+// when it's set we also close the popup afterwards, since the button
+// was the popup's own content and there's nothing left to look at in
+// it. The automatic on-click trigger (see renderMapLayerMarkers()
+// below) passes no btn and leaves the popup open, so its info stays
+// visible alongside the zone it just drew.
+async function showCameraCoverage(lat, lon, btn, style) {
   if (!MAP_AVAILABLE || !mapInstance) return;
+  const color = style?.color || COVERAGE_DEFAULT_COLOR;
+  const radiusM = style?.radiusM || COVERAGE_DEFAULT_RADIUS_M;
   if (btn) btn.disabled = true;
   try {
-    const points = await computeCameraCoverage(lat, lon);
+    const points = await computeCameraCoverage(lat, lon, radiusM);
     if (coveragePolygonLayer) mapInstance.removeLayer(coveragePolygonLayer);
     coveragePolygonLayer = L.polygon(points, {
-      color: "#facc15", fillColor: "#facc15", fillOpacity: 0.25, weight: 1.5,
+      color, fillColor: color, fillOpacity: 0.25, weight: 1.5,
     }).addTo(mapInstance);
-    mapInstance.closePopup();
+    if (btn) mapInstance.closePopup();
   } catch (e) {
     showToast(e.message, "error");
   } finally {
@@ -2277,6 +2360,7 @@ async function renderMapLayerMarkers() {
     let points;
     try { points = await ensureLayerPointsLoaded(id); } catch (e) { showToast(e.message, "error"); continue; }
     const color = layerColorFor(id);
+    const cov = coverageStyleFor(id); // same for every point in this layer -- a per-layer setting, not per-point
     for (const p of points) {
       // Always circleMarker, canvas-drawn (see ensureMap()'s own
       // comment) -- no per-point icon anymore, that's the whole fix.
@@ -2285,17 +2369,19 @@ async function renderMapLayerMarkers() {
       }).addTo(mapInstance);
       const title = p.name ? escapeHtml(p.name) : "•";
       const desc = p.description ? `<br>${escapeHtml(p.description)}` : "";
-      marker.bindPopup(
-        `<div class="layer-point-popup"><b>${title}</b>${desc}` +
-          `<button type="button" class="btn-ghost layer-coverage-btn" data-lat="${p.lat}" data-lon="${p.lon}">${t("map.layerCoverageBtn")}</button>` +
-        `</div>`
-      );
+      // With the layer's "Zone" setting on, skip the button entirely --
+      // opening the popup (the marker's default click behavior) already
+      // draws the coverage itself, see the popupopen handler below.
+      const coverageBtn = cov.enabled ? "" :
+        `<button type="button" class="btn-ghost layer-coverage-btn" data-lat="${p.lat}" data-lon="${p.lon}">${t("map.layerCoverageBtn")}</button>`;
+      marker.bindPopup(`<div class="layer-point-popup"><b>${title}</b>${desc}${coverageBtn}</div>`);
       // Delegated, not bound once at creation -- same reasoning as the
       // NATO/layer-delete popups: bindPopup() re-renders its content
       // into a fresh DOM node each time it opens.
       marker.on("popupopen", () => {
+        if (cov.enabled) { showCameraCoverage(p.lat, p.lon, null, cov); return; }
         const btn = document.querySelector(`.layer-coverage-btn[data-lat="${p.lat}"][data-lon="${p.lon}"]`);
-        if (btn) btn.addEventListener("click", () => showCameraCoverage(p.lat, p.lon, btn));
+        if (btn) btn.addEventListener("click", () => showCameraCoverage(p.lat, p.lon, btn, cov));
       });
       mapLayerMarkers.push(marker);
     }

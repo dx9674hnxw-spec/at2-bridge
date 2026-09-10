@@ -643,10 +643,15 @@ tbody tr:hover { background: var(--color-surface-hover); }
 }
 .layers-import-panel input[type=file]::file-selector-button:hover { background: var(--color-surface-hover); }
 .layers-list { display: flex; flex-direction: column; gap: 6px; }
-.map-layer-row {
-  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+/* One layer's whole management card: the existing color/label/count/
+   delete row, plus the "zone" (line-of-sight coverage) settings row
+   below it -- both grouped inside one bordered box instead of each
+   having its own, so it reads as one layer's settings, not two. */
+.map-layer-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 7px 9px;
   border: 1px solid var(--color-border); border-radius: var(--radius-sm);
 }
+.map-layer-row { display: flex; align-items: center; gap: 8px; }
 .map-layer-color {
   flex-shrink: 0; width: 26px; height: 26px; padding: 0; border: 1px solid var(--color-border);
   border-radius: var(--radius-sm); background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
@@ -661,6 +666,22 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-layer-label { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-layer-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-faint); }
 .map-layer-delete { font-size: 13px; }
+
+/* Zone (line-of-sight coverage) settings row -- see coverageStyleFor()/
+   renderMapLayerMarkers() in app.js. Wraps at narrow widths rather than
+   forcing a horizontal scroll (phone-width rule, see this row's own
+   flex-wrap) -- there's nothing here that needs to stay on one line. */
+.map-layer-zone-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; color: var(--color-text-dim); }
+.map-layer-zone-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.map-layer-zone-color {
+  flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.map-layer-zone-color::-webkit-color-swatch-wrapper { padding: 0; }
+.map-layer-zone-color::-webkit-color-swatch { border: none; border-radius: var(--radius-sm); }
+.map-layer-zone-color::-moz-color-swatch { border: none; border-radius: var(--radius-sm); }
+.map-layer-zone-radius { width: 56px; padding: 4px 6px; font-size: 11.5px; }
+.map-layer-zone-unit { color: var(--color-text-faint); }
 
 /* Left sidebar (layer toggles) / map / right sidebar (beacons) -- see
    this section's own comment in index.html for why the toolbar and
