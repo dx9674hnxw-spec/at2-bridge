@@ -1832,8 +1832,19 @@ function saveLayerStyles() {
 }
 let layerStyles = loadLayerStyles(); // { [layerId]: { color, icon } }
 
+// Precedence: this viewer's own localStorage override (set via the
+// color/icon controls in the layers list) first, then the layer's own
+// server-side default (set in app/map_layers/config.json for a bundled
+// layer -- see mapLayersMeta, populated by refreshMapLayersList() --
+// null/absent for a plain upload with no configured default), then this
+// app's generic fallback.
 function layerStyleFor(id) {
-  return layerStyles[id] || { color: LAYER_DEFAULT_COLOR, icon: "" };
+  if (layerStyles[id]) return layerStyles[id];
+  const meta = mapLayersMeta.find((l) => l.id === id);
+  if (meta && (meta.icon || meta.color)) {
+    return { color: meta.color || LAYER_DEFAULT_COLOR, icon: meta.icon || "" };
+  }
+  return { color: LAYER_DEFAULT_COLOR, icon: "" };
 }
 
 function slugifyLayerId(label) {
@@ -1874,7 +1885,8 @@ function renderMapLayersList() {
       <input type="checkbox" data-layer-id="${idAttr}" ${mapLayersActive.has(l.id) ? "checked" : ""} title="${t("map.layerToggle")}" />
       <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${style.color}" title="${t("map.layerColor")}" />
       <select class="map-layer-icon" data-layer-id="${idAttr}" title="${t("map.layerIcon")}">
-        ${LAYER_ICON_CHOICES.map((ic) => `<option value="${ic}" ${ic === style.icon ? "selected" : ""}>${ic || "●"}</option>`).join("")}
+        ${(LAYER_ICON_CHOICES.includes(style.icon) ? LAYER_ICON_CHOICES : [style.icon, ...LAYER_ICON_CHOICES])
+          .map((ic) => `<option value="${ic}" ${ic === style.icon ? "selected" : ""}>${ic || "●"}</option>`).join("")}
       </select>
       <span class="map-layer-label">${escapeHtml(l.label)}</span>
       <span class="map-layer-count">${l.count}</span>
