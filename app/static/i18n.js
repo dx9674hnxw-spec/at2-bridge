@@ -48,14 +48,13 @@ const I18N_DICT = {
     "tab.messages": "Messagerie",
     "tab.map": "Carte",
     "tab.log": "Journal",
-    "tab.beta": "Beta",
 
     // Channel scan -- a collapsible section inside the PTT panel (Appareils
     // tab), not its own tab. Cycles real channels via select_channel(),
     // same call the channel dropdown uses (see sendChannelSelect() in
     // app.js). "Activity detected" reuses the RX indicator's real
     // incoming-PTT-packet signal,
-    // not a simulated RSSI reading -- ported from the Beta tab's
+    // not a simulated RSSI reading -- ported from an earlier
     // frequency-scan.html prototype.
     "scan.title": "Scan de canaux",
     "scan.subEmpty": "Aucun canal lu",
@@ -81,15 +80,6 @@ const I18N_DICT = {
     "scan.logHit": "CH{n} {name} — activité détectée (PTT), pause {s}s",
     "scan.logVisit": "CH{n} {name} — RAS",
     "scan.includeInScan": "Inclure dans le scan",
-
-    // Beta tab -- isolated prototypes (app/static/beta/, its own README),
-    // each loaded in an <iframe> so a broken experiment can't take the
-    // rest of the app down with it. See BETA_PAGES in app.js.
-    "beta.flag": "expérimental",
-    "beta.hint": "Prototypes isolés (dossier app/static/beta/, code indépendant de l'appli principale) : on teste, on évalue, puis on porte ce qui marche dans l'appli.",
-    "beta.page.mapRedesign": "Carte (refonte)",
-    "beta.page.spectrum": "Spectromètre",
-    "beta.page.recordReplay": "Enregistrement / lecture",
 
     // Debug: envoi de trame brute (expérimental)
     "debug.rawFrameTitle": "🧪 Debug — Envoi de trame brute (expérimental)",
@@ -426,7 +416,6 @@ const I18N_DICT = {
     "tab.messages": "Messaging",
     "tab.map": "Map",
     "tab.log": "Log",
-    "tab.beta": "Beta",
 
     "scan.title": "Channel scan",
     "scan.subEmpty": "No channels read",
@@ -452,12 +441,6 @@ const I18N_DICT = {
     "scan.logHit": "CH{n} {name} -- activity detected (PTT), pausing {s}s",
     "scan.logVisit": "CH{n} {name} -- clear",
     "scan.includeInScan": "Include in scan",
-
-    "beta.flag": "experimental",
-    "beta.hint": "Isolated prototypes (app/static/beta/ folder, code independent from the main app): test, evaluate, then port what works into the app.",
-    "beta.page.mapRedesign": "Map (redesign)",
-    "beta.page.spectrum": "Spectrum",
-    "beta.page.recordReplay": "Record / replay",
 
     // Debug: raw frame send (experimental)
     "debug.rawFrameTitle": "🧪 Debug — Send raw frame (experimental)",
