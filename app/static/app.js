@@ -1251,6 +1251,37 @@ $("#nato-add-place-here").addEventListener("click", async () => {
   } catch (e) { showToast(e.message, "error"); }
 });
 
+$("#map-layers-toggle").addEventListener("click", () => {
+  $("#map-layers-panel").hidden = !$("#map-layers-panel").hidden;
+});
+
+$("#map-layer-import-btn").addEventListener("click", async () => {
+  const fileInput = $("#map-layer-file");
+  const labelInput = $("#map-layer-label");
+  const file = fileInput.files[0];
+  if (!file) { showToast(t("map.layerNeedFile"), "error"); return; }
+  const label = labelInput.value.trim() || file.name.replace(/\.kml$/i, "");
+  const id = slugifyLayerId(label);
+  const btn = $("#map-layer-import-btn");
+  btn.disabled = true;
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("label", label);
+    const result = await apiUpload(`/api/map/layers/${encodeURIComponent(id)}/import`, form);
+    showToast(t("map.layerImported", { n: result.count, label: result.label }), "success");
+    fileInput.value = "";
+    labelInput.value = "";
+    mapLayersActive.add(id);
+    await refreshMapLayersList();
+    renderMapLayerMarkers();
+  } catch (e) {
+    showToast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Map tab: last known position of every sender who has shared a GPS
 // beacon. There's no structured "Position" message type in the real
@@ -1730,6 +1761,116 @@ function setMapLayerVisible(el, visible) {
   el.style.display = visible ? "block" : "none";
 }
 
+// ---------------------------------------------------------------------------
+// Map tab: imported data layers (KML upload -- e.g. a Paris CCTV camera
+// map). See /api/map/layers/* in main.py + app/kml.py: the KML is
+// uploaded once through #map-layer-import-btn below, parsed and stored
+// server-side, and served back from that stored copy from then on --
+// this is *not* a live feed of wherever the KML originally came from
+// (see main.py's own comment on why not). Stored server-side, not in
+// this device's own localStorage, so every device pointed at the same
+// AT2Bridge server sees the same imported layers -- consistent with
+// everything else on this tab being a shared team picture, not a
+// per-device scratchpad.
+//
+// Rendered on the Leaflet map only, never the radar fallback: a data
+// layer can easily be a few hundred points, and without streets/a
+// basemap to give them context a pile of dots on the abstract bearing-
+// only radar chart wouldn't mean anything -- #map-layers-radar-hint
+// below says so instead of silently doing nothing.
+// ---------------------------------------------------------------------------
+
+let mapLayersMeta = []; // [{id, label, count, imported_at}]
+let mapLayersActive = new Set(); // layer ids currently toggled on
+let mapLayersPointsCache = new Map(); // id -> points[], fetched lazily once per id
+let mapLayerMarkers = []; // kept separate from mapMarkers (beacons/NATO) -- toggling a layer shouldn't force those to redraw, or vice versa
+
+function slugifyLayerId(label) {
+  const slug = (label || "layer")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents (e.g. é -> e)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug || "layer";
+}
+
+async function refreshMapLayersList() {
+  try {
+    mapLayersMeta = await api("GET", "/api/map/layers");
+  } catch (e) {
+    mapLayersMeta = [];
+  }
+  renderMapLayersList();
+}
+
+function renderMapLayersList() {
+  const el = $("#map-layers-list");
+  if (!mapLayersMeta.length) {
+    el.innerHTML = `<div class="hint">${t("map.layersEmpty")}</div>`;
+    return;
+  }
+  el.innerHTML = mapLayersMeta.map((l) => `
+    <label class="map-layer-row">
+      <input type="checkbox" data-layer-id="${escapeHtml(l.id)}" ${mapLayersActive.has(l.id) ? "checked" : ""} />
+      <span class="map-layer-label">${escapeHtml(l.label)}</span>
+      <span class="map-layer-count">${l.count}</span>
+      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${escapeHtml(l.id)}" title="${t("map.layerDelete")}">🗑</button>
+    </label>
+  `).join("");
+  el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      const id = e.target.dataset.layerId;
+      if (e.target.checked) mapLayersActive.add(id); else mapLayersActive.delete(id);
+      renderMapLayerMarkers();
+    });
+  });
+  el.querySelectorAll(".map-layer-delete").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.layerId;
+      if (!confirm(t("map.layerConfirmDelete"))) return;
+      try {
+        await api("DELETE", `/api/map/layers/${encodeURIComponent(id)}`);
+        mapLayersActive.delete(id);
+        mapLayersPointsCache.delete(id);
+        await refreshMapLayersList();
+        renderMapLayerMarkers();
+      } catch (e) { showToast(e.message, "error"); }
+    });
+  });
+}
+
+async function ensureLayerPointsLoaded(id) {
+  if (mapLayersPointsCache.has(id)) return mapLayersPointsCache.get(id);
+  const data = await api("GET", `/api/map/layers/${encodeURIComponent(id)}`);
+  mapLayersPointsCache.set(id, data.points);
+  return data.points;
+}
+
+// Fire-and-forget from renderMap() (which isn't itself async) -- rebuilds
+// its own marker set from scratch each call, same pattern as the beacon/
+// NATO markers just above, so a mid-flight call from a fast double-toggle
+// simply gets superseded by the next one rather than needing to be
+// cancelled.
+async function renderMapLayerMarkers() {
+  mapLayerMarkers.forEach((m) => mapInstance && mapInstance.removeLayer(m));
+  mapLayerMarkers = [];
+  $("#map-layers-radar-hint").hidden = !(mapLayersActive.size && mapViewMode !== "map");
+  if (!MAP_AVAILABLE || mapViewMode !== "map" || !mapInstance) return;
+  for (const id of mapLayersActive) {
+    let points;
+    try { points = await ensureLayerPointsLoaded(id); } catch (e) { showToast(e.message, "error"); continue; }
+    for (const p of points) {
+      const marker = L.circleMarker([p.lat, p.lon], {
+        radius: 5, color: "#a855f7", fillColor: "#a855f7", fillOpacity: 0.85, weight: 1.5,
+      }).addTo(mapInstance);
+      const title = p.name ? escapeHtml(p.name) : "•";
+      marker.bindPopup(p.description ? `<b>${title}</b><br>${escapeHtml(p.description)}` : `<b>${title}</b>`);
+      mapLayerMarkers.push(marker);
+    }
+  }
+}
+
 function renderMap() {
   const list = latestBeaconsBySender();
   $("#map-sub").textContent = t("map.knownCount", { n: list.length });
@@ -1761,6 +1902,7 @@ function renderMap() {
       mapMarkers.push(addNatoMarker(nm));
       points.push([nm.lat, nm.lon]);
     }
+    renderMapLayerMarkers(); // async, own marker set -- see its own comment for why this isn't awaited here
     // Only auto-fit while the user hasn't taken the wheel themselves --
     // otherwise every beacon from a live swarm snaps the view back and the
     // map effectively can't be dragged. "Centrer sur moi" resets the flag
@@ -1770,6 +1912,7 @@ function renderMap() {
     setMapLayerVisible($("#map-canvas"), false);
     setMapLayerVisible($("#map-radar"), true);
     renderRadar(list, natoMarkers);
+    renderMapLayerMarkers(); // no-op on markers here (radar mode) -- just keeps #map-layers-radar-hint in sync
   }
 }
 
@@ -3070,6 +3213,7 @@ function startApp() {
   api("GET", "/api/channels/tone-options").then((opts) => { toneOptions = opts; }).catch(() => {});
   refreshStatus();
   refreshTargetList();
+  refreshMapLayersList();
   setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
 }
 

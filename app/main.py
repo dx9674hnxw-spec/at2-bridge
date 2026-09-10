@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import auth, store
+from app import auth, kml, store
 from app.device import device_manager
 from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_CHUNK_BYTES, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
@@ -591,6 +592,72 @@ async def send_position(req: PositionRequest, _: None = Depends(auth.require_aut
 @app.post("/api/position/sos")
 async def send_sos(req: PositionRequest, _: None = Depends(auth.require_auth)):
     await device_manager.send_position(req.username, req.lat, req.lon, f"🆘 {req.note}")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Map tab: imported data layers (see app/kml.py). Local, static data --
+# uploaded once, stored, and served back from disk from then on. Not a
+# live subscription to whatever external source the KML came from (a
+# Google My Maps NetworkLink, say): this project has no HTTP client
+# dependency to go fetch one, and even if it did, a live fetch against
+# an arbitrary external host is exactly the kind of thing that can't be
+# verified from this project's own dev sandbox (its egress proxy blocks
+# it outright -- see every map-basemap commit earlier this session for
+# the same limitation playing out with tile providers). A one-time
+# upload sidesteps needing that dependency at all, and keeps whatever
+# was imported working with no Internet access afterwards, which matters
+# for an app whose whole point is working off-grid.
+# ---------------------------------------------------------------------------
+
+_MAX_KML_UPLOAD_BYTES = 10 * 1024 * 1024  # a KML with a few hundred placemarks is still tiny; generous headroom
+_LAYER_ID_RE = re.compile(r"^[a-z0-9_-]{1,40}$")
+
+
+@app.post("/api/map/layers/{layer_id}/import")
+async def import_map_layer(
+    layer_id: str, file: UploadFile = File(...), label: str = Form(...), _: None = Depends(auth.require_auth)
+):
+    if not _LAYER_ID_RE.match(layer_id):
+        raise HTTPException(status_code=400, detail="identifiant de couche invalide (minuscules/chiffres/-/_ seulement)")
+    raw = await file.read()
+    if len(raw) > _MAX_KML_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="fichier KML trop volumineux")
+    upper = raw.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        # Same guard, same reasoning as /api/channels/import-xml just
+        # above: this is now a file-upload endpoint accepting untrusted
+        # input, cheap dependency-free defense against XML entity-
+        # expansion ("billion laughs") on xml.etree.ElementTree.
+        raise HTTPException(status_code=400, detail="XML avec DOCTYPE/ENTITY non autorisé")
+    try:
+        points = kml.parse_kml_placemarks(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    store.save_map_layer(layer_id, label.strip() or layer_id, points)
+    return {"id": layer_id, "label": label, "count": len(points)}
+
+
+@app.get("/api/map/layers")
+async def list_map_layers(_: None = Depends(auth.require_auth)):
+    layers = store.get_map_layers()
+    return [
+        {"id": lid, "label": l["label"], "count": len(l["points"]), "imported_at": l["imported_at"]}
+        for lid, l in layers.items()
+    ]
+
+
+@app.get("/api/map/layers/{layer_id}")
+async def get_map_layer(layer_id: str, _: None = Depends(auth.require_auth)):
+    layers = store.get_map_layers()
+    if layer_id not in layers:
+        raise HTTPException(status_code=404, detail="couche introuvable")
+    return layers[layer_id]
+
+
+@app.delete("/api/map/layers/{layer_id}")
+async def delete_map_layer(layer_id: str, _: None = Depends(auth.require_auth)):
+    store.delete_map_layer(layer_id)
     return {"ok": True}
 
 
