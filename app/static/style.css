@@ -662,8 +662,19 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
 
+/* z-index: 0 (any explicit number, not just "relative" positioning)
+   is what actually matters here: it makes this element establish its
+   *own* stacking context, trapping every z-index inside it -- and
+   Leaflet's own CSS reaches surprisingly high (.leaflet-popup-pane:
+   700, .leaflet-top/.leaflet-bottom, i.e. the +/- zoom control: 1000)
+   with nothing of its own capping that. Without this, those values
+   compete directly against the rest of the app's -- .alert-history-
+   overlay (z-index 250, meant to sit on top of literally everything
+   else) ended up hidden *behind* the map's own zoom control and
+   markers, which was the actual bug: not "the map has a high z-index"
+   but "the map has no ceiling on its own". */
 .map-canvas-wrap {
-  position: relative; height: clamp(420px, 65vh, 760px); border-radius: var(--radius-lg);
+  position: relative; z-index: 0; height: clamp(420px, 65vh, 760px); border-radius: var(--radius-lg);
   overflow: hidden; border: 1px solid var(--color-border); background: var(--color-bg-alt);
 }
 /* Dark background behind the map itself (not just the wrapper card around
