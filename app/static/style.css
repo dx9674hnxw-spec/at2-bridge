@@ -572,6 +572,16 @@ tbody tr:hover { background: var(--color-surface-hover); }
    not an edge case -- without this, the gap flashes light gray instead of
    matching the dark theme. */
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--color-bg-alt); }
+/* Same bug, same fix as .scan-empty-state[hidden] above (see that comment):
+   the `hidden` HTML attribute isn't reliably honored on an <svg> element in
+   every browser -- confirmed live here, not theoretical -- so #map-radar
+   stayed painted (transparent, but still hit-testable) directly on top of
+   #map-canvas, both position:absolute/inset:0 in the same wrap. That ate
+   every mouse gesture aimed at the map underneath (drag pan, wheel zoom)
+   while leaving Leaflet's own +/- zoom control clickable, since that sits
+   in its own higher-stacked control pane above both. Force it explicitly
+   rather than trusting the UA default this time. */
+#map-radar[hidden] { display: none; }
 
 /* Stock OSM tiles (see ensureMap() in app.js -- CARTO's Dark Matter and a
    MapTiler/MapLibre GL path were both tried and reverted, see git
