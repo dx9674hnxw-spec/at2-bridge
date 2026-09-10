@@ -646,27 +646,24 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-layer-color::-webkit-color-swatch-wrapper { padding: 0; }
 .map-layer-color::-webkit-color-swatch { border: none; border-radius: var(--radius-sm); }
 .map-layer-color::-moz-color-swatch { border: none; border-radius: var(--radius-sm); }
-.map-layer-icon {
-  flex-shrink: 0; width: 52px; padding: 4px 6px; font-size: 13px;
-}
 .map-layer-label { flex: 1; font-size: 13px; }
 .map-layer-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-faint); }
 .map-layer-delete { font-size: 13px; }
 
-/* Leaflet divIcon marker for a data-layer point with an icon chosen
-   (see renderMapLayerMarkers() in app.js) -- same idea as .nato-chip,
-   just round instead of the NATO frame shapes since these aren't
-   military-symbology markers. Background color is set inline per point
-   (the layer's own chosen color, see #map-layer-color), not here. */
-.layer-marker-icon { background: transparent; border: none; }
-.layer-chip {
-  display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
-  border-radius: 50%; font-size: 13px; border: 1.5px solid rgba(0, 0, 0, 0.35);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+/* Left sidebar (layer toggles) / map / right sidebar (beacons) -- see
+   this section's own comment in index.html for why the toolbar and
+   every panel it opens live below this row instead of above it, and
+   why layer toggles are their own column instead of sharing the
+   beacon one. Both side columns match widths so the map stays
+   centered; collapses to a single column (toggles, then map, then
+   beacons, in that order) below 900px where two ~280px sidebars plus
+   a usable map no longer fit side by side. */
+.map-layout {
+  display: grid; grid-template-columns: minmax(180px, 240px) 1fr minmax(240px, 300px);
+  gap: 16px; align-items: start; margin-bottom: 12px;
 }
-
-.map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
-@media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .map-layout { grid-template-columns: 1fr; } }
+.map-toolbar-below { margin-bottom: 12px; }
 
 /* z-index: 0 (any explicit number, not just "relative" positioning)
    is what actually matters here: it makes this element establish its
@@ -803,15 +800,16 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
-/* Sidebar next to the map (see .map-layout) -- quick layer on/off list
-   on top (renderMapLayerToggles() in app.js; empty/collapsed via :empty
-   when no layer has been imported/bundled yet, see app/map_layers/),
-   the beacon list filling whatever's left below it. Detailed layer
-   management (import, color/icon, delete) lives in the #map-layers-panel
-   further down the page instead, not here -- this stays a glance-and-go
-   list. */
+/* Two side columns in .map-layout, same wrapper class for both -- left
+   holds the quick layer on/off list (renderMapLayerToggles() in
+   app.js; empty/collapsed via :empty when no layer has been imported/
+   bundled yet, see app/map_layers/), right holds the beacon list.
+   Detailed layer management (import, color, delete) lives in
+   #map-layers-panel further down the page instead, not either sidebar
+   -- both stay a glance-and-go list, matching the map's own fixed
+   height so the whole row lines up. */
 .map-side-panel { display: flex; flex-direction: column; gap: 10px; height: clamp(420px, 65vh, 760px); }
-.map-layer-toggles { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.map-layer-toggles { display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; overflow-y: auto; }
 .map-layer-toggles:empty { display: none; }
 .map-layer-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12.5px; }
 .map-layer-toggle:hover { background: var(--color-surface-hover); }
