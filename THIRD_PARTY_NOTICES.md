@@ -52,9 +52,10 @@ run in the browser instead of natively.
 - Upstream: https://github.com/iconoir-icons/iconoir
 - License: MIT (Copyright (c) 2021 Luca Burgio)
 - Used as: a handful of `icons/regular/*.svg` icons (list, map-pin-plus,
-  combine) copied inline into `app/static/index.html`'s Map tab
-  toolbar buttons, unmodified apart from dropping each file's own
-  `width`/`height` attributes (sized via CSS instead, see
-  `.btn-icon-svg` in `app/static/style.css`) and `stroke="currentColor"`
-  already present upstream, kept as-is so each icon follows its
-  button's own text color.
+  combine, trash, half-moon, sun-light) copied inline into
+  `app/static/index.html` and, as JS string constants (`ICON_TRASH`,
+  `ICON_SUN`, `ICON_MOON`), `app/static/app.js` -- unmodified apart from
+  dropping each file's own `width`/`height` attributes (sized via CSS
+  instead, see `.btn-icon-svg` in `app/static/style.css`) and
+  `stroke="currentColor"` already present upstream, kept as-is so each
+  icon follows its button's own text color.

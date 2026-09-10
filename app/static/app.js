@@ -77,9 +77,17 @@ function refreshDynamicTranslations() {
 // unrelated to the radio protocol, so it's fine independent of anything
 // device-specific.
 // ---------------------------------------------------------------------------
+// Iconoir (iconoir.com, MIT -- see THIRD_PARTY_NOTICES.md): sun-light
+// for "switch to light" (i.e. currently dark) and half-moon for
+// "switch to dark" (currently light) -- same icon-shows-the-*other*-
+// state convention the emoji they replace (🌙/☀️) already used.
+const ICON_SUN = '<svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 12L23 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2V1" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 23V22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20L19 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4L19 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20L5 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4L5 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 12L2 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_MOON = '<svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11.5066C3 16.7497 7.25034 21 12.4934 21C16.2209 21 19.4466 18.8518 21 15.7259C12.4934 15.7259 8.27411 11.5066 8.27411 3C5.14821 4.55344 3 7.77915 3 11.5066Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  $("#theme-toggle").textContent = theme === "light" ? t("theme.light") : t("theme.dark");
+  const icon = theme === "light" ? ICON_SUN : ICON_MOON;
+  $("#theme-toggle").innerHTML = `${icon}<span>${theme === "light" ? t("theme.light") : t("theme.dark")}</span>`;
   $("#theme-toggle").title = t("theme.title");
 }
 
@@ -1448,6 +1456,14 @@ function natoShapeFor(type) {
   return def ? def.shape : "rect";
 }
 
+// Iconoir (iconoir.com, MIT -- see THIRD_PARTY_NOTICES.md), inline like
+// every other icon added this session: no extra request/CDN dependency,
+// and stroke="currentColor" so it follows whatever button it's dropped
+// into. Built as JS strings, not static markup, since both places that
+// use this (the NATO popup below and the layers list further down) are
+// themselves built from a JS template, not static HTML.
+const ICON_TRASH = '<svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 9L18.005 20.3463C17.8369 21.3026 17.0062 22 16.0353 22H7.96474C6.99379 22 6.1631 21.3026 5.99496 20.3463L4 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 6L15.375 6M3 6L8.625 6M8.625 6V4C8.625 2.89543 9.52043 2 10.625 2H13.375C14.4796 2 15.375 2.89543 15.375 4V6M8.625 6L15.375 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function addNatoMarker(nm) {
   const icon = L.divIcon({
     className: "nato-marker-icon",
@@ -1460,7 +1476,7 @@ function addNatoMarker(nm) {
     `<div class="nato-popup">` +
       `<div class="nato-popup-title">${titleLine}</div>` +
       `<div class="nato-popup-sub">${escapeHtml(nm.sender || "")} · ${timeAgoLabel(nm.time)}</div>` +
-      `<button type="button" class="btn-ghost nato-popup-delete" data-nato-id="${escapeHtml(nm.id)}">${t("map.natoDelete")}</button>` +
+      `<button type="button" class="btn-ghost btn-icon nato-popup-delete" data-nato-id="${escapeHtml(nm.id)}">${ICON_TRASH}<span>${t("map.natoDelete")}</span></button>` +
     `</div>`
   );
   // Delegated rather than bound once at creation: bindPopup() re-renders
@@ -1604,11 +1620,12 @@ function timeAgoLabel(ms) {
 const MAP_AVAILABLE = typeof L !== "undefined";
 let mapInstance = null;
 let mapMarkers = [];
+// No manual radar/map switch (there used to be one -- removed: with the
+// choice made automatically right here, a button that only ever had one
+// working position wasn't worth the tap). MAP_AVAILABLE alone decides,
+// for this whole session -- see leafletUnavailableNoticeShown below for
+// the one-time heads-up when it's false.
 let mapViewMode = MAP_AVAILABLE ? "map" : "radar";
-if (!MAP_AVAILABLE) {
-  $("#map-view-toggle").disabled = true;
-  $("#map-view-toggle").title = t("map.leafletUnavailable");
-}
 
 // True once the user has panned/zoomed the map by hand. Every incoming
 // beacon used to re-run fitBounds() unconditionally, which yanked the view
@@ -1658,6 +1675,15 @@ function ensureMap() {
   mapInstance = L.map("map-canvas", {
     dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
     boxZoom: true, touchZoom: true, tap: true,
+    // Canvas, not Leaflet's own SVG default, as the renderer every
+    // L.circleMarker on this map draws through unless it says
+    // otherwise -- reported choppy on an iPad with a real (1300+
+    // point) data layer on screen: SVG gives every point its own real
+    // DOM node Leaflet has to reposition on each pan/zoom frame, canvas
+    // draws them all into one bitmap instead. Beacon/NATO counts are
+    // small enough that either would've been fine; this is for the
+    // data-layer points (see renderMapLayerMarkers()) that can't be.
+    renderer: L.canvas(),
   }).setView([0, 0], 2);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -1812,13 +1838,24 @@ let mapLayersActive = new Set(); // layer ids currently toggled on
 let mapLayersPointsCache = new Map(); // id -> points[], fetched lazily once per id
 let mapLayerMarkers = []; // kept separate from mapMarkers (beacons/NATO) -- toggling a layer shouldn't force those to redraw, or vice versa
 
-// Per-viewer display choices (color/icon), not part of the layer's
-// stored data (see main.py/app/kml.py) -- "what dot color do *I* want
-// for this layer" is a personal preference, not team-shared state, so
-// it lives in this device's own localStorage rather than being another
+// Per-viewer display choice (color), not part of the layer's stored
+// data (see main.py/app/kml.py) -- "what dot color do *I* want for
+// this layer" is a personal preference, not team-shared state, so it
+// lives in this device's own localStorage rather than being another
 // field on the server-side layer record.
+//
+// Used to also carry a per-point *icon* choice, rendered via a Leaflet
+// divIcon per point (same idea as the NATO marker chips) -- dropped
+// after a real-device report: a few hundred/thousand of those (a real
+// KML layer's size) is a few hundred/thousand actual DOM elements
+// Leaflet has to reposition on every pan/zoom, and that's what was
+// visibly choppy on an iPad, not which glyph was on them. Color alone
+// renders as an L.circleMarker (see renderMapLayerMarkers() below),
+// SVG/canvas-drawn, not a DOM element per point -- much cheaper at
+// this scale. A per-point icon *could* come back later gated to small
+// layers only, but isn't worth the complexity until something actually
+// needs it.
 const LAYER_STYLE_KEY = "at2_layer_style";
-const LAYER_ICON_CHOICES = ["", "📷", "📍", "⚠️", "🚨", "🏢"]; // "" = plain colored dot, no icon
 const LAYER_DEFAULT_COLOR = "#a855f7";
 
 function loadLayerStyles() {
@@ -1830,21 +1867,18 @@ function loadLayerStyles() {
 function saveLayerStyles() {
   try { localStorage.setItem(LAYER_STYLE_KEY, JSON.stringify(layerStyles)); } catch (e) {}
 }
-let layerStyles = loadLayerStyles(); // { [layerId]: { color, icon } }
+let layerStyles = loadLayerStyles(); // { [layerId]: { color } }
 
 // Precedence: this viewer's own localStorage override (set via the
-// color/icon controls in the layers list) first, then the layer's own
+// color control in the layers list) first, then the layer's own
 // server-side default (set in app/map_layers/config.json for a bundled
 // layer -- see mapLayersMeta, populated by refreshMapLayersList() --
-// null/absent for a plain upload with no configured default), then this
+// absent for a plain upload with no configured default), then this
 // app's generic fallback.
-function layerStyleFor(id) {
-  if (layerStyles[id]) return layerStyles[id];
+function layerColorFor(id) {
+  if (layerStyles[id]?.color) return layerStyles[id].color;
   const meta = mapLayersMeta.find((l) => l.id === id);
-  if (meta && (meta.icon || meta.color)) {
-    return { color: meta.color || LAYER_DEFAULT_COLOR, icon: meta.icon || "" };
-  }
-  return { color: LAYER_DEFAULT_COLOR, icon: "" };
+  return meta?.color || LAYER_DEFAULT_COLOR;
 }
 
 function slugifyLayerId(label) {
@@ -1886,65 +1920,45 @@ function setLayerActive(id, active) {
 function renderMapLayerToggles() {
   const el = $("#map-layer-toggles");
   if (!mapLayersMeta.length) { el.innerHTML = ""; return; }
-  el.innerHTML = mapLayersMeta.map((l) => {
-    const style = layerStyleFor(l.id);
-    return `
+  el.innerHTML = mapLayersMeta.map((l) => `
     <label class="map-layer-toggle">
       <input type="checkbox" data-layer-id="${escapeHtml(l.id)}" ${mapLayersActive.has(l.id) ? "checked" : ""} />
-      <span class="map-layer-toggle-dot" style="background:${style.color}"></span>
+      <span class="map-layer-toggle-dot" style="background:${layerColorFor(l.id)}"></span>
       <span class="map-layer-toggle-label">${escapeHtml(l.label)}</span>
-    </label>`;
-  }).join("");
+    </label>`).join("");
   el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", (e) => setLayerActive(e.target.dataset.layerId, e.target.checked));
   });
 }
 
+// The "manage" panel below the map -- import, color, delete. On/off
+// lives only in the sidebar's renderMapLayerToggles() above (no
+// checkbox here too anymore -- the same toggle in two different places
+// at once was confusing, reported live); no icon picker either
+// anymore, see LAYER_STYLE_KEY's own comment for why.
 function renderMapLayersList() {
   const el = $("#map-layers-list");
   if (!mapLayersMeta.length) {
     el.innerHTML = `<div class="hint">${t("map.layersEmpty")}</div>`;
     return;
   }
-  // A plain <div> row, not a <label> wrapping the checkbox: this row also
-  // holds a color <input> and an icon <select>, and a label's implicit
-  // "click anywhere in me toggles my control" behavior is one interaction
-  // too many once there's more than one control inside it -- explicit
-  // listeners on each control below instead.
   el.innerHTML = mapLayersMeta.map((l) => {
-    const style = layerStyleFor(l.id);
     const idAttr = escapeHtml(l.id);
     return `
     <div class="map-layer-row">
-      <input type="checkbox" data-layer-id="${idAttr}" ${mapLayersActive.has(l.id) ? "checked" : ""} title="${t("map.layerToggle")}" />
-      <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${style.color}" title="${t("map.layerColor")}" />
-      <select class="map-layer-icon" data-layer-id="${idAttr}" title="${t("map.layerIcon")}">
-        ${(LAYER_ICON_CHOICES.includes(style.icon) ? LAYER_ICON_CHOICES : [style.icon, ...LAYER_ICON_CHOICES])
-          .map((ic) => `<option value="${ic}" ${ic === style.icon ? "selected" : ""}>${ic || "●"}</option>`).join("")}
-      </select>
+      <input type="color" class="map-layer-color" data-layer-id="${idAttr}" value="${layerColorFor(l.id)}" title="${t("map.layerColor")}" />
       <span class="map-layer-label">${escapeHtml(l.label)}</span>
       <span class="map-layer-count">${l.count}</span>
-      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${idAttr}" title="${t("map.layerDelete")}">🗑</button>
+      <button type="button" class="icon-btn map-layer-delete" data-layer-id="${idAttr}" title="${t("map.layerDelete")}">${ICON_TRASH}</button>
     </div>
   `;
   }).join("");
-  el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.addEventListener("change", (e) => setLayerActive(e.target.dataset.layerId, e.target.checked));
-  });
   el.querySelectorAll(".map-layer-color").forEach((input) => {
     input.addEventListener("input", (e) => {
       const id = e.target.dataset.layerId;
-      layerStyles[id] = { ...layerStyleFor(id), color: e.target.value };
+      layerStyles[id] = { ...layerStyles[id], color: e.target.value };
       saveLayerStyles();
       renderMapLayerToggles(); // its color dot needs to pick up the change too
-      renderMapLayerMarkers();
-    });
-  });
-  el.querySelectorAll(".map-layer-icon").forEach((sel) => {
-    sel.addEventListener("change", (e) => {
-      const id = e.target.dataset.layerId;
-      layerStyles[id] = { ...layerStyleFor(id), icon: e.target.value };
-      saveLayerStyles();
       renderMapLayerMarkers();
     });
   });
@@ -1985,22 +1999,13 @@ async function renderMapLayerMarkers() {
   for (const id of mapLayersActive) {
     let points;
     try { points = await ensureLayerPointsLoaded(id); } catch (e) { showToast(e.message, "error"); continue; }
-    const style = layerStyleFor(id);
+    const color = layerColorFor(id);
     for (const p of points) {
-      // <input type=color> only ever yields a well-formed #rrggbb string
-      // (the browser enforces the format), safe to drop straight into an
-      // inline style attribute below with no separate escaping needed.
-      const marker = style.icon
-        ? L.marker([p.lat, p.lon], {
-            icon: L.divIcon({
-              className: "layer-marker-icon",
-              html: `<div class="layer-chip" style="background:${style.color}">${style.icon}</div>`,
-              iconSize: [24, 24], iconAnchor: [12, 12],
-            }),
-          }).addTo(mapInstance)
-        : L.circleMarker([p.lat, p.lon], {
-            radius: 5, color: style.color, fillColor: style.color, fillOpacity: 0.85, weight: 1.5,
-          }).addTo(mapInstance);
+      // Always circleMarker, canvas-drawn (see ensureMap()'s own
+      // comment) -- no per-point icon anymore, that's the whole fix.
+      const marker = L.circleMarker([p.lat, p.lon], {
+        radius: 5, color, fillColor: color, fillOpacity: 0.85, weight: 1.5,
+      }).addTo(mapInstance);
       const title = p.name ? escapeHtml(p.name) : "•";
       marker.bindPopup(p.description ? `<b>${title}</b><br>${escapeHtml(p.description)}` : `<b>${title}</b>`);
       mapLayerMarkers.push(marker);
@@ -2057,12 +2062,6 @@ function renderMapIfActive() {
   if ($("#tab-map").classList.contains("active")) renderMap();
 }
 
-$("#map-view-toggle").addEventListener("click", () => {
-  if (!MAP_AVAILABLE) return showToast(t("map.leafletUnavailable"), "info");
-  mapViewMode = mapViewMode === "map" ? "radar" : "map";
-  $("#map-view-toggle").textContent = mapViewMode === "map" ? t("map.viewRadar") : t("map.viewMap");
-  renderMap();
-});
 $("#map-center-btn").addEventListener("click", () => {
   requestLocation(true);
   showToast(t("map.locating"), "info");
@@ -2072,8 +2071,19 @@ $("#map-center-btn").addEventListener("click", () => {
 // visible -- MapLibre reports a zero-size map until resize() runs against
 // a visible container, and the beacon list should reflect anything
 // received while another tab was open.
+let leafletUnavailableNoticeShown = false;
 $$(".tab").forEach((tabBtn) => {
-  if (tabBtn.dataset.tab === "map") tabBtn.addEventListener("click", () => setTimeout(renderMap, 0));
+  if (tabBtn.dataset.tab === "map") tabBtn.addEventListener("click", () => {
+    // No manual map/radar switch anymore (MAP_AVAILABLE alone decides,
+    // see mapViewMode's own declaration) -- worth one heads-up the first
+    // time someone lands on a radar-only session, so the abstract
+    // bearing chart doesn't read as just a broken map.
+    if (!MAP_AVAILABLE && !leafletUnavailableNoticeShown) {
+      leafletUnavailableNoticeShown = true;
+      showToast(t("map.leafletUnavailable"), "info");
+    }
+    setTimeout(renderMap, 0);
+  });
 });
 // Keep the map aligned with its container on viewport/orientation changes
 // -- otherwise resizing the window (or rotating a tablet) leaves its
