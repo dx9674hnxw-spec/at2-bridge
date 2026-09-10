@@ -168,6 +168,19 @@
               </span>
             </button>
             <div class="hint" id="sos-status" data-i18n="gps.sosIdleHint">Envoie ta position avec le motif ci-dessus, accompagnée d'une tonalité d'alerte.</div>
+
+            <!-- Appears only once *your own* SOS has actually been sent
+                 (see sosActive in app.js) -- clicking it re-sends your
+                 position, this time without 🆘, so every radio that shows
+                 you on their map sees your point turn from red back to
+                 green, same "one marker per sender = latest beacon" logic
+                 that already draws the red one (see latestBeaconsBySender
+                 in app.js). Deliberately self-report only, not something a
+                 dispatcher can click for someone else's marker: the
+                 protocol has no addressing/authentication (see README), so
+                 there's no way to prove a Code 4 for someone else's alert
+                 actually came from them. -->
+            <button class="btn-ghost sos-resolve-btn" id="sos-resolve-btn" data-i18n="gps.code4Btn" hidden>✅ Code 4 — Terminé (RAS)</button>
           </div>
         </div>
       </div>
@@ -475,8 +488,34 @@
           <div class="settings-toolbar">
             <button class="btn-ghost" id="map-view-toggle" data-i18n="map.viewRadar">Vue radar</button>
             <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
+            <button class="btn-ghost" id="map-codes-toggle" data-i18n="map.codesToggle">📻 Codes</button>
           </div>
         </div>
+
+        <!-- Read-only reference, not an input: this app has no addressed
+             "close this specific alert" message type (see README/map.hint
+             below), so a code here never gets sent from this panel -- Code
+             4 is only ever self-reported by the unit whose own SOS it is,
+             from the Code 4 button next to the SOS hold button itself (see
+             #sos-resolve-btn in the Appareils tab). Keeping the two apart
+             avoids this panel looking like it can close someone else's
+             alert when it can't. -->
+        <div class="codes-panel" id="codes-panel" hidden>
+          <div class="codes-panel-title" data-i18n="map.codesTitle">Codes radio essentiels</div>
+          <ul class="codes-list">
+            <li><span class="codes-code">10-1</span><span data-i18n="map.code10_1">Signal faible / mal reçu</span></li>
+            <li><span class="codes-code">10-4</span><span data-i18n="map.code10_4">Bien reçu, affirmatif</span></li>
+            <li><span class="codes-code">10-7</span><span data-i18n="map.code10_7">Hors service</span></li>
+            <li><span class="codes-code">10-8</span><span data-i18n="map.code10_8">En service, disponible</span></li>
+            <li><span class="codes-code">10-9</span><span data-i18n="map.code10_9">Répétez, mal compris</span></li>
+            <li><span class="codes-code">10-20</span><span data-i18n="map.code10_20">Donner sa position</span></li>
+            <li><span class="codes-code">10-23</span><span data-i18n="map.code10_23">Arrivé sur les lieux</span></li>
+            <li><span class="codes-code">10-33</span><span data-i18n="map.code10_33">Urgence, trafic prioritaire</span></li>
+            <li class="codes-highlight"><span class="codes-code">Code 4</span><span data-i18n="map.codeStatus4">Terminé — aucune assistance supplémentaire (RAS), fait passer le point du rouge au vert</span></li>
+          </ul>
+          <p class="hint" data-i18n="map.codesHint">Référence rapide, hors-ligne. Pour clore une alerte SOS en cours, utilise le bouton Code 4 dans l'onglet Appareils (Position &amp; urgence) — seule la personne à l'origine du SOS peut la clore.</p>
+        </div>
+
         <div class="map-layout">
           <div class="map-canvas-wrap">
             <div id="map-canvas"></div>

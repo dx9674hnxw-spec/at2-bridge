@@ -1147,6 +1147,12 @@ $("#beacon-interval").addEventListener("change", () => {
 const SOS_HOLD_MS = 1400;
 let sosHoldTimer = null;
 let sosHolding = false;
+// True from a successful SOS send until this same device reports Code 4
+// (#sos-resolve-btn below) -- purely a local UI flag gating that button's
+// visibility, not synced from anywhere else: this device is the only one
+// that can legitimately declare its own SOS over, so there's nothing to
+// read back from the network to derive it from.
+let sosActive = false;
 
 function sosSetLabel(key) { $("#sos-hold-label").textContent = t(key); }
 
@@ -1174,10 +1180,15 @@ async function sosConfirmSend() {
     btn.classList.add("sent");
     sosSetLabel("gps.sosSent");
     $("#sos-status").textContent = t("gps.sosSentAt", { time: new Date().toLocaleTimeString("fr-FR", { hour12: false }) });
+    sosActive = true;
+    $("#sos-resolve-btn").hidden = false;
     setTimeout(() => {
       btn.classList.remove("sent");
       sosSetLabel("gps.sosHoldLabel");
-      $("#sos-status").textContent = t("gps.sosIdleHint");
+      // Only reset the idle hint text if Code 4 hasn't already been sent
+      // and overwritten it in the meantime (a fast confirm during this
+      // same 3s window shouldn't get its own status message stomped).
+      if (sosActive) $("#sos-status").textContent = t("gps.sosIdleHint");
     }, 3000);
   } catch (e) {
     sosSetLabel("gps.sosHoldLabel");
@@ -1189,6 +1200,38 @@ const sosBtn = $("#sos-btn");
 sosBtn.addEventListener("mousedown", sosStartHold);
 sosBtn.addEventListener("touchstart", (e) => { e.preventDefault(); sosStartHold(); });
 ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((evt) => sosBtn.addEventListener(evt, sosCancelHold));
+
+// Code 4 -- "no further assistance needed", real dispatch terminology
+// (California-style Code system, not the 10-codes it's usually paired
+// with -- see #codes-panel's own comment in index.html for why it lives
+// here and not there). Re-sends the current position through the same
+// non-SOS /api/position/send path as #gps-send-now -- no 🆘 prefix, so
+// parsePositionText() reads sos:false off it, and since the map only ever
+// draws each sender's single *latest* beacon (see latestBeaconsBySender),
+// this new beacon simply replaces the red one, turning the dot green for
+// every radio that receives it. No new protocol/backend surface at all.
+$("#sos-resolve-btn").addEventListener("click", async () => {
+  const btn = $("#sos-resolve-btn");
+  btn.disabled = true;
+  try {
+    // Fixed, non-localized wire text -- same reasoning as the 📍/🆘 markers
+    // themselves (see parsePositionText): every radio on the channel needs
+    // to recognize this note regardless of that device's own UI language.
+    await sendPositionPayload("/api/position/send", "✅ Code 4");
+    sosActive = false;
+    btn.hidden = true;
+    $("#sos-status").textContent = t("gps.code4Sent");
+    appendLog(t("gps.code4Sent"));
+  } catch (e) {
+    showToast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#map-codes-toggle").addEventListener("click", () => {
+  $("#codes-panel").hidden = !$("#codes-panel").hidden;
+});
 
 // ---------------------------------------------------------------------------
 // Map tab: last known position of every sender who has shared a GPS

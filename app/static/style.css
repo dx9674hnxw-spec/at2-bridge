@@ -438,6 +438,18 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 .sos-hold-btn.holding .sos-hold-icon, .sos-hold-btn.sent .sos-hold-icon { background: #fff; color: var(--status-down); }
 @media (prefers-reduced-motion: reduce) { .sos-hold-fill { transition-duration: 1ms; } }
 
+/* Only shown once this device's own SOS has actually gone out (see
+   sosActive in app.js) -- the "over" counterpart to the hold-to-send
+   button above, tinted with the same status-up green the map itself
+   switches a resolved marker to, so the color already tells you what
+   the click will do before you read the label. */
+.sos-resolve-btn {
+  width: 100%; margin-top: 10px; border-color: var(--status-up-border);
+  color: var(--status-up); font-weight: 700;
+}
+.sos-resolve-btn:hover { background: var(--status-up-bg); }
+.sos-resolve-btn[hidden] { display: none; }
+
 .table-wrap { overflow-x: auto; background: rgba(18, 18, 18, 0.92); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); -webkit-overflow-scrolling: touch; }
 table { border-collapse: collapse; width: 100%; min-width: 900px; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--color-border); }
@@ -558,6 +570,22 @@ tbody tr:hover { background: var(--color-surface-hover); }
   box-sizing: border-box;
 }
 .wide-panel > .card { max-width: 1600px; margin-left: auto; margin-right: auto; }
+
+/* Toggled by #map-codes-toggle (app.js). display:flex below is an
+   unconditional author rule, so -- same bug/fix as .scan-empty-state[hidden]
+   a few hundred lines up -- it needs its own [hidden] override or the
+   browser's own default never gets a chance to apply. */
+.codes-panel {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+  padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.codes-panel[hidden] { display: none; }
+.codes-panel-title { font-weight: 700; font-size: 13px; }
+.codes-list { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.codes-list li { display: flex; align-items: baseline; gap: 10px; }
+.codes-code { flex-shrink: 0; min-width: 54px; font-family: var(--font-mono); font-weight: 700; color: var(--color-primary); }
+.codes-highlight .codes-code, .codes-highlight { color: var(--status-up); }
 
 .map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
