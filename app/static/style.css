@@ -407,6 +407,15 @@ main { padding: 16px 16px calc(64px + var(--safe-bottom)); max-width: 1100px; ma
 
 .gps-send-btn { width: 100%; margin: 12px 0 14px; }
 
+/* Personal status (#status-declare-btn) -- "what am I doing", not an
+   emergency, so it's styled as a plain neutral block, not the alert-red
+   .sos-block just below it in the DOM (which keeps its own margin-
+   top:auto to stay pinned to the card's bottom -- this block just sits
+   normally above it, in source order). */
+.status-block { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.status-select { width: 100%; margin-bottom: 8px; }
+#status-declare-btn { width: 100%; margin-bottom: 8px; }
+
 /* -- SOS: was a single click on a small button right next to the reason
    dropdown -- one misclick or fat-thumb tap sent a real emergency alert.
    Redesigned as a hold-to-confirm button (same interaction language as
@@ -839,6 +848,10 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .map-beacon-info { min-width: 0; }
 .map-beacon-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
 .map-beacon-sub { font-size: 11px; color: var(--color-text-subtle); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A beacon's note recognized as a declared status code (statusLabelFor()
+   in app.js), not just shown as plain note text like an SOS reason or
+   any other free-text note would be. */
+.map-beacon-status { color: var(--status-info); font-weight: 600; }
 
 /* -- Channel scan: a full-width card in the Appareils tab, right below
    the PTT/channel-selection grid it acts on (not its own tab, not nested
