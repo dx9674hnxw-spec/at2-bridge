@@ -1,7 +1,8 @@
 """Small local JSON store for things the AT2 protocol itself has no
 room for: human-readable channel names (the radio only stores numeric
-channel slots) and a list of previously-seen devices so the UI can
-show them even before a fresh scan.
+channel slots), a list of previously-seen devices so the UI can show
+them even before a fresh scan, and imported Map tab data layers (see
+app/kml.py).
 
 Not a database -- this is single-writer, low-frequency data, so a
 plain JSON file with atomic replace is enough.
@@ -11,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 DATA_DIR = Path(os.environ.get("AT2_BRIDGE_DATA_DIR", "/srv/data"))
@@ -19,6 +21,7 @@ STORE_PATH = DATA_DIR / "store.json"
 _DEFAULT = {
     "channel_names": {},   # {"1": "Base", "5": "Équipe A", ...}
     "known_devices": [],   # [{"id": "...", "name": "...", "transport": "ble"|"serial", "target": "..."}]
+    "map_layers": {},      # {"paris_cameras": {"label": "...", "imported_at": iso str, "points": [{"name","description","lat","lon"}, ...]}}
 }
 
 
@@ -75,4 +78,24 @@ def remember_device(device_id: str, name: str, transport: str, target: str) -> N
 def forget_device(device_id: str) -> None:
     data = _read()
     data["known_devices"] = [d for d in data["known_devices"] if d["id"] != device_id]
+    _write(data)
+
+
+def get_map_layers() -> dict:
+    return _read()["map_layers"]
+
+
+def save_map_layer(layer_id: str, label: str, points: list[dict]) -> None:
+    data = _read()
+    data["map_layers"][layer_id] = {
+        "label": label,
+        "imported_at": datetime.now(timezone.utc).isoformat(),
+        "points": points,
+    }
+    _write(data)
+
+
+def delete_map_layer(layer_id: str) -> None:
+    data = _read()
+    data["map_layers"].pop(layer_id, None)
     _write(data)

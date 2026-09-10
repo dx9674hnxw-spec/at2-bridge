@@ -490,7 +490,26 @@
             <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
             <button class="btn-ghost" id="map-codes-toggle" data-i18n="map.codesToggle">📻 Codes</button>
             <button class="btn-ghost" id="map-add-nato-toggle" data-i18n="map.addNatoToggle">🎖️ + Marqueur</button>
+            <button class="btn-ghost" id="map-layers-toggle" data-i18n="map.layersToggle">🗂️ Couches</button>
           </div>
+        </div>
+
+        <!-- Imported data layers (KML upload -- see /api/map/layers/*
+             in main.py + app/kml.py). Static/local, not a live feed: the
+             KML gets uploaded once here, parsed and stored server-side,
+             and rendered from that stored copy from then on -- see
+             main.py's own comment on why this isn't a live re-fetch of
+             wherever the KML originally came from. -->
+        <div class="layers-panel" id="map-layers-panel" hidden>
+          <div class="layers-panel-title" data-i18n="map.layersTitle">Couches de données (KML)</div>
+          <div class="layers-import-row">
+            <input type="file" id="map-layer-file" accept=".kml" />
+            <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
+            <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
+          </div>
+          <div class="layers-list" id="map-layers-list"></div>
+          <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
+          <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
         </div>
 
         <!-- Type/label picked here, then either a click on the map

@@ -601,6 +601,26 @@ tbody tr:hover { background: var(--color-surface-hover); }
    for your next click on the map", not just a focused button. */
 #nato-add-place-map.armed { background: var(--status-info-bg); color: #fff; border-color: var(--color-primary); }
 
+/* Same [hidden] situation and fix as .codes-panel/.nato-add-panel above. */
+.layers-panel {
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+  padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.layers-panel[hidden] { display: none; }
+.layers-panel-title { font-weight: 700; font-size: 13px; }
+.layers-import-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.layers-import-row input[type=file] { flex: 1 1 220px; }
+.layers-import-row input[type=text] { flex: 2 1 260px; }
+.layers-list { display: flex; flex-direction: column; gap: 6px; }
+.map-layer-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer;
+}
+.map-layer-label { flex: 1; font-size: 13px; }
+.map-layer-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-faint); }
+.map-layer-delete { font-size: 13px; }
+
 .map-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; margin-bottom: 12px; }
 @media (max-width: 780px) { .map-layout { grid-template-columns: 1fr; } }
 
