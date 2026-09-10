@@ -46,3 +46,15 @@ implementations (see `Baofeng-ALERVITES-AT2-Android`'s
 THIRD_PARTY_NOTICES.md, referenced above), the same caveat applies
 here since this is the identical underlying codec, just compiled to
 run in the browser instead of natively.
+
+## Iconoir
+
+- Upstream: https://github.com/iconoir-icons/iconoir
+- License: MIT (Copyright (c) 2021 Luca Burgio)
+- Used as: a handful of `icons/regular/*.svg` icons (list, map-pin-plus,
+  combine) copied inline into `app/static/index.html`'s Map tab
+  toolbar buttons, unmodified apart from dropping each file's own
+  `width`/`height` attributes (sized via CSS instead, see
+  `.btn-icon-svg` in `app/static/style.css`) and `stroke="currentColor"`
+  already present upstream, kept as-is so each icon follows its
+  button's own text color.

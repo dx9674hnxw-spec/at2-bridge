@@ -269,6 +269,12 @@ button { border: none; border-radius: var(--radius-md); padding: 8px 14px; font-
 .btn-primary:hover { background-color: var(--color-primary-hover); }
 .btn-ghost { background-color: var(--color-surface); color: var(--color-text-dim); border: 1px solid var(--color-border); }
 .btn-ghost:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+
+/* Leading-icon variant (see the Map tab's Codes/+ Marqueur/Couches
+   buttons) -- icon inherits this button's own color via currentColor,
+   so it dims/brightens on hover together with the label for free. */
+.btn-icon { display: inline-flex; align-items: center; gap: 6px; }
+.btn-icon-svg { width: 15px; height: 15px; flex-shrink: 0; }
 .btn-danger { background-color: var(--status-down-bg); color: var(--status-down); border: 1px solid var(--status-down-border); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 

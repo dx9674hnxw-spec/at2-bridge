@@ -488,9 +488,28 @@
           <div class="settings-toolbar">
             <button class="btn-ghost" id="map-view-toggle" data-i18n="map.viewRadar">Vue radar</button>
             <button class="btn-ghost" id="map-center-btn" data-i18n="map.centerOnMe">Centrer sur moi</button>
-            <button class="btn-ghost" id="map-codes-toggle" data-i18n="map.codesToggle">Codes</button>
-            <button class="btn-ghost" id="map-add-nato-toggle" data-i18n="map.addNatoToggle">+ Marqueur</button>
-            <button class="btn-ghost" id="map-layers-toggle" data-i18n="map.layersToggle">Couches</button>
+            <!-- Icons: Iconoir (iconoir.com, MIT), inline so there's no
+                 extra request/CDN dependency -- "list"/"map-pin-plus"/
+                 "combine" (closest available to an actual "layers" icon,
+                 Iconoir doesn't have one). stroke="currentColor" so each
+                 one inherits this button's own text color/hover state
+                 for free, same as the plain-text label next to it.
+                 data-i18n stays on the inner <span>, not the <button>
+                 itself -- applyTranslations() sets .textContent, which
+                 would silently wipe the icon out if it were on the same
+                 element. -->
+            <button class="btn-ghost btn-icon" id="map-codes-toggle">
+              <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L20 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6.01L4.01 5.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12.01L4.01 11.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18.01L4.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 18L20 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span data-i18n="map.codesToggle">Codes</span>
+            </button>
+            <button class="btn-ghost btn-icon" id="map-add-nato-toggle">
+              <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 9.2C16 13.1765 9 20 9 20C9 20 2 13.1765 2 9.2C2 5.22355 5.13401 2 9 2C12.866 2 16 5.22355 16 9.2Z" stroke="currentColor"/><path d="M9 10C9.55228 10 10 9.55228 10 9C10 8.44772 9.55228 8 9 8C8.44772 8 8 8.44772 8 9C8 9.55228 8.44772 10 9 10Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H19M22 19H19M19 19V16M19 19V22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span data-i18n="map.addNatoToggle">+ Marqueur</span>
+            </button>
+            <button class="btn-ghost btn-icon" id="map-layers-toggle">
+              <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 9.6V20.4C21 20.7314 20.7314 21 20.4 21H9.6C9.26863 21 9 20.7314 9 20.4V9.6C9 9.26863 9.26863 9 9.6 9H20.4C20.7314 9 21 9.26863 21 9.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3.6V14.4C15 14.7314 14.7314 15 14.4 15H3.6C3.26863 15 3 14.7314 3 14.4V3.6C3 3.26863 3.26863 3 3.6 3H14.4C14.7314 3 15 3.26863 15 3.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span data-i18n="map.layersToggle">Couches</span>
+            </button>
           </div>
         </div>
 
