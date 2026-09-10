@@ -1255,9 +1255,21 @@ function recordBeaconFromMessage(msg) {
 // One marker per sender (the most recent beacon they've sent), not a full
 // trail -- keeps both the list and the map legible with more than a
 // handful of people. Sorted most-recent-first.
+//
+// Excludes b.synthetic entries: the Beta map-redesign prototype
+// deliberately reads/writes this app's own at2_beacons localStorage key
+// (see its "Test-data helpers" comment) so its "+ Balise de test" button
+// can preview fake positions as if they were real, tagging each one
+// `synthetic: true` specifically so it's easy to tell apart from a
+// genuinely-received position. That's fine for the prototype's own
+// preview, but this is a safety-relevant position tracker -- someone's
+// real "Send my position now"/SOS should never share a map with made-up
+// "Test-7"/"Test-12" dots that happen to still be sitting in the same
+// browser's storage from an earlier Beta session.
 function latestBeaconsBySender() {
   const bySender = new Map();
   for (const b of beacons) {
+    if (b.synthetic) continue;
     const key = b.mine ? "__mine__" : b.sender;
     const cur = bySender.get(key);
     if (!cur || b.time > cur.time) bySender.set(key, b);
