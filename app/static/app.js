@@ -2168,9 +2168,109 @@ async function ensureLayerPointsLoaded(id) {
 // NATO markers just above, so a mid-flight call from a fast double-toggle
 // simply gets superseded by the next one rather than needing to be
 // cancelled.
+// ---------------------------------------------------------------------------
+// Per-point line-of-sight coverage: click "Voir la zone de visibilité" in
+// a data-layer point's popup (e.g. a camera from the Paris
+// vidéoverbalisation KML) to compute and draw how far it can actually
+// see, buildings blocking the rest -- see /api/map/buildings-near
+// (main.py) + app/buildings.py for the server side, which only ever
+// hands back raw building outlines near one point; every bit of the
+// actual visibility-polygon math happens here, one point at a time
+// (never for a whole layer at once -- that's what made the per-point
+// *icon* idea too slow for 1300+ points a few commits ago; this is a
+// heavier computation than an icon, so it stays strictly opt-in/one-
+// at-a-time on purpose).
+//
+// No orientation/field-of-view data exists in the source KML (see
+// app/kml.py's own comment), so this is necessarily omnidirectional:
+// how far visibility reaches in *every* direction up to
+// COVERAGE_RADIUS_M, not a real camera's actual cone.
+// ---------------------------------------------------------------------------
+
+const COVERAGE_RADIUS_M = 50; // assumed max range -- a plausible fixed-camera distance, not a real spec (see above)
+const COVERAGE_RAYS = 180; // angular resolution (2° steps) -- enough to read as a smooth shadowed area, cheap enough for one point on a tap
+const METERS_PER_DEGREE_LAT = 111320;
+
+// Local planar meters (x=east, y=north) around `origin` -- an
+// equirectangular approximation, fine at this scale (tens of meters),
+// not meant for anything beyond it.
+function toLocalXY(lat, lon, origin) {
+  const y = (lat - origin.lat) * METERS_PER_DEGREE_LAT;
+  const x = (lon - origin.lon) * METERS_PER_DEGREE_LAT * Math.cos((origin.lat * Math.PI) / 180);
+  return [x, y];
+}
+function fromLocalXY(x, y, origin) {
+  const lat = origin.lat + y / METERS_PER_DEGREE_LAT;
+  const lon = origin.lon + x / (METERS_PER_DEGREE_LAT * Math.cos((origin.lat * Math.PI) / 180));
+  return [lat, lon];
+}
+
+// Distance from (0,0) along direction (dx,dy) (a unit vector) to where
+// it crosses segment (ax,ay)-(bx,by), or null if it doesn't (behind the
+// ray, off the segment's own span, or parallel). Standard ray/segment
+// intersection via Cramer's rule on the two line equations.
+function rayHitsSegment(dx, dy, ax, ay, bx, by) {
+  const ex = bx - ax, ey = by - ay;
+  const denom = dx * ey - dy * ex;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = (ax * ey - ay * ex) / denom;
+  const u = (ax * dy - ay * dx) / denom;
+  if (t < 0 || u < 0 || u > 1) return null;
+  return t;
+}
+
+async function computeCameraCoverage(lat, lon) {
+  const data = await api("GET", `/api/map/buildings-near?lat=${lat}&lon=${lon}&radius_m=${COVERAGE_RADIUS_M}`);
+  const origin = { lat, lon };
+  // Every building ring turned into local-XY segments once, not
+  // re-projected on every one of the COVERAGE_RAYS casts below.
+  const segments = [];
+  for (const ring of data.buildings) {
+    const pts = ring.map(([blat, blon]) => toLocalXY(blat, blon, origin));
+    for (let i = 0; i < pts.length - 1; i++) {
+      segments.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]]);
+    }
+  }
+  const polygon = [];
+  for (let i = 0; i < COVERAGE_RAYS; i++) {
+    const angle = (i / COVERAGE_RAYS) * 2 * Math.PI;
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    let closest = COVERAGE_RADIUS_M;
+    for (const [ax, ay, bx, by] of segments) {
+      const t = rayHitsSegment(dx, dy, ax - 0, ay - 0, bx, by);
+      // (ax,ay)/(bx,by) are already relative to the origin (0,0), so no
+      // extra offset is needed -- rayHitsSegment takes the segment
+      // endpoints as-is.
+      if (t !== null && t < closest) closest = t;
+    }
+    polygon.push(fromLocalXY(dx * closest, dy * closest, origin));
+  }
+  return polygon; // [[lat, lon], ...], ready for L.polygon
+}
+
+let coveragePolygonLayer = null; // only one shown at a time -- a new click replaces it, doesn't stack
+
+async function showCameraCoverage(lat, lon, btn) {
+  if (!MAP_AVAILABLE || !mapInstance) return;
+  if (btn) btn.disabled = true;
+  try {
+    const points = await computeCameraCoverage(lat, lon);
+    if (coveragePolygonLayer) mapInstance.removeLayer(coveragePolygonLayer);
+    coveragePolygonLayer = L.polygon(points, {
+      color: "#facc15", fillColor: "#facc15", fillOpacity: 0.25, weight: 1.5,
+    }).addTo(mapInstance);
+    mapInstance.closePopup();
+  } catch (e) {
+    showToast(e.message, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function renderMapLayerMarkers() {
   mapLayerMarkers.forEach((m) => mapInstance && mapInstance.removeLayer(m));
   mapLayerMarkers = [];
+  if (coveragePolygonLayer && mapInstance) { mapInstance.removeLayer(coveragePolygonLayer); coveragePolygonLayer = null; }
   $("#map-layers-radar-hint").hidden = !(mapLayersActive.size && mapViewMode !== "map");
   if (!MAP_AVAILABLE || mapViewMode !== "map" || !mapInstance) return;
   for (const id of mapLayersActive) {
@@ -2184,7 +2284,19 @@ async function renderMapLayerMarkers() {
         radius: 5, color, fillColor: color, fillOpacity: 0.85, weight: 1.5,
       }).addTo(mapInstance);
       const title = p.name ? escapeHtml(p.name) : "•";
-      marker.bindPopup(p.description ? `<b>${title}</b><br>${escapeHtml(p.description)}` : `<b>${title}</b>`);
+      const desc = p.description ? `<br>${escapeHtml(p.description)}` : "";
+      marker.bindPopup(
+        `<div class="layer-point-popup"><b>${title}</b>${desc}` +
+          `<button type="button" class="btn-ghost layer-coverage-btn" data-lat="${p.lat}" data-lon="${p.lon}">${t("map.layerCoverageBtn")}</button>` +
+        `</div>`
+      );
+      // Delegated, not bound once at creation -- same reasoning as the
+      // NATO/layer-delete popups: bindPopup() re-renders its content
+      // into a fresh DOM node each time it opens.
+      marker.on("popupopen", () => {
+        const btn = document.querySelector(`.layer-coverage-btn[data-lat="${p.lat}"][data-lon="${p.lon}"]`);
+        if (btn) btn.addEventListener("click", () => showCameraCoverage(p.lat, p.lon, btn));
+      });
       mapLayerMarkers.push(marker);
     }
   }

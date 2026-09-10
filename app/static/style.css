@@ -785,6 +785,12 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .nato-popup-sub { color: var(--color-text-faint); font-size: 11px; }
 .nato-popup-delete { font-size: 11.5px; padding: 5px 8px; align-self: flex-start; }
 
+/* Imported data-layer points (e.g. camera KML), see renderMapLayerMarkers()
+   in app.js -- same popup treatment as .nato-popup above, plus a button to
+   trigger the per-point line-of-sight coverage computation. */
+.layer-point-popup { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; min-width: 160px; }
+.layer-coverage-btn { font-size: 11.5px; padding: 5px 8px; align-self: flex-start; }
+
 /* background/border-color set inline per marker (see addNatoMarker() in
    app.js) from its own affiliation -- BLUFOR/OPFOR/Neutral, the
    standard APP-6/MIL-STD-2525 blue/red/green convention (NATO_AFFILIATIONS

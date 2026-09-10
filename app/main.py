@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import auth, bundled_layers, kml, store
+from app import auth, buildings, bundled_layers, kml, store
 from app.device import device_manager
 from app.protocol.channel import ChannelConfig, parse_cps_xml, tone_options
 from app.protocol.messages import CompletedMessage, IMAGE_CHUNK_BYTES, IMAGE_JPEG_QUALITY, IMAGE_LONG_EDGE_PX
@@ -30,6 +30,14 @@ async def _load_bundled_map_layers() -> None:
     uploaded layer so they show up in the Map tab's layers list without
     anyone having to re-import them after every deploy."""
     bundled_layers.load_bundled_layers()
+
+
+@app.on_event("startup")
+async def _load_buildings() -> None:
+    """See app/buildings.py + app/map_buildings/README.md: building
+    footprints for the Map tab's per-point line-of-sight coverage
+    feature (GET /api/map/buildings-near below)."""
+    buildings.load_buildings()
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +681,28 @@ async def get_map_layer(layer_id: str, _: None = Depends(auth.require_auth)):
 async def delete_map_layer(layer_id: str, _: None = Depends(auth.require_auth)):
     store.delete_map_layer(layer_id)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Map tab: building footprints (see app/buildings.py + app/map_buildings/
+# README.md) for the per-point line-of-sight coverage feature -- the
+# frontend asks this for whatever's near a clicked point and computes the
+# actual visibility polygon itself (computeCameraCoverage() in app.js),
+# so this only ever needs to hand back raw building outlines for a small
+# area, never anything city-scale in one response.
+# ---------------------------------------------------------------------------
+
+_COVERAGE_MAX_RADIUS_M = 300  # a "camera can see this far" claim beyond this isn't plausible enough to bother computing
+
+
+@app.get("/api/map/buildings-near")
+async def get_buildings_near(
+    lat: float, lon: float, radius_m: float = 60, _: None = Depends(auth.require_auth)
+):
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise HTTPException(status_code=400, detail="coordonnées invalides")
+    radius_m = max(5.0, min(radius_m, _COVERAGE_MAX_RADIUS_M))
+    return {"buildings": buildings.buildings_near(lat, lon, radius_m)}
 
 
 # ---------------------------------------------------------------------------
