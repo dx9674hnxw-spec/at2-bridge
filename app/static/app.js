@@ -1287,72 +1287,25 @@ function timeAgoLabel(ms) {
   return t("map.daysAgo", { n: Math.round(s / 86400) });
 }
 
-// Optional user-supplied tile/style URL + attribution (Settings > Carte),
-// so someone willing to sign up for a free MapTiler/Stadia/etc. account
-// and key can get that provider's actual dark basemap instead of the
-// CSS-filtered OSM fallback -- see mapEngineFor()/ensureMap() below.
-// Stored client-side only (localStorage), read fresh wherever it's used
-// rather than cached in a top-level const, since the settings inputs can
-// be edited any time after this script has already run once. Never sent
-// anywhere -- this app has no backend of its own to relay it through, it
-// goes straight from the browser to whichever host the URL points at,
-// same as the default OSM fallback already does.
-const MAP_TILE_URL_KEY = "at2_map_tile_url";
-const MAP_TILE_ATTRIBUTION_KEY = "at2_map_tile_attribution";
-// Fallback if a custom *raster* tile URL is set but the attribution field
-// was left blank -- a fixed technical default, not user-facing copy, so
-// it can't drift out of correctness if map.tileAttributionPlaceholder's
-// *example* text ever gets reworded/retranslated for clarity independent
-// of this. Not used for a vector style URL -- those carry their own
-// attribution as part of the style itself.
-const DEFAULT_CUSTOM_TILE_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; MapTiler";
-
-function getMapTilePrefs() {
-  try {
-    return {
-      url: (localStorage.getItem(MAP_TILE_URL_KEY) || "").trim(),
-      attribution: (localStorage.getItem(MAP_TILE_ATTRIBUTION_KEY) || "").trim(),
-    };
-  } catch (e) {
-    return { url: "", attribution: "" };
-  }
-}
-
-// A raster XYZ template always contains the {z}/{x}/{y} placeholders; a
-// vector style URL (style.json) never does -- good enough to tell the two
-// apart without asking the user which kind of URL they pasted.
-function isRasterTileTemplate(url) {
-  return /\{z\}/.test(url) && /\{x\}/.test(url) && /\{y\}/.test(url);
-}
-
-// Which map engine a given URL wants -- not a user choice, a consequence
-// of what each library can actually render. MapLibre GL draws everything
-// (including raster tiles) into a WebGL canvas, which needs the tile host
-// to send CORS headers before the browser will let it read the pixels
-// into a texture; a real deploy of an all-MapLibre version confirmed OSM's
-// own tile servers don't reliably send those (controls/attribution
-// rendered fine since neither touches tile pixels, but the canvas itself
-// stayed blank -- no tiles ever painted). Leaflet just places plain <img>
-// tags in the DOM and never touches pixel data, so it doesn't care either
-// way -- hence raster (the free OSM default, or an explicit {z}/{x}/{y}
-// URL) stays on Leaflet. A real vector style doesn't have this problem at
-// all -- MapLibre fetches style.json/vector tiles over plain fetch(), no
-// canvas-texture CORS requirement -- so that's MapLibre's job here.
-function mapEngineFor(url) {
-  return url && !isRasterTileTemplate(url) ? "maplibre" : "leaflet";
-}
-
-// Both libraries loaded (see index.html's script tags) only if the client
-// had Internet access to fetch them -- `L`/`maplibregl` stay undefined
-// otherwise (this app runs off-grid by design, so that's an expected, not
-// exceptional, outcome). Falls back to the dependency-free radar view,
-// user-toggleable rather than auto-detected: there's no reliable, cheap
-// way to tell "the library loaded fine but tiles themselves are
-// unreachable" after the fact. mapEngine is fixed for the session (same
-// "Settings > Carte takes effect on next page load" already documented
-// on those fields) -- re-read on reload, not live-swapped mid-session.
-const mapEngine = mapEngineFor(getMapTilePrefs().url);
-const MAP_AVAILABLE = mapEngine === "maplibre" ? typeof maplibregl !== "undefined" : typeof L !== "undefined";
+// Leaflet loaded (see index.html's script tag) only if the client had
+// Internet access to fetch it -- `L` stays undefined otherwise (this app
+// runs off-grid by design, so that's an expected, not exceptional,
+// outcome). Falls back to the dependency-free radar view, user-toggleable
+// rather than auto-detected: there's no reliable, cheap way to tell "the
+// library loaded fine but tiles themselves are unreachable" after the
+// fact.
+//
+// OSM tiles only, no configurable basemap -- tried CARTO's Dark Matter
+// (needed an API key, their anonymous access was retired), MapTiler
+// custom styles (raster tiles needed a paid plan; a MapLibre GL version
+// that could render the free vector style instead painted a blank canvas
+// in real testing -- WebGL raster/vector rendering needs the tile/style
+// host to send CORS headers, which not everything does reliably), and a
+// hybrid Leaflet+MapLibre setup layered on top of that. All reverted:
+// plain Leaflet + stock OSM tiles, darkened with a CSS filter (see
+// .leaflet-tile in style.css), is the version that's actually confirmed
+// working.
+const MAP_AVAILABLE = typeof L !== "undefined";
 let mapInstance = null;
 let mapMarkers = [];
 let mapViewMode = MAP_AVAILABLE ? "map" : "radar";
@@ -1367,28 +1320,18 @@ if (!MAP_AVAILABLE) {
 // swarm of radios that beacon every few seconds this made the map feel
 // undraggable. Once the user has touched it, auto-fit backs off and only
 // resumes on an explicit "Centrer sur moi" click. mapProgrammaticMove tells
-// the move listener below to ignore moves *we* trigger (fitBounds/jumpTo),
-// so those don't get misread as user interaction -- MapLibre's movestart
-// and Leaflet's dragstart+zoomstart both fire for programmatic moves too,
-// same guard either way.
+// the dragstart/zoomstart listener below to ignore moves *we* trigger
+// (fitBounds/setView), so those don't get misread as user interaction.
 let mapUserInteracted = false;
 let mapProgrammaticMove = false;
 
 function addMapMarker(lat, lon, color, label) {
-  if (mapEngine === "maplibre") {
-    const el = document.createElement("div");
-    el.className = "map-marker-dot";
-    el.style.backgroundColor = color;
-    el.title = label;
-    return new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(mapInstance);
-  }
   return L.circleMarker([lat, lon], { radius: 7, color, fillColor: color, fillOpacity: 0.9, weight: 2 })
     .addTo(mapInstance).bindTooltip(label);
 }
 
 function removeAllMapMarkers() {
-  if (mapEngine === "maplibre") mapMarkers.forEach((m) => m.remove());
-  else mapMarkers.forEach((m) => mapInstance.removeLayer(m));
+  mapMarkers.forEach((m) => mapInstance.removeLayer(m));
   mapMarkers = [];
 }
 
@@ -1398,48 +1341,20 @@ function removeAllMapMarkers() {
 function mapFitToPoints(points) {
   if (!points.length) return;
   mapProgrammaticMove = true;
-  if (mapEngine === "maplibre") {
-    const bounds = new maplibregl.LngLatBounds();
-    points.forEach(([lat, lon]) => bounds.extend([lon, lat]));
-    mapInstance.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 0 });
-  } else {
-    mapInstance.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
-  }
+  mapInstance.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
   mapProgrammaticMove = false;
 }
 
 function mapJumpTo(lat, lon, zoom) {
-  if (mapEngine === "maplibre") mapInstance.jumpTo({ center: [lon, lat], zoom });
-  else mapInstance.setView([lat, lon], zoom);
+  mapInstance.setView([lat, lon], zoom);
 }
 
 function mapResize() {
-  if (mapEngine === "maplibre") mapInstance.resize();
-  else mapInstance.invalidateSize();
+  mapInstance.invalidateSize();
 }
 
 function ensureMap() {
   if (mapInstance || !MAP_AVAILABLE) return;
-  const { url: customUrl, attribution: customAttribution } = getMapTilePrefs();
-  if (mapEngine === "maplibre") {
-    // mapEngineFor() only routes here when customUrl is a real vector
-    // style URL, never blank/raster -- no OSM fallback to build, no
-    // .using-custom-basemap toggle needed (MapLibre is only ever a custom
-    // basemap now, already styled how its owner wants).
-    mapInstance = new maplibregl.Map({ container: "map-canvas", style: customUrl, center: [0, 0], zoom: 2 });
-    mapInstance.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-    mapInstance.on("movestart", () => {
-      if (!mapProgrammaticMove) mapUserInteracted = true;
-    });
-    return;
-  }
-  // Leaflet: the free OSM raster default, or an explicit raster
-  // {z}/{x}/{y} URL -- see mapEngineFor() above for why raster stays
-  // here rather than MapLibre. #map-canvas gets a class either way so
-  // the dark CSS filter (style.css) only ever applies to the OSM
-  // fallback itself, not an already-properly-styled custom raster tile
-  // set someone configured.
-  $("#map-canvas").classList.toggle("using-custom-basemap", !!customUrl);
   // Every pan/zoom interaction explicit rather than relying on Leaflet's
   // own defaults (which already match this, so functionally a no-op) --
   // ruling out a version/build quirk silently disabling one of them was
@@ -1448,9 +1363,9 @@ function ensureMap() {
     dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
     boxZoom: true, touchZoom: true, tap: true,
   }).setView([0, 0], 2);
-  L.tileLayer(customUrl || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: customUrl ? (customAttribution || DEFAULT_CUSTOM_TILE_ATTRIBUTION) : "&copy; OpenStreetMap",
+    attribution: "&copy; OpenStreetMap",
   }).addTo(mapInstance);
   // Belt-and-suspenders for the constructor options above: explicitly
   // re-enable the interaction handlers Leaflet exposes for this, in case
@@ -1462,24 +1377,6 @@ function ensureMap() {
   mapInstance.scrollWheelZoom.enable();
   mapInstance.on("dragstart zoomstart", () => {
     if (!mapProgrammaticMove) mapUserInteracted = true;
-  });
-}
-
-// Settings > Carte fields -- just persist to localStorage on change.
-// ensureMap() only ever runs once (guarded by `if (mapInstance)` above),
-// so a change here doesn't retroactively swap an already-built map's
-// style; the hint text next to these inputs says as much.
-{
-  const urlInput = $("#map-tile-url");
-  const attributionInput = $("#map-tile-attribution");
-  const prefs = getMapTilePrefs();
-  urlInput.value = prefs.url;
-  attributionInput.value = prefs.attribution;
-  urlInput.addEventListener("change", () => {
-    try { localStorage.setItem(MAP_TILE_URL_KEY, urlInput.value.trim()); } catch (e) {}
-  });
-  attributionInput.addEventListener("change", () => {
-    try { localStorage.setItem(MAP_TILE_ATTRIBUTION_KEY, attributionInput.value.trim()); } catch (e) {}
   });
 }
 

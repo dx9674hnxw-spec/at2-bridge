@@ -573,20 +573,15 @@ tbody tr:hover { background: var(--color-surface-hover); }
    matching the dark theme. */
 #map-canvas, #map-radar { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--color-bg-alt); }
 
-/* Stock OSM tiles (see ensureMap()/mapEngineFor() in app.js -- every
-   free, no-account dark basemap we tried turned out to gate raster tiles
-   behind a paid plan, CARTO and MapTiler both, and WebGL/MapLibre raster
-   rendering needs CORS headers OSM's own tile servers don't reliably
-   send anyway) are a light/day-mode basemap; darken them with a CSS
-   filter instead of a purpose-built dark tile set. grayscale() FIRST,
-   before invert() -- inverting a still-in-color map (green parks, blue
-   water, orange roads) and hue-rotating to compensate only approximately
+/* Stock OSM tiles (see ensureMap() in app.js -- CARTO's Dark Matter and a
+   MapTiler/MapLibre GL path were both tried and reverted, see git
+   history) are a light/day-mode basemap; darken them with a CSS filter
+   instead of a purpose-built dark tile set. grayscale() FIRST, before
+   invert() -- inverting a still-in-color map (green parks, blue water,
+   orange roads) and hue-rotating to compensate only approximately
    restores the original hues, and saturated colors come out muddy/
    purplish. Desaturating first sidesteps that entirely: the result is a
-   clean monochrome map, light roads/labels on a near-black ground, same
-   idea as e.g. a purpose-built dark basemap but achieved with plain OSM
-   tiles served through Leaflet (the only engine raster ever uses now,
-   see mapEngineFor()).
+   clean monochrome map, light roads/labels on a near-black ground.
 
    On .leaflet-tile (each tile <img>) rather than .leaflet-tile-pane (the
    pane wrapping all of them) -- filter establishes a new containing
@@ -602,12 +597,8 @@ tbody tr:hover { background: var(--color-surface-hover); }
    there. Markers/tooltips live in .leaflet-overlay-pane/.leaflet-marker-
    pane, a sibling of the tile pane entirely -- untouched either way, so
    their already-correct colors (see addMapMarker() in app.js) never run
-   through this filter.
-
-   Skipped when #map-canvas carries .using-custom-basemap -- an explicit
-   raster tile URL (Settings > Carte) is presumably already styled the
-   way its owner wants, not stock light OSM needing to be darkened. */
-#map-canvas:not(.using-custom-basemap) .leaflet-tile { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
+   through this filter. */
+.leaflet-tile { filter: grayscale(1) invert(1) brightness(0.88) contrast(0.95); }
 
 /* Leaflet's own chrome (zoom control, attribution, tooltips) is a
    light-mode design by default too -- reskin all three to the app's own
@@ -633,44 +624,6 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
   border-top-color: var(--color-border) !important; border-bottom-color: var(--color-border) !important;
 }
-
-/* Colored dot marker (see addMapMarker() in app.js) -- only used on the
-   MapLibre path (a real vector style, see mapEngineFor()); the Leaflet
-   path uses its own circleMarker instead, styled inline in JS same as
-   before. MapLibre markers are plain DOM elements you style yourself, no
-   default look to override the way Leaflet's circleMarker had one built
-   in. Dark ring instead of a same-color stroke so it stays visible
-   against any basemap, not just ones close to its own fill color. */
-.map-marker-dot {
-  width: 16px; height: 16px; border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-}
-
-/* MapLibre's own chrome (zoom control, attribution) is a light-mode
-   design by default too -- reskin both to the app's own surface/border/
-   text tokens so nothing here still reads as a light-mode widget dropped
-   into a dark app. Only ever seen on the MapLibre path (a real vector
-   style someone configured, see mapEngineFor()) -- no dark CSS filter
-   needed here the way the Leaflet/raster path above gets one, since a
-   real vector style is presumably already styled how its owner wants. */
-.maplibregl-ctrl-group {
-  background: var(--color-surface) !important;
-  border: 1px solid var(--color-border) !important;
-  border-radius: var(--radius-sm) !important;
-  box-shadow: none !important; overflow: hidden;
-}
-.maplibregl-ctrl-group button { background: transparent !important; }
-.maplibregl-ctrl-group button:not(:first-child) { border-top: 1px solid var(--color-border) !important; }
-.maplibregl-ctrl-group button:hover { background: var(--color-surface-hover) !important; }
-/* The zoom +/- glyphs are background-image data URIs drawn dark, meant
-   for light chrome -- invert them to read against the now-dark buttons. */
-.maplibregl-ctrl-icon { filter: invert(1) brightness(1.8); }
-.maplibregl-ctrl-attrib {
-  background: rgba(18, 18, 18, 0.75) !important; color: var(--color-text-faint) !important;
-}
-.maplibregl-ctrl-attrib a { color: var(--color-text-dim) !important; }
-.maplibregl-ctrl-attrib-button { filter: invert(1); }
 
 .radar-ring { fill: none; stroke: var(--color-border); stroke-width: 1; }
 .radar-axis { stroke: var(--color-border); stroke-width: 1; }

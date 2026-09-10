@@ -6,20 +6,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AT2 Bridge</title>
-  <!-- Both Leaflet and MapLibre GL -- see mapEngineFor()/app.js for which
-       one actually gets used: Leaflet for the free OSM raster default (or
-       an explicit raster {z}/{x}/{y} URL), MapLibre GL for a real vector
-       style.json (e.g. a MapTiler account) if one's configured in
-       Settings > Carte. Not a redundant pair -- MapLibre's WebGL raster
-       rendering needs the tile host to send CORS headers to read tile
-       pixels into a texture, and OSM's own tile servers don't reliably do
-       that (confirmed against the real app: a MapLibre-only version
-       painted a blank canvas for the free default, controls/attribution
-       aside, since those don't touch tile pixels), so the free/no-account
-       path stays on Leaflet's plain-<img>-tag approach instead, which
-       never needed CORS to begin with. -->
+  <!-- Leaflet + stock OSM tiles for the Map tab -- tried CARTO/MapTiler
+       basemaps and a MapLibre GL rendering path too (see git history);
+       all reverted. Plain Leaflet + OSM tiles, darkened with a CSS filter
+       (see .leaflet-tile in style.css), is the version confirmed working
+       in real testing. -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -403,28 +395,6 @@
         </div>
       </div>
 
-      <!-- Basemap de la carte -- préférence d'app (stockée en local,
-           jamais envoyée à la radio ni à un backend AT2Bridge), pas un
-           réglage radio, donc en dehors de la carte "Réglages appareil"
-           ci-dessus et de son bouton "Appliquer les changements". Vide
-           par défaut : les tuiles OSM (gratuites, sans compte) + le
-           filtre CSS sombre du Map tab restent le comportement par
-           défaut. Un fournisseur de tuiles avec un vrai style sombre
-           (CARTO Dark Matter, Stadia, MapTiler...) nécessite maintenant
-           un compte + clé API gratuite chez la plupart des fournisseurs
-           -- personne n'est obligé d'en créer un, mais si l'utilisateur
-           le fait, coller ici l'URL de tuiles fournie par son tableau de
-           bord (déjà au bon format avec sa clé dedans) évite à ce code
-           de deviner le schéma d'auth propre à chaque fournisseur. -->
-      <div class="card">
-        <div class="ptt-device-name" style="margin-bottom:10px;" data-i18n="settings.sectionMap">Carte</div>
-        <div class="hint" style="margin-bottom:10px;" data-i18n="map.tileUrlHint">Optionnel — laisse vide pour les tuiles OSM gratuites (assombries automatiquement). Colle ici soit une URL de style vectoriel (style.json, ex. MapTiler) soit un gabarit d'URL de tuiles raster ({z}/{x}/{y}) — détecté automatiquement. Prend effet au prochain chargement de la page.</div>
-        <label class="hint" for="map-tile-url" style="display:block; margin-bottom:4px;" data-i18n="map.tileUrlLabel">URL des tuiles ou du style</label>
-        <input type="text" id="map-tile-url" style="width:100%; font-family:var(--font-mono); margin-bottom:10px;" data-i18n-placeholder="map.tileUrlPlaceholder" placeholder="https://api.maptiler.com/maps/…/style.json?key=… ou https://…/{z}/{x}/{y}.png" />
-        <label class="hint" for="map-tile-attribution" style="display:block; margin-bottom:4px;" data-i18n="map.tileAttributionLabel">Attribution (tuiles raster uniquement — un style.json apporte déjà la sienne)</label>
-        <input type="text" id="map-tile-attribution" style="width:100%;" data-i18n-placeholder="map.tileAttributionPlaceholder" placeholder="&amp;copy; OpenStreetMap contributors &amp;copy; MapTiler" />
-      </div>
-
       <!-- Journal + outil de trame brute -- anciennement leur propre onglet
            "Journal", fusionné ici sous Réglages (même logique que le Scan
            déplacé sous Appareils : contenu de diagnostic/expert, pas un
@@ -568,13 +538,11 @@
   <script src="/static/ble-client.js"></script>
   <script src="/static/ptt-audio.js"></script>
   <!-- No network access needed for the radio features above -- this is the
-       one exception: map tiles for the Carte tab need Internet. If these
-       fail to load (offline server, no Internet at the client), `L`/
-       `maplibregl` stay undefined and app.js falls back to the
-       dependency-free radar view -- see its "GPS beacons / Map tab"
-       section. -->
+       one exception: OpenStreetMap tiles for the Carte tab need Internet.
+       If this fails to load (offline server, no Internet at the client),
+       `L` stays undefined and app.js falls back to the dependency-free
+       radar view -- see its "GPS beacons / Map tab" section. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
