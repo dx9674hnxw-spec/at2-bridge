@@ -269,6 +269,12 @@ button { border: none; border-radius: var(--radius-md); padding: 8px 14px; font-
 .btn-primary:hover { background-color: var(--color-primary-hover); }
 .btn-ghost { background-color: var(--color-surface); color: var(--color-text-dim); border: 1px solid var(--color-border); }
 .btn-ghost:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+
+/* Leading-icon variant (see the Map tab's Codes/+ Marqueur/Couches
+   buttons) -- icon inherits this button's own color via currentColor,
+   so it dims/brightens on hover together with the label for free. */
+.btn-icon { display: inline-flex; align-items: center; gap: 6px; }
+.btn-icon-svg { width: 15px; height: 15px; flex-shrink: 0; }
 .btn-danger { background-color: var(--status-down-bg); color: var(--status-down); border: 1px solid var(--status-down-border); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -797,7 +803,22 @@ tbody tr:hover { background: var(--color-surface-hover); }
 .radar-point.sos { fill: var(--status-down); }
 .radar-label { font-size: 10px; fill: var(--color-text-dim); text-anchor: middle; font-family: var(--font-mono); }
 
-.map-beacon-list { display: flex; flex-direction: column; gap: 8px; max-height: clamp(420px, 65vh, 760px); overflow-y: auto; }
+/* Sidebar next to the map (see .map-layout) -- quick layer on/off list
+   on top (renderMapLayerToggles() in app.js; empty/collapsed via :empty
+   when no layer has been imported/bundled yet, see app/map_layers/),
+   the beacon list filling whatever's left below it. Detailed layer
+   management (import, color/icon, delete) lives in the #map-layers-panel
+   further down the page instead, not here -- this stays a glance-and-go
+   list. */
+.map-side-panel { display: flex; flex-direction: column; gap: 10px; height: clamp(420px, 65vh, 760px); }
+.map-layer-toggles { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.map-layer-toggles:empty { display: none; }
+.map-layer-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12.5px; }
+.map-layer-toggle:hover { background: var(--color-surface-hover); }
+.map-layer-toggle-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0, 0, 0, 0.3); }
+.map-layer-toggle-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.map-beacon-list { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; }
 .map-beacon-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px;
   border-radius: var(--radius-md); background-color: rgba(18, 18, 18, 0.92);
