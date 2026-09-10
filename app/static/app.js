@@ -1262,6 +1262,23 @@ $("#nato-add-place-here").addEventListener("click", async () => {
 $("#map-layers-toggle").addEventListener("click", () => {
   $("#map-layers-panel").hidden = !$("#map-layers-panel").hidden;
 });
+$("#map-layer-import-toggle").addEventListener("click", () => {
+  $("#map-layer-import-panel").hidden = !$("#map-layer-import-panel").hidden;
+});
+
+// NATO marker affiliation -- BLUFOR/OPFOR/Neutral, standard APP-6/
+// MIL-STD-2525 friendly/hostile/neutral colors. Only ever changes the
+// marker's color (see addNatoMarker()/renderRadar() below); the type
+// (INF, ARM, ...) still decides its shape/label the same as before this
+// existed. Defaults to BLUFOR -- same as every NATO marker this app
+// could place before affiliation existed at all.
+let natoSelectedAffiliation = "B";
+$$(".affil-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    natoSelectedAffiliation = btn.dataset.affil;
+    $$(".affil-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  });
+});
 
 $("#map-layer-import-btn").addEventListener("click", async () => {
   const fileInput = $("#map-layer-file");
@@ -1396,9 +1413,21 @@ const NATO_MARKER_TYPES = [
   { id: "UAV", shape: "circle" },
 ];
 
+// B/O/N = BLUFOR/OPFOR/Neutral -- standard APP-6/MIL-STD-2525 friendly/
+// hostile/neutral colors (blue/red/green). The `:X` suffix is optional
+// on the wire specifically so a marker sent by a version of this app
+// from before affiliation existed still parses today -- absent means
+// BLUFOR, same as every marker this app could place back then.
+const NATO_AFFILIATIONS = {
+  B: { color: "#3b82f6", border: "#1d4ed8" },
+  O: { color: "#ef4444", border: "#b91c1c" },
+  N: { color: "#22c55e", border: "#15803d" },
+};
+const NATO_AFFILIATION_DEFAULT = "B";
+
 const NATO_MARKER_STORE_KEY = "at2_nato_markers";
 const NATO_MARKER_MAX = 200;
-const NATO_RE = /^🎯\s*NATO:([A-Z0-9]{2,5})\s*/;
+const NATO_RE = /^🎯\s*NATO:([A-Z0-9]{2,5})(?::([BON]))?\s*/;
 
 function parseNatoMarkerText(text) {
   if (!text) return null;
@@ -1406,9 +1435,10 @@ function parseNatoMarkerText(text) {
   if (!m) return null;
   const type = m[1];
   if (!NATO_MARKER_TYPES.some((nt) => nt.id === type)) return null;
+  const affiliation = m[2] || NATO_AFFILIATION_DEFAULT;
   const pos = parsePositionText(text.slice(m[0].length));
   if (!pos) return null;
-  return { type, label: pos.note, lat: pos.lat, lon: pos.lon };
+  return { type, affiliation, label: pos.note, lat: pos.lat, lon: pos.lon };
 }
 
 function loadNatoMarkers() {
@@ -1428,9 +1458,10 @@ let nextNatoMarkerLocalId = 1;
 // just placed by this device itself (sendNatoMarker further down, which
 // records locally *before* it knows whether broadcasting it will even
 // work -- see that function's own comment).
-function recordNatoMarker({ type, label, lat, lon, sender, mine }) {
+function recordNatoMarker({ type, affiliation, label, lat, lon, sender, mine }) {
   natoMarkers.push({
-    id: `${Date.now()}-${nextNatoMarkerLocalId++}`, type, label, lat, lon,
+    id: `${Date.now()}-${nextNatoMarkerLocalId++}`, type,
+    affiliation: affiliation || NATO_AFFILIATION_DEFAULT, label, lat, lon,
     sender, mine: !!mine, time: Date.now(),
   });
   if (natoMarkers.length > NATO_MARKER_MAX) natoMarkers.splice(0, natoMarkers.length - NATO_MARKER_MAX);
@@ -1465,9 +1496,10 @@ function natoShapeFor(type) {
 const ICON_TRASH = '<svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 9L18.005 20.3463C17.8369 21.3026 17.0062 22 16.0353 22H7.96474C6.99379 22 6.1631 21.3026 5.99496 20.3463L4 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 6L15.375 6M3 6L8.625 6M8.625 6V4C8.625 2.89543 9.52043 2 10.625 2H13.375C14.4796 2 15.375 2.89543 15.375 4V6M8.625 6L15.375 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function addNatoMarker(nm) {
+  const affil = NATO_AFFILIATIONS[nm.affiliation] || NATO_AFFILIATIONS[NATO_AFFILIATION_DEFAULT];
   const icon = L.divIcon({
     className: "nato-marker-icon",
-    html: `<div class="nato-chip nato-chip-${natoShapeFor(nm.type)}">${escapeHtml(nm.type)}</div>`,
+    html: `<div class="nato-chip nato-chip-${natoShapeFor(nm.type)}" style="background:${affil.color};border-color:${affil.border}">${escapeHtml(nm.type)}</div>`,
     iconSize: [36, 22], iconAnchor: [18, 11],
   });
   const marker = L.marker([nm.lat, nm.lon], { icon }).addTo(mapInstance);
@@ -1515,13 +1547,19 @@ async function sendNatoMarker(lat, lon) {
   // click/tap. sendTextMessage() (chat) does the exact same thing for
   // the same reason: nothing echoes a device's own sent message back to
   // itself, so the sender has to record it locally itself either way.
-  recordNatoMarker({ type, label, lat, lon, sender: username, mine: true });
+  const affiliation = natoSelectedAffiliation;
+  recordNatoMarker({ type, affiliation, label, lat, lon, sender: username, mine: true });
   $("#nato-add-label").value = "";
   // Fixed, non-localized wire prefix -- same reasoning as 📍/🆘/✅ Code 4:
   // every radio on the channel must recognize it regardless of that
   // device's own UI language. The type code itself (INF, ARM, ...) is
-  // already language-neutral by design (see NATO_MARKER_TYPES).
-  const note = `🎯NATO:${type}${label ? " " + label : ""}`;
+  // already language-neutral by design (see NATO_MARKER_TYPES); ditto
+  // the single-letter affiliation suffix (B/O/N) -- omitted entirely
+  // when it's the default (BLUFOR), so a marker sent from here reads
+  // identically on the wire to one from before affiliation existed
+  // unless something other than the default was actually picked.
+  const affixSuffix = affiliation !== NATO_AFFILIATION_DEFAULT ? `:${affiliation}` : "";
+  const note = `🎯NATO:${type}${affixSuffix}${label ? " " + label : ""}`;
   try {
     await sendPositionAt(lat, lon, note);
   } catch (e) {
@@ -1772,7 +1810,13 @@ function renderRadar(list, natoList) {
       const r = km * scale;
       const x = center + r * Math.cos(rad);
       const y = center + r * Math.sin(rad);
-      parts.push(`<rect x="${x - 6}" y="${y - 6}" width="12" height="12" class="radar-point nato" data-nato-id="${n.id}" />`);
+      // style="fill:..." (inline), not the fill="..." presentation
+      // attribute: CSS always wins over a presentation attribute
+      // regardless of specificity, and .radar-point.nato already sets
+      // fill in style.css -- only an inline *style* actually overrides
+      // that per marker.
+      const affil = NATO_AFFILIATIONS[n.affiliation] || NATO_AFFILIATIONS[NATO_AFFILIATION_DEFAULT];
+      parts.push(`<rect x="${x - 6}" y="${y - 6}" width="12" height="12" class="radar-point nato" style="fill:${affil.color}" data-nato-id="${n.id}" />`);
       parts.push(`<text x="${x}" y="${y - 10}" class="radar-label">${escapeHtml(n.type)}</text>`);
     }
   }
