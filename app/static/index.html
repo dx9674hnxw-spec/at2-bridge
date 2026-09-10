@@ -45,7 +45,6 @@
       <button class="tab" data-tab="messages" data-i18n="tab.messages">Messagerie</button>
       <button class="tab" data-tab="device" data-i18n="tab.settings">Réglages</button>
       <button class="tab" data-tab="map" data-i18n="tab.map">Carte</button>
-      <button class="tab" data-tab="beta" data-i18n="tab.beta">Beta</button>
     </nav>
   </div>
 
@@ -629,22 +628,6 @@
       </div>
     </section>
 
-    <!-- Isolated experiments -- see app/static/beta/README.md. Each
-         sub-tab is a standalone page under beta/, loaded in its own
-         <iframe> (populated by app.js's buildBetaTab()) so a bug in a
-         prototype can't reach the app around it. -->
-    <section id="tab-beta" class="tab-panel wide-panel">
-      <div class="card">
-        <div class="beta-head">
-          <div>
-            <div class="ptt-device-name">Beta <span class="beta-flag" data-i18n="beta.flag">expérimental</span></div>
-            <div class="ptt-device-sub" data-i18n="beta.hint">Prototypes isolés (dossier app/static/beta/, code indépendant de l'appli principale) : on teste, on évalue, puis on porte ce qui marche dans l'appli.</div>
-          </div>
-        </div>
-        <nav class="beta-subtabs" id="beta-subtabs"></nav>
-        <div class="beta-frames" id="beta-frames"></div>
-      </div>
-    </section>
   </main>
 
   <div id="login-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; align-items:center; justify-content:center; padding:16px;">

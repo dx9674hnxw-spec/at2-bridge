@@ -65,7 +65,6 @@ function refreshDynamicTranslations() {
   renderChanOpts();
   renderChanFreq();
   renderScanState();
-  refreshBetaLabels();
   applyModeUi();
   applyTheme(document.documentElement.getAttribute("data-theme") || "dark");
   if (!$("#device-list").children.length || $("#device-list").textContent.trim()) loadDeviceList();
@@ -1718,16 +1717,17 @@ async function sendPositionAt(lat, lon, note) {
 // trail -- keeps both the list and the map legible with more than a
 // handful of people. Sorted most-recent-first.
 //
-// Excludes b.synthetic entries: the Beta map-redesign prototype
-// deliberately reads/writes this app's own at2_beacons localStorage key
-// (see its "Test-data helpers" comment) so its "+ Balise de test" button
-// can preview fake positions as if they were real, tagging each one
-// `synthetic: true` specifically so it's easy to tell apart from a
-// genuinely-received position. That's fine for the prototype's own
-// preview, but this is a safety-relevant position tracker -- someone's
-// real "Send my position now"/SOS should never share a map with made-up
-// "Test-7"/"Test-12" dots that happen to still be sitting in the same
-// browser's storage from an earlier Beta session.
+// Excludes b.synthetic entries: a since-removed Beta map-redesign
+// prototype used to deliberately read/write this app's own at2_beacons
+// localStorage key so its "+ Balise de test" button could preview fake
+// positions as if they were real, tagging each one `synthetic: true`
+// specifically so it was easy to tell apart from a genuinely-received
+// position. Kept here as a defensive filter even with that prototype
+// gone: this is a safety-relevant position tracker, and a browser that
+// visited it while it still existed could still have old synthetic
+// entries sitting in that same localStorage key -- someone's real
+// "Send my position now"/SOS should never share a map with leftover
+// made-up "Test-7"/"Test-12" dots.
 function latestBeaconsBySender() {
   const bySender = new Map();
   for (const b of beacons) {
@@ -2280,14 +2280,14 @@ window.addEventListener("resize", () => {
 // with unused width beside it). Cycles through the channels already read
 // into lastReadChannels (Canaux tab), sending the real select_channel
 // command for each one via
-// sendChannelSelect() -- ported from the Beta tab's frequency-scan.html
+// sendChannelSelect() -- ported from an earlier frequency-scan.html
 // prototype, same idea minus the simulated activity. "Activity detected"
 // reuses the RX indicator's real incoming-PTT-packet signal (see the
 // "at2:rf-activity" event dispatched from markIncomingRfActivity() above);
 // there is no RSSI/squelch telemetry in this protocol to detect with, and
 // this only catches traffic relayed through this app, not any radio
-// chatter -- see scan.activityNote / beta/README.md's "Honnêteté
-// matérielle" for why that limit is stated up front rather than implied.
+// chatter -- see scan.activityNote for why that limit is stated up front
+// rather than implied.
 // ---------------------------------------------------------------------------
 let scanRunning = false;
 let scanPaused = false;
@@ -2488,57 +2488,6 @@ $$(".scan-toggle-btn").forEach((btn) => btn.addEventListener("click", () => { sc
 // static HTML placeholders up until the next channel read or language
 // switch happens to trigger a re-render.
 renderScanState();
-
-// ---------------------------------------------------------------------------
-// Beta tab: isolated prototypes, each its own static page under
-// app/static/beta/ (own HTML/CSS/JS -- see beta/README.md) loaded in an
-// <iframe> so a bug in an experiment can't reach the rest of the app.
-// Adding a new one to try is one line here plus the file itself; nothing
-// else in this app needs to change.
-// ---------------------------------------------------------------------------
-const BETA_PAGES = [
-  { id: "map-redesign", i18nKey: "beta.page.mapRedesign", src: "/static/beta/map-redesign.html" },
-  { id: "spectrum", i18nKey: "beta.page.spectrum", src: "/static/beta/spectrum.html" },
-  { id: "record-replay", i18nKey: "beta.page.recordReplay", src: "/static/beta/record-replay.html" },
-];
-
-function buildBetaTab() {
-  const nav = $("#beta-subtabs");
-  const frames = $("#beta-frames");
-  nav.innerHTML = BETA_PAGES.map((p, i) => `<button class="beta-subtab ${i === 0 ? "active" : ""}" data-beta="${p.id}"></button>`).join("");
-  frames.innerHTML = BETA_PAGES.map((p, i) => `<iframe class="beta-frame ${i === 0 ? "active" : ""}" data-beta="${p.id}" loading="lazy"></iframe>`).join("");
-  nav.querySelectorAll(".beta-subtab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      nav.querySelectorAll(".beta-subtab").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      frames.querySelectorAll(".beta-frame").forEach((f) => f.classList.toggle("active", f.dataset.beta === btn.dataset.beta));
-      activateBetaFrame(btn.dataset.beta);
-    });
-  });
-  refreshBetaLabels();
-}
-// iframe src is only set the first time a sub-tab is actually shown --
-// same reasoning as the Map tab's own lazy render: no point loading
-// Leaflet + OSM tiles for an experiment nobody opened this session.
-function activateBetaFrame(id) {
-  const frame = $(`.beta-frame[data-beta="${id}"]`);
-  const page = BETA_PAGES.find((p) => p.id === id);
-  if (frame && page && !frame.getAttribute("src")) frame.src = page.src;
-}
-function refreshBetaLabels() {
-  $$(".beta-subtab").forEach((btn) => {
-    const page = BETA_PAGES.find((p) => p.id === btn.dataset.beta);
-    if (page) btn.textContent = t(page.i18nKey);
-  });
-  $$(".beta-frame").forEach((f) => {
-    const page = BETA_PAGES.find((p) => p.id === f.dataset.beta);
-    if (page) f.title = t(page.i18nKey);
-  });
-}
-buildBetaTab();
-$$(".tab").forEach((tabBtn) => {
-  if (tabBtn.dataset.tab === "beta") tabBtn.addEventListener("click", () => activateBetaFrame(BETA_PAGES[0].id));
-});
 
 // ---------------------------------------------------------------------------
 // Channel table (bulk read/write)
