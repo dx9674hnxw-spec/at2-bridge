@@ -45,6 +45,28 @@ ou `MultiPolygon` (tout le reste — points, lignes — est ignoré). Les
 autres propriétés de chaque `Feature` (nom, adresse, etc.) ne sont pas
 utilisées, seul le contour compte.
 
+## Nommage des fichiers
+
+Pour que la liste « Bâtiments » de l'onglet Carte affiche un
+arrondissement (et pas un nom de fichier), nomme chaque fichier
+`<numéro><lettre?>_AR_paris.geojson` :
+
+- `<numéro>` : le numéro d'arrondissement (`1`, `18`, `19`, `20`, …).
+- `<lettre?>` : une lettre (`A`, `B`, `C`, …) juste après le numéro,
+  **seulement** si cet arrondissement a nécessité plusieurs fichiers
+  (l'export d'un coup est trop volumineux, par exemple) — sinon, pas
+  de lettre du tout.
+- `_AR_paris` : littéralement ça, à la fin.
+
+Exemples : `1_AR_paris.geojson` (un seul fichier pour le 1er),
+`19A_AR_paris.geojson` + `19B_AR_paris.geojson` (deux fichiers pour le
+19e — tous les deux apparaissent regroupés sous « Paris 19e » dans la
+liste, avec le compte de bâtiments additionné).
+
+Un fichier qui ne suit pas ce format (un ancien test, par exemple)
+n'est pas ignoré pour autant — il apparaît juste dans la liste sous son
+propre nom au lieu d'être regroupé avec un arrondissement.
+
 ## Rechargement
 
 Comme les couches embarquées (`app/map_layers/`), ces fichiers sont

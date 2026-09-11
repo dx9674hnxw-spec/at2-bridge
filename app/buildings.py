@@ -6,15 +6,22 @@ and draws a visibility polygon client-side (see computeCameraCoverage()
 in app.js) -- buildings block the view past them, so the result reads
 as "how far can this point actually see", not just a plain circle.
 
-Also served whole, one file ("zone") at a time, as a plain building-
+Also served whole, one arrondissement at a time, as a plain building-
 outline map layer (list_zones() / buildings_in_zone() below, see
-GET /api/map/building-zones(/…) in main.py) -- toggle a zone on in the
+GET /api/map/building-zones(/…) in main.py) -- toggle one on in the
 Map tab to see its building footprints directly, not just the
-per-point coverage above. One zone per *.geojson file dropped into
-app/map_buildings/ (see that folder's own README.md), typically one
-Paris arrondissement each, hence "zone" rather than "arrondissement":
-nothing here actually requires the file to be arrondissement-shaped,
-that's just been the practical unit so far.
+per-point coverage above. Files in app/map_buildings/ (see that
+folder's own README.md) are named "<numéro><lettre?>_AR_paris.geojson"
+-- an arrondissement number, an optional letter (A/B/C…) when a single
+arrondissement needed more than one file, then "_AR_paris" -- and
+list_zones() groups every file sharing a number into one entry for
+that arrondissement, so "19A_AR_paris.geojson" + "19B_AR_paris.geojson"
+both show up as one thing ("Paris 19e"), not two. A file that doesn't
+match that pattern (an older one-off upload, say) just shows up as its
+own entry under its own name instead, rather than being dropped --
+hence "zone" in these function names, not "arrondissement": the
+grouping is arrondissement-shaped when the filename says so, but
+nothing here actually requires it.
 
 No orientation/field-of-view data exists in the camera KML (see
 app/kml.py's own comment on that dataset's actual fields), so this is
@@ -39,6 +46,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -47,17 +55,39 @@ BUILDINGS_DIR = Path(__file__).parent / "map_buildings"
 
 METERS_PER_DEGREE_LAT = 111_320  # good enough at this scale (tens of meters); no attempt at ellipsoid precision
 
+# "19A_AR_paris" -> "19" (arrondissement number), "1_AR_paris" -> "1".
+# Case-insensitive and tolerant of the "AR"/"paris" separator being
+# missing (some real uploads have come in as e.g. "1_ARparis") since
+# that's just a naming slip, not a different dataset -- the number is
+# what actually matters for grouping. Doesn't match the app's own
+# earlier one-off test files ("paris_1er", "paris_6e", ...), which is
+# exactly the point: those fall back to their own individual entry
+# rather than being folded into a group (see list_zones() below).
+_ARRONDISSEMENT_RE = re.compile(r"^(\d{1,2})[A-Za-z]?[_\s]?AR[_\s]?paris$", re.IGNORECASE)
+
 # Each entry: {"ring": [[lon, lat], ...], "bbox": (minlon, minlat, maxlon, maxlat)}
 _buildings: list[dict] = []  # every zone's buildings, flattened -- for buildings_near()'s cross-zone bbox query
-_zones: dict[str, list[dict]] = {}  # zone id (file stem, e.g. "paris_1er") -> that file's own buildings, in file order
+_zones: dict[str, list[dict]] = {}  # zone id (file stem, e.g. "19A_AR_paris") -> that file's own buildings, in file order
+
+
+def _arrondissement_number(zone_id: str) -> str | None:
+    m = _ARRONDISSEMENT_RE.match(zone_id)
+    return m.group(1) if m else None
+
+
+def _label_for_arrondissement(num: str) -> str:
+    n = int(num)
+    return f"Paris {'1er' if n == 1 else f'{n}e'}"
 
 
 def _label_for_zone(zone_id: str) -> str:
-    """"paris_1er" -> "Paris 1er": capitalize each word, but only if it
-    starts with a letter -- a naive .title() would turn "1er" into
-    "1Er". Falls back to the raw id for anything that ends up empty
-    (shouldn't happen for a real filename stem, but a label is cosmetic
-    either way -- not worth failing over)."""
+    """Fallback label for a file that doesn't match the arrondissement
+    naming convention above: "paris_1er" -> "Paris 1er" -- capitalize
+    each word, but only if it starts with a letter, since a naive
+    .title() would turn "1er" into "1Er". Falls back to the raw id for
+    anything that ends up empty (shouldn't happen for a real filename
+    stem, but a label is cosmetic either way -- not worth failing
+    over)."""
     words = zone_id.replace("_", " ").replace("-", " ").split()
     out = [w[0].upper() + w[1:] if w and w[0].isalpha() else w for w in words]
     return " ".join(out) or zone_id
@@ -147,29 +177,70 @@ def buildings_near(lat: float, lon: float, radius_m: float, max_count: int = 500
     return out
 
 
+def _zone_ids_by_arrondissement() -> dict[str, list[str]]:
+    """Every loaded zone id that matches the arrondissement naming
+    convention, grouped by its number -- e.g. {"19": ["19A_AR_paris",
+    "19B_AR_paris"]}. Recomputed from _zones on each call rather than
+    kept as its own state: cheap (a handful of short strings, at most
+    one regex match per loaded file) and one less thing that could get
+    out of sync with _zones itself."""
+    groups: dict[str, list[str]] = {}
+    for zone_id in _zones:
+        num = _arrondissement_number(zone_id)
+        if num is not None:
+            groups.setdefault(num, []).append(zone_id)
+    return groups
+
+
 def list_zones() -> list[dict]:
-    """One entry per loaded *.geojson file, for the Map tab's "show
-    building footprints" layer list (GET /api/map/building-zones) --
-    id/label/count, no geometry (that's buildings_in_zone() below, kept
-    separate so listing the available zones stays cheap regardless of
-    how big any one of them is)."""
-    return [
-        {"id": zone_id, "label": _label_for_zone(zone_id), "count": len(bldgs)}
-        for zone_id, bldgs in sorted(_zones.items())
+    """Display-level zones for the Map tab's "show building footprints"
+    layer list (GET /api/map/building-zones) -- id/label/count, no
+    geometry (that's buildings_in_zone() below, kept separate so
+    listing stays cheap regardless of how big any one zone is).
+
+    Files matching "<numéro><lettre?>_AR_paris" (see this module's own
+    docstring) are grouped into one entry per arrondissement number
+    (id = that number, e.g. "19"), count = every matching file's
+    buildings summed -- the point of the naming convention is exactly
+    this, one arrondissement worth showing as one thing regardless of
+    how many files it took to cover it. Arrondissement entries come
+    first, in numeric order (1, 2, … 20), since that's how someone
+    scanning the list would expect to find one. Anything that doesn't
+    match falls back to its own entry (_label_for_zone()), listed after,
+    alphabetically."""
+    groups = _zone_ids_by_arrondissement()
+    grouped_ids = {zid for ids in groups.values() for zid in ids}
+    standalone = sorted(zid for zid in _zones if zid not in grouped_ids)
+
+    out = [
+        {"id": num, "label": _label_for_arrondissement(num), "count": sum(len(_zones[z]) for z in ids)}
+        for num, ids in sorted(groups.items(), key=lambda kv: int(kv[0]))
     ]
+    out.extend(
+        {"id": zone_id, "label": _label_for_zone(zone_id), "count": len(_zones[zone_id])}
+        for zone_id in standalone
+    )
+    return out
 
 
-def buildings_in_zone(zone_id: str, max_count: int = 20_000) -> list[list[list[float]]] | None:
-    """Every building in one zone (whole file, no distance filter --
-    unlike buildings_near() above, this is "give me this file's own
-    outlines to draw as a layer", not "what's near this point"), each
-    as a ring of [lat, lon] pairs. None if the zone id doesn't exist
-    (caller turns that into a 404). max_count is a defensive cap, not a
-    real limit at today's scale (a few thousand per arrondissement) --
-    it'd only ever bite if someone dropped in a single file covering
-    all of Paris at once, and even then this just silently truncates
-    rather than failing outright."""
-    bldgs = _zones.get(zone_id)
-    if bldgs is None:
-        return None
+def buildings_in_zone(zone_id: str, max_count: int = 100_000) -> list[list[list[float]]] | None:
+    """Every building in one display-level zone from list_zones() above
+    -- an arrondissement number (combining every file that shares it)
+    if `zone_id` is one, otherwise one specific file's own buildings
+    (whole file, no distance filter -- unlike buildings_near() above,
+    this is "give me this zone's own outlines to draw as a layer", not
+    "what's near this point"). Each building as a ring of [lat, lon]
+    pairs. None if `zone_id` matches neither (caller turns that into a
+    404). max_count is a defensive cap, not a real limit at today's
+    scale (tens of thousands combined per arrondissement) -- it'd only
+    ever bite if someone dropped in a single file covering all of
+    Paris at once, and even then this just silently truncates rather
+    than failing outright."""
+    groups = _zone_ids_by_arrondissement()
+    if zone_id in groups:
+        bldgs = [b for z in groups[zone_id] for b in _zones[z]]
+    else:
+        bldgs = _zones.get(zone_id)
+        if bldgs is None:
+            return None
     return [[[lat_, lon_] for lon_, lat_ in b["ring"]] for b in bldgs[:max_count]]
