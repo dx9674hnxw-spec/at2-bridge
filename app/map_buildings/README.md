@@ -9,8 +9,18 @@ compte des bâtiments qui bloquent la vue.
 
 ## Où obtenir ces données
 
-**Recommandé : [overpass-turbo.eu](https://overpass-turbo.eu)** — déplace
-la carte sur la zone qui t'intéresse, colle cette requête, **Run**, puis
+**Recommandé : [le jeu de données « Volumes bâtis » de la Ville de
+Paris](https://opendata.paris.fr/explore/dataset/volumesbatisparis/)**
+— la donnée officielle, couvre tout Paris. Onglet **Tableau** ou
+**Carte** : filtre par arrondissement (facette `n_ar` si dispo, ou
+zoome sur la zone qui t'intéresse), puis onglet **Export → GeoJSON**.
+C'est comme ça que `paris_1er.geojson` et `paris_6e.geojson` (déjà dans
+ce dossier) ont été obtenus — répète pour d'autres arrondissements afin
+d'étendre la couverture au fur et à mesure.
+
+**Alternative : [overpass-turbo.eu](https://overpass-turbo.eu)** (données
+OSM, pas officielles mais dispo ailleurs qu'à Paris) — déplace la carte
+sur la zone qui t'intéresse, colle cette requête, **Run**, puis
 **Export → GeoJSON** :
 
 ```
@@ -21,15 +31,12 @@ la carte sur la zone qui t'intéresse, colle cette requête, **Run**, puis
 out geom;
 ```
 
-**Alternative : [opendata.paris.fr](https://opendata.paris.fr)** —
-cherche « emprise des bâtiments », filtre par arrondissement si
-possible, exporte en GeoJSON.
-
-Commence par une petite zone (un quartier, un arrondissement) plutôt
-que tout Paris d'un coup : le fichier grossit vite (des centaines de Mo
-pour toute la ville), et ce n'est pas nécessaire — la fonction ne
-calcule une zone de visibilité qu'autour d'un point cliqué à la fois
-(quelques dizaines de mètres), pas pour toute la carte en même temps.
+Dans les deux cas, exporte arrondissement par arrondissement (ou zone
+par zone) plutôt que tout Paris d'un coup : un fichier par zone reste
+gérable (quelques Mo), et ce n'est pas nécessaire de tout avoir en un
+coup — la fonction ne calcule une zone de visibilité qu'autour d'un
+point cliqué à la fois (quelques dizaines de mètres), pas pour toute la
+carte en même temps.
 
 ## Format attendu
 

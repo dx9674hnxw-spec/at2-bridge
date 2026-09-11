@@ -11,15 +11,18 @@ app/kml.py's own comment on that dataset's actual fields), so this is
 necessarily omnidirectional -- how far visibility reaches in *every*
 direction up to some assumed range, not a real camera's actual cone.
 
-Add more coverage by dropping another *.geojson export (OSM building
-footprints, e.g. via overpass-turbo.eu -- see app/map_buildings/
-README.md) into this folder; every file present is loaded at startup.
-Loaded once into a flat in-memory list, no spatial index (R-tree etc.):
-a naive bounding-box pre-filter per query is plenty fast at this
-dataset's scale (a few thousand polygons for one test neighborhood),
-and a new dependency for this isn't worth it unless a much larger area
-actually needs it -- worth revisiting if this ever covers all of Paris
-at once (a few hundred thousand buildings).
+Add more coverage by dropping another *.geojson export (building
+footprints -- either OSM via overpass-turbo.eu, or the Ville de
+Paris's own "Volumes bâtis" open-data set, see app/map_buildings/
+README.md) into this folder; every file present is loaded at startup,
+arrondissement by arrondissement, growing coverage over time. Loaded
+once into a flat in-memory list, no spatial index (R-tree etc.): a
+naive bounding-box pre-filter per query is plenty fast at this
+dataset's scale (tens of thousands of polygons across a handful of
+arrondissements so far), and a new dependency for this isn't worth it
+unless a much larger area actually needs it -- worth revisiting if
+this ever covers all of Paris at once (the full open-data set is
+~360k buildings).
 """
 from __future__ import annotations
 
