@@ -1285,6 +1285,9 @@ $("#map-layers-toggle").addEventListener("click", () => {
 $("#map-layer-import-toggle").addEventListener("click", () => {
   $("#map-layer-import-panel").hidden = !$("#map-layer-import-panel").hidden;
 });
+$("#map-buildings-toggle").addEventListener("click", () => {
+  $("#map-buildings-panel").hidden = !$("#map-buildings-panel").hidden;
+});
 
 // NATO marker affiliation -- BLUFOR/OPFOR/Neutral, standard APP-6/
 // MIL-STD-2525 friendly/hostile/neutral colors. Only ever changes the
@@ -2015,6 +2018,17 @@ let mapLayersActive = new Set(); // layer ids currently toggled on
 let mapLayersPointsCache = new Map(); // id -> points[], fetched lazily once per id
 let mapLayerMarkers = []; // kept separate from mapMarkers (beacons/NATO) -- toggling a layer shouldn't force those to redraw, or vice versa
 
+// Whole-zone building footprints (see app/buildings.py's own comment on
+// "zones") -- raw outlines, not point data, so a separate state/array
+// from everything above rather than folding it into mapLayersMeta:
+// toggling a zone shouldn't touch KML layer markers, or vice versa. See
+// renderMapBuildingZones() further down.
+const BUILDING_ZONE_COLOR = "#64748b"; // neutral slate -- outlines for orientation, not meant to compete visually with beacons/NATO markers/camera dots
+let mapBuildingZonesMeta = []; // [{id, label, count}]
+let mapBuildingZonesActive = new Set(); // zone ids currently toggled on
+let mapBuildingZonesCache = new Map(); // id -> rings[], fetched lazily once per id
+let mapBuildingZoneLayers = []; // currently-drawn L.polygon layers, one per building ring across every active zone
+
 // Per-viewer display choice (color), not part of the layer's stored
 // data (see main.py/app/kml.py) -- "what dot color do *I* want for
 // this layer" is a personal preference, not team-shared state, so it
@@ -2235,6 +2249,85 @@ async function ensureLayerPointsLoaded(id) {
   return data.points;
 }
 
+// ---------------------------------------------------------------------------
+// Building footprints, whole zone at a time (see app/buildings.py's own
+// comment on "zones" -- one per *.geojson file, typically one
+// arrondissement each): a toggle list, own panel (#map-buildings-panel/
+// #map-buildings-toggle), completely separate from the KML "Couches"
+// above -- this is raw building outlines, not point data, and it's what
+// the per-point coverage feature (computeCameraCoverage() further down)
+// already draws its shadows from, just shown directly here instead of
+// only implicitly through a coverage polygon.
+// ---------------------------------------------------------------------------
+
+async function refreshMapBuildingZones() {
+  try {
+    mapBuildingZonesMeta = await api("GET", "/api/map/building-zones");
+  } catch (e) {
+    mapBuildingZonesMeta = [];
+  }
+  renderMapBuildingZonesList();
+}
+
+// The toggle list itself (#map-building-zones-list) -- on/off only, no
+// per-zone color/delete (unlike the KML layers manage panel): every
+// zone shares BUILDING_ZONE_COLOR, there's nothing to customize here
+// yet, and these files aren't user-deletable from the UI (see
+// app/map_buildings/README.md -- dropped in by hand, reloaded on
+// server restart).
+function renderMapBuildingZonesList() {
+  const el = $("#map-building-zones-list");
+  if (!mapBuildingZonesMeta.length) {
+    el.innerHTML = `<div class="hint">${t("map.buildingZonesEmpty")}</div>`;
+    return;
+  }
+  el.innerHTML = mapBuildingZonesMeta.map((z) => {
+    const idAttr = escapeHtml(z.id);
+    return `
+    <label class="map-layer-toggle">
+      <input type="checkbox" data-zone-id="${idAttr}" ${mapBuildingZonesActive.has(z.id) ? "checked" : ""} />
+      <span class="map-layer-toggle-label">${escapeHtml(z.label)}</span>
+      <span class="map-layer-count">${z.count}</span>
+    </label>`;
+  }).join("");
+  el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      const id = e.target.dataset.zoneId;
+      if (e.target.checked) mapBuildingZonesActive.add(id); else mapBuildingZonesActive.delete(id);
+      renderMapBuildingZones();
+    });
+  });
+}
+
+async function ensureBuildingZoneLoaded(id) {
+  if (mapBuildingZonesCache.has(id)) return mapBuildingZonesCache.get(id);
+  const data = await api("GET", `/api/map/building-zones/${encodeURIComponent(id)}`);
+  mapBuildingZonesCache.set(id, data.buildings);
+  return data.buildings;
+}
+
+// Same fire-and-forget pattern as renderMapLayerMarkers() just below --
+// rebuilds its own layer set from scratch each call, so a fast double-
+// toggle just gets superseded by the next call rather than needing to
+// be cancelled. Radar view has no real building data to draw against
+// (it's not a real map), so this is a no-op there, same as
+// renderMapLayerMarkers()'s own MAP_AVAILABLE/mapViewMode guard.
+async function renderMapBuildingZones() {
+  mapBuildingZoneLayers.forEach((l) => mapInstance && mapInstance.removeLayer(l));
+  mapBuildingZoneLayers = [];
+  if (!MAP_AVAILABLE || mapViewMode !== "map" || !mapInstance) return;
+  for (const id of mapBuildingZonesActive) {
+    let rings;
+    try { rings = await ensureBuildingZoneLoaded(id); } catch (e) { showToast(e.message, "error"); continue; }
+    for (const ring of rings) {
+      const poly = L.polygon(ring, {
+        color: BUILDING_ZONE_COLOR, weight: 1, fillColor: BUILDING_ZONE_COLOR, fillOpacity: 0.12,
+      }).addTo(mapInstance);
+      mapBuildingZoneLayers.push(poly);
+    }
+  }
+}
+
 // Fire-and-forget from renderMap() (which isn't itself async) -- rebuilds
 // its own marker set from scratch each call, same pattern as the beacon/
 // NATO markers just above, so a mid-flight call from a fast double-toggle
@@ -2422,6 +2515,7 @@ function renderMap() {
       points.push([nm.lat, nm.lon]);
     }
     renderMapLayerMarkers(); // async, own marker set -- see its own comment for why this isn't awaited here
+    renderMapBuildingZones(); // same reasoning, own layer set
     // Only auto-fit while the user hasn't taken the wheel themselves --
     // otherwise every beacon from a live swarm snaps the view back and the
     // map effectively can't be dragged. "Centrer sur moi" resets the flag
@@ -2432,6 +2526,7 @@ function renderMap() {
     setMapLayerVisible($("#map-radar"), true);
     renderRadar(list, natoMarkers);
     renderMapLayerMarkers(); // no-op on markers here (radar mode) -- just keeps #map-layers-radar-hint in sync
+    renderMapBuildingZones(); // no-op here too, same reasoning (radar view has no real building data to draw against)
   }
 }
 
@@ -3687,6 +3782,7 @@ function startApp() {
   refreshStatus();
   refreshTargetList();
   refreshMapLayersList();
+  refreshMapBuildingZones();
   setInterval(() => { if (mode === "server") refreshStatus(); }, 5000);
 }
 
