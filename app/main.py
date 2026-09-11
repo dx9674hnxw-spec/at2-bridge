@@ -705,6 +705,25 @@ async def get_buildings_near(
     return {"buildings": buildings.buildings_near(lat, lon, radius_m)}
 
 
+# Whole-zone building footprints -- "see the buildings for this
+# arrondissement", not the per-point coverage above. One zone per
+# *.geojson file in app/map_buildings/ (see that folder's own
+# README.md); list_map_building_zones() is what populates the Map
+# tab's "Bâtiments" toggle list.
+
+@app.get("/api/map/building-zones")
+async def list_map_building_zones(_: None = Depends(auth.require_auth)):
+    return buildings.list_zones()
+
+
+@app.get("/api/map/building-zones/{zone_id}")
+async def get_map_building_zone(zone_id: str, _: None = Depends(auth.require_auth)):
+    result = buildings.buildings_in_zone(zone_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="zone introuvable")
+    return {"buildings": result}
+
+
 # ---------------------------------------------------------------------------
 # Debug: raw frame injection (experimental, for protocol reverse-engineering)
 # ---------------------------------------------------------------------------

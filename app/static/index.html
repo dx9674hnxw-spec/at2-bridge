@@ -532,6 +532,10 @@
                 <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 20L18 20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16V4M12 4L15.5 7.5M12 4L8.5 7.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span data-i18n="map.layerImportToggle">Importer</span>
               </button>
+              <button class="btn-ghost btn-icon" id="map-buildings-toggle">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 9.01L10.01 8.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 9.01L14.01 8.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 13.01L10.01 12.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 13.01L14.01 12.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 17.01L10.01 16.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 17.01L14.01 16.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20.4V5.6C6 5.26863 6.26863 5 6.6 5H12V3.6C12 3.26863 12.2686 3 12.6 3H17.4C17.7314 3 18 3.26863 18 3.6V20.4C18 20.7314 17.7314 21 17.4 21H6.6C6.26863 21 6 20.7314 6 20.4Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span data-i18n="map.buildingsToggle">Bâtiments</span>
+              </button>
             </div>
             <div class="map-layer-toggles" id="map-layer-toggles"></div>
             <p class="hint" id="map-layers-radar-hint" data-i18n="map.layersRadarOnly" hidden>Les couches importées ne s'affichent qu'en vue carte.</p>
@@ -560,6 +564,17 @@
               <input type="text" id="map-layer-label" data-i18n-placeholder="map.layerLabelPlaceholder" placeholder="Nom de la couche (ex. Caméras Paris)" maxlength="60" />
               <button class="btn-ghost" id="map-layer-import-btn" data-i18n="map.layerImportBtn">Importer</button>
               <p class="hint" data-i18n="map.layersHint">Stocké sur ce serveur (visible par tous ceux connectés dessus), pas envoyé sur les ondes radio. Dans Google My Maps : menu ⋮ → Télécharger un fichier KML → décoche « Contenu réseau » avant de télécharger.</p>
+            </div>
+
+            <!-- Building footprints (see app/buildings.py) -- raw
+                 outlines per zone (usually one Paris arrondissement
+                 each), completely separate from the KML "Couches"
+                 above: on/off only, no color/delete here, own toggle
+                 (#map-buildings-toggle). See renderMapBuildingZones()
+                 in app.js. -->
+            <div class="layers-panel" id="map-buildings-panel" hidden>
+              <div class="layers-list" id="map-building-zones-list"></div>
+              <p class="hint" data-i18n="map.buildingZonesHint">Un fichier par zone (voir app/map_buildings/) — coche les zones à afficher directement sur la carte, indépendamment de la « Zone » de visibilité des points d'une couche ci-dessus (qui s'appuie sur les mêmes données).</p>
             </div>
 
             <button class="btn-ghost btn-icon" id="map-add-nato-toggle">
