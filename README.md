@@ -85,10 +85,7 @@ Status legend: ✅ confirmed on real hardware (see the note above on what that r
       <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_05.png" alt="Map tab — position tracking"><br>
       <sub><b>Map</b> — positions extracted from received offline beacons</sub>
     </td>
-    <td align="center" width="50%">
-      <img src="https://github.com/dx9674hnxw-spec/at2-bridge/blob/main/Docs/screenshots/Screen_06.png" alt="Log tab — raw frame debug"><br>
-      <sub><b>Log</b> — raw frame debug console, export exchanges</sub>
-    </td>
+   
   </tr>
 </table>
 
